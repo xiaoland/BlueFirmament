@@ -50,6 +50,7 @@ class PostgrestDataAccessObject(DataAccessObject):
         }
         if token:
             self.__headers[HeaderName.AUTHORIZATION.value] = f'Bearer {token}'
+            self.__headers['apiKey'] = token
         '''PostgREST客户端使用的请求头'''
 
         self.__client = postgrest.AsyncPostgrestClient(
@@ -170,7 +171,7 @@ class PostgrestDataAccessObject(DataAccessObject):
         *filters: DALFilter, 
         path: DALPath | None = None, 
         fields: typing.Iterable[str | enum.Enum] | None = None
-    ) -> typing.List[dict]:
+    ) -> typing.Tuple[dict, ...]:
         
         if fields is None:
             fields = ("*",)
@@ -185,7 +186,11 @@ class PostgrestDataAccessObject(DataAccessObject):
         base_query = self.__apply_filters_to_base_query(base_query, filters)
 
         res = await base_query.execute()
-        return res.data
+        if isinstance(res.data, dict):
+            res_data = (res.data,)
+        else:
+            res_data = tuple(res.data)
+        return res_data
     
     async def delete(self, *filters: DALFilter, path: DALPath | None = None) -> None:
         
