@@ -91,8 +91,8 @@ class BlueFirmamentTransport(abc.ABC):
         session_cls: typing.Type['Session']
     ) -> None:
 
-        self.__request_handler: 'RequestHandlerType' = req_handler
-        self.__session_cls: typing.Type['Session'] = session_cls
+        self._request_handler: 'RequestHandlerType' = req_handler
+        self._session_cls: typing.Type['Session'] = session_cls
 
     @abc.abstractmethod
     async def start(self):
