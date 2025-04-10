@@ -91,7 +91,7 @@ class HTTPTransport(BlueFirmamentTransport):
                     get_when_truly(scope['client'], PeerInfo.__call__), 
                     get_when_truly(scope['server'], PeerInfo.__call__), 
                 ),
-                session_cls=self.__session_cls,
+                session_cls=self._session_cls,
                 body=self.parse_body(
                     body_raw=body_raw, 
                     content_type=content_type, 
@@ -103,7 +103,7 @@ class HTTPTransport(BlueFirmamentTransport):
             )
             response = Response()
             
-            call_function(self.__request_handler, request=request, response=response)
+            await call_function(self._request_handler, request, response)
 
             # send response
             try:
@@ -131,7 +131,7 @@ class HTTPTransport(BlueFirmamentTransport):
             typing.Literal[ContentType.FORM],
         ],
         content_encoding: str = 'utf-8',
-    ) -> dict:
+    ) -> dict | None:
         pass
 
     @typing.overload
@@ -140,7 +140,7 @@ class HTTPTransport(BlueFirmamentTransport):
         body_raw: bytes,
         content_type: typing.Literal[ContentType.TEXT],
         content_encoding: str = 'utf-8',
-    ) -> str:
+    ) -> str | None:
         pass
 
     @typing.overload
@@ -149,7 +149,7 @@ class HTTPTransport(BlueFirmamentTransport):
         body_raw: bytes,
         content_type: typing.Literal[ContentType.BINARY] | str,
         content_encoding: str = 'utf-8',
-    ) -> bytes:
+    ) -> bytes | None:
         pass
 
     @staticmethod
@@ -182,6 +182,9 @@ class HTTPTransport(BlueFirmamentTransport):
         - ``application/octet-stream``: 返回原始字节流
 
         '''
+        if not body_raw:
+            return None
+
         content_type = dump_enum(content_type)
         if content_type == ContentType.JSON.value:
             return json.loads(body_raw.decode(content_encoding))
@@ -228,7 +231,7 @@ class HTTPTransport(BlueFirmamentTransport):
         '''
         query_string = query_bytes.decode(content_encoding)
         parsed_dict = QueryParamsType({})
-        pairs = urllib.parse.parse_qsl(query_string)
+        pairs: list[tuple[str, str]] = urllib.parse.parse_qsl(query_string)
         for key, value in pairs:
             parsed_dict[key] = try_convert_str(value)
         return parsed_dict
