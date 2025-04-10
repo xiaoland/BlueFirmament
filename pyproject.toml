@@ -8,15 +8,20 @@ version = "0.1.0"
 description = "A python backend framework"
 readme = "README.md"
 requires-python = ">=3.12"
-# license = {text = "MIT"}
+license = {text = "MIT"}
 authors = [
     {name = "Lan_zhijiang", email = "lanzhijiang@foxmail.com"}
 ]
 classifiers = [
     "Development Status :: 3 - Alpha",
     "Intended Audience :: Developers",
-    # "License :: OSI Approved :: MIT License",
+    "License :: OSI Approved :: GPL-3.0 License",
+    "Natural Language :: Chinese (Simplified)",
+    "Natural Language :: English",
+    "Typing :: Typed",
+    "Programming Language :: Python :: 3",
     "Programming Language :: Python :: 3.12",
+    "Topic :: Software Development :: Libraries :: Python Modules",
 ]
 dependencies = [
     "structlog (>=25.2.0,<26.0.0)", 
