@@ -7,7 +7,7 @@ import structlog
 from ..request import Request
 from ..response import Response
 from . import _types as http_types
-from ...utils import try_convert_str, call_function, dump_enum, get_when_truly
+from ...utils import try_convert_str, call_function_as_async, dump_enum, get_when_truly
 
 from ..base import (
     BlueFirmamentTransport, Connection, RequestHandlerType, ConnectionType,
@@ -103,7 +103,7 @@ class HTTPTransport(BlueFirmamentTransport):
             )
             response = Response()
             
-            await call_function(self._request_handler, request, response)
+            await call_function_as_async(self._request_handler, request, response)
 
             # send response
             try:

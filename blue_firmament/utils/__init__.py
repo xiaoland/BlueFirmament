@@ -78,14 +78,13 @@ def get_when_truly(
     return getter(value) if value else fallback
 
 
-def call_function(func: typing.Callable, *args, **kwargs) -> typing.Any:
+async def call_function_as_async(func: typing.Callable, *args, **kwargs) -> typing.Any:
 
     """
     Calls the given function with the provided arguments, handling both
     synchronous and asynchronous functions transparently.
     
-    This allows calling async functions from synchronous code without using
-    the async/await syntax.
+    This reduce the need to check if the function is async or sync before calling it. (treat it as async)
     
     :param func: The async/sync function to call
     :param *args: Positional arguments to pass to the function
@@ -110,9 +109,15 @@ def call_function(func: typing.Callable, *args, **kwargs) -> typing.Any:
         result2 = call_function(async_func, 5)  # Returns 15
     ```
     """
+    # process func is a instance with __call__ method
+    if hasattr(func, '__call__') and not (
+        inspect.isfunction(func) or inspect.ismethod(func)
+    ):
+        func = func.__call__  # type: ignore[assignment]
+
     if inspect.iscoroutinefunction(func):
         # Function is async, run it with asyncio
-        return asyncio.get_event_loop().run_until_complete(func(*args, **kwargs))
+        return await func(*args, **kwargs)
     else:
         # Function is synchronous, call it directly
         return func(*args, **kwargs)

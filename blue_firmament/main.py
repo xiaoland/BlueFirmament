@@ -12,7 +12,7 @@ from .transport.base import (
 from .transport.http import HTTPTransporter
 from .session.common import CommonSession
 from .scheme import BaseScheme, make_partial
-from .utils import call_function
+from .utils import call_function_as_async
 from .routing import Router
 from .middleware import BaseMiddleware
 from .dal.filters import *
@@ -109,7 +109,7 @@ class BlueFirmamentApp:
         middlewares: BaseMiddleware.MiddlewaresType = (
             route_record,
         )
-        await call_function(
+        await call_function_as_async(
             middlewares[0], next = BaseMiddleware.get_next(middlewares, **env), **env
         )
 
