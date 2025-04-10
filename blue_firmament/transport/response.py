@@ -62,10 +62,10 @@ class JsonResponseBody(ResponseBody[JsonDumpable]):
         return self._data
 
     def dump_to_bytes(self) -> bytes:
-        return dumps_to_json(self.dump_to_dict()).encode('utf-8')
+        return dumps_to_json(self._data).encode('utf-8')
 
     def dump_to_json(self) -> str:
-        return dumps_to_json(self.dump_to_dict())
+        return dumps_to_json(self._data)
 
 
 class Response:

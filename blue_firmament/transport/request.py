@@ -50,6 +50,7 @@ class Request(typing.Generic[RequestSessionType]):
         body: RequestBodyType = None,
     ) -> None:
 
+        from ..routing import RouteKey
         self.__route_key = RouteKey(operation, path)
         self.__conn = conn
         self.__session: typing.Optional[RequestSessionType] = None

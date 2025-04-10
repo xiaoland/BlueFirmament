@@ -8,7 +8,7 @@ class LogSetting(Setting):
 
     _setting_name: str = "log"
 
-    log_level: logging._Level = logging.INFO
+    log_level: int = logging.INFO
 
 
 get_setting, set_setting = make_setting_singleton(LogSetting())

@@ -10,21 +10,21 @@ from . import _types as http_types
 from ...utils import try_convert_str, call_function_as_async, dump_enum, get_when_truly
 
 from ..base import (
-    BlueFirmamentTransport, Connection, RequestHandlerType, ConnectionType,
+    BlueFirmamentTransporter, Connection, RequestHandlerType, ConnectionType,
     PeerInfo, Cookie
 )
 from ..request import RequestBodyType
 from .. import TransportOperationType, ContentType, HeaderName
+from ..request import QueryParamsType
 
 if typing.TYPE_CHECKING:
     from ...session import Session
-    from ..request import QueryParamsType
 
 
 logger = structlog.get_logger(__name__)
 
 
-class HTTPTransport(BlueFirmamentTransport):
+class HTTPTransporter(BlueFirmamentTransporter):
 
     """碧霄HTTP传输类
 

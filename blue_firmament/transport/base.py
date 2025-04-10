@@ -32,7 +32,7 @@ class Connection:
     '''
 
     type: InitVar[ConnectionType]
-    transporter: InitVar['BlueFirmamentTransport']
+    transporter: InitVar['BlueFirmamentTransporter']
     source: InitVar[typing.Optional[PeerInfo]] = None
     target: InitVar[typing.Optional[PeerInfo]] = None
 
@@ -83,7 +83,7 @@ class Cookie(BaseScheme):
 
 
 ConnectionHandlerType = typing.Callable[['Connection'], None]
-class BlueFirmamentTransport(abc.ABC):
+class BlueFirmamentTransporter(abc.ABC):
     """The base class of the transport module."""
 
     def __init__(self, 

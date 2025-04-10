@@ -3,9 +3,14 @@ from ..dal.postgrest_dal import PostgrestDataAccessObject
 from ..data.settings.transport import get_setting as get_transport_setting
 from . import Session, SessionField
 from ..transport import HeaderName
+from ..log import get_logger
+
 import typing
 import jwt
 import uuid
+
+
+logger = get_logger(__name__)
 
 
 class DAOSessionField(SessionField[DataAccessObject]):
@@ -71,7 +76,8 @@ class CommonSession(Session):
                 jwt_str = request.get_cookie(HeaderName.AUTHORIZATION.value)
 
                 if not jwt_str:
-                    raise ValueError('Cannot find valid JWT in headers or cookies')
+                    logger.warning('Cannot find valid JWT in headers or cookies')
+                    raise ValueError('JWT not found')
                 else:
                     jwt_str = jwt_str.value
 
