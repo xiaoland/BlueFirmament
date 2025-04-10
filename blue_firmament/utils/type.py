@@ -1,6 +1,7 @@
 '''Utils related to type checking and type hinting.'''
 
 import typing
+from ..scheme import BaseScheme
 
 def is_annotated(val: typing.Any) -> typing.TypeGuard[typing.Annotated]:
     '''Check if the value is typing.Annotated
@@ -15,6 +16,10 @@ def is_annotated(val: typing.Any) -> typing.TypeGuard[typing.Annotated]:
     return hasattr(val, '__origin__') and hasattr(val, '__metadata__')
 
 def get_origin(type: typing.Any) -> typing.Type:
+    res = None
+    if getattr(type, '__class__') == typing.NewType:
+        type = type.__supertype__
+    
     return typing.get_origin(type) or type
 
 
@@ -23,4 +28,9 @@ JsonDumpable = typing.Union[
     typing.List['JsonDumpable'], 
     typing.Tuple['JsonDumpable', ...],
     typing.Dict[str, 'JsonDumpable'],
+    BaseScheme
 ]
+'''可以序列化为JSON的类型
+
+其中BaseScheme实际上不能被json.dumps处理，需要通过我们自定义的json_dumps来处理
+'''

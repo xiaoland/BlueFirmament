@@ -1,12 +1,12 @@
 import abc
 import typing
-import json
 
 from . import ResponseStatus
 from .base import Cookie
 from ..scheme import BaseScheme
 from ..utils import singleton
 from ..utils.type import JsonDumpable
+from ..utils.json import dumps_to_json
 
 
 ResponseBodyDataType = typing.TypeVar('ResponseBodyDataType')
@@ -62,10 +62,10 @@ class JsonResponseBody(ResponseBody[JsonDumpable]):
         return self._data
 
     def dump_to_bytes(self) -> bytes:
-        return json.dumps(self.dump_to_dict()).encode('utf-8')
+        return dumps_to_json(self.dump_to_dict()).encode('utf-8')
 
     def dump_to_json(self) -> str:
-        return json.dumps(self.dump_to_dict())
+        return dumps_to_json(self.dump_to_dict())
 
 
 class Response:
