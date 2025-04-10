@@ -1,13 +1,15 @@
 import asyncio
 import typing
+
+from .log import get_logger
 from .transport import TransportOperationType
 from .transport.response import Response
 from .transport.request import CommonSesstionRequest, Request
-from .transport import TransportOperationType, TransportType
+from .transport import TransportOperationType
 from .transport.base import (
-    Connection, BlueFirmamentTransport
+    Connection, BlueFirmamentTransporter
 )
-from .transport.http import HTTPTransport
+from .transport.http import HTTPTransporter
 from .session.common import CommonSession
 from .scheme import BaseScheme, make_partial
 from .utils import call_function
@@ -15,6 +17,8 @@ from .routing import Router
 from .middleware import BaseMiddleware
 from .dal.filters import *
 
+
+logger = get_logger(__name__)
 
 class BlueFirmamentApp:
 
@@ -24,24 +28,36 @@ class BlueFirmamentApp:
     """
 
     def __init__(self,
-        transport: TransportType,
-        host: str, port: int,
+        name: str = 'BlueFirmamentApp',
+        transports: typing.List[BlueFirmamentTransporter] | None = None,
         router: typing.Optional[Router] = None
     ):
         
+        """
+        :param router: （根）路由器实例，默认为None；如果为None，则会创建一个新的路由器实例
+        """
+        
         if typing.TYPE_CHECKING:
-            self.__transport: BlueFirmamentTransport
-
-        if transport == TransportType.HTTP:
-            self.__transport = HTTPTransport(
-                self.handle_request,
-                CommonSession,
-                host, port
-            )
-                
+            self.__transports: typing.List[BlueFirmamentTransporter]
+        
+        self.__name__ = name
+        self.__transports = transports or []
+        
         if router is None:
             router = Router('root')
         self.__router = router
+
+    def add_transporter(self, transporter: BlueFirmamentTransporter):
+
+        """添加一个新的传输层
+
+        :param transporter: 传输层实例
+        """
+        
+        if not isinstance(transporter, BlueFirmamentTransporter):
+            raise TypeError('transporter must be an instance of BlueFirmamentTransporter')
+        
+        self.__transports += (transporter,)
 
     def run(self):
 
@@ -51,7 +67,21 @@ class BlueFirmamentApp:
         ^^^^^^^^^
         使用asyncio启动各个transport
         """
-        asyncio.run(self.__transport.start())
+        event_loop = asyncio.new_event_loop()
+        try:
+            asyncio.set_event_loop(event_loop)
+            
+            tasks = [
+                event_loop.create_task(transport.start()) 
+                for transport in self.__transports
+            ]
+
+            event_loop.run_forever()
+        except KeyboardInterrupt:
+            logger.info('Stopping application...')
+        finally:
+            event_loop.stop()
+            event_loop.close()
 
     async def handle_request(self, request: Request, response: Response):
 
@@ -79,7 +109,7 @@ class BlueFirmamentApp:
         middlewares: BaseMiddleware.MiddlewaresType = (
             route_record,
         )
-        call_function(
+        await call_function(
             middlewares[0], next = BaseMiddleware.get_next(middlewares, **env), **env
         )
 
@@ -170,11 +200,11 @@ class BlueFirmamentApp:
         - 主键值来源于路径参数 ``id``
         '''
 
-        def wrapper(
+        async def wrapper(
             request: CommonSesstionRequest,
             id
         ):
-            return request.session.dao.select_a_scheme_from_primary_key(
+            return await request.session.dao.select_a_scheme_from_primary_key(
                 cls, id
             )
 
@@ -190,12 +220,12 @@ class BlueFirmamentApp:
         - 数据模型实例通过请求体（ ``body`` ）实例化
         - 请求体中不应该包含主键字段，如果有会被剔除
         '''
-        def wrapper(
+        async def wrapper(
             request: CommonSesstionRequest, 
             body: typing.Annotated[BaseScheme, cls]
         ):
             ins = cls(**body)
-            return request.session.dao.insert(ins)
+            return await request.session.dao.insert(ins)
 
         return wrapper
     
@@ -208,12 +238,12 @@ class BlueFirmamentApp:
         - 通过会话数据访问对象覆盖要创建的数据模型实例
         - 数据模型实例通过请求体（ ``body`` ）实例化
         '''
-        def wrapper(
+        async def wrapper(
             request: CommonSesstionRequest, id, 
             body: typing.Annotated[BaseScheme, cls]
         ):
             ins = cls(**body)
-            return request.session.dao.update(
+            return await request.session.dao.update(
                 ins, None, EqFilter(cls.get_primary_key(), id)
             )
 
@@ -228,12 +258,12 @@ class BlueFirmamentApp:
         - 通过会话数据访问对象更新要创建的数据模型实例
         - 数据模型实例使用部分化的数据模型类，数据为请求体（ ``body`` ）
         '''
-        def wrapper(
+        async def wrapper(
             request: CommonSesstionRequest, 
             id, body: typing.Annotated[BaseScheme, cls]
         ):
             ins = make_partial(cls)(**body)
-            return request.session.dao.update(
+            return await request.session.dao.update(
                 ins, None, EqFilter(cls.get_primary_key(), id)
             )
 
@@ -248,8 +278,8 @@ class BlueFirmamentApp:
         - 通过会话数据访问对象删除要创建的数据模型实例
         - 数据模型实例通过路径参数 ``id`` 实例化
         '''
-        def wrapper(request: CommonSesstionRequest, id):
-            return request.session.dao.delete_a_scheme(
+        async def wrapper(request: CommonSesstionRequest, id):
+            return await request.session.dao.delete_a_scheme(
                 cls, id
             )
 
