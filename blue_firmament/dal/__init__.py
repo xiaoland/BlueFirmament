@@ -7,7 +7,8 @@ from ..utils import dump_enum
 from .filters import *
 from .exceptions import *
 
-from ..scheme import BaseScheme
+if typing.TYPE_CHECKING:
+    from ..scheme import BaseScheme
 
 
 DALPath = typing.NewType('DALPath', typing.Tuple[str | enum.Enum | None, ...])
@@ -81,23 +82,23 @@ class DataAccessObject(abc.ABC):
     @typing.overload
     @abc.abstractmethod
     async def insert(self,
-        to_insert: BaseScheme,
+        to_insert: "BaseScheme",
         path: typing.Optional[DALPath] = None,
-    ) -> BaseScheme:
+    ) -> "BaseScheme":
         pass
 
     @typing.overload
     @abc.abstractmethod
     async def insert(self,
-        to_insert: typing.List[dict | BaseScheme],
+        to_insert: typing.List["dict | BaseScheme"],
         path: typing.Optional[DALPath] = None,
-    ) -> typing.List[dict | BaseScheme]:
+    ) -> typing.List["dict | BaseScheme"]:
         pass
 
     TO_INSERT_TYPE = typing.TypeVar('TO_INSERT_TYPE', bound=(
         typing.Union[
-            dict, BaseScheme, 
-            typing.List[dict | BaseScheme]
+            dict, "BaseScheme", 
+            typing.List["dict | BaseScheme"]
         ]
     ))
     @abc.abstractmethod
@@ -128,7 +129,7 @@ class DataAccessObject(abc.ABC):
     ) -> None:
         pass
 
-    async def delete_a_scheme(self, scheme: typing.Type[BaseScheme], primary_key_value):
+    async def delete_a_scheme(self, scheme: typing.Type["BaseScheme"], primary_key_value):
 
         '''删除一个数据模型实例
         '''
@@ -140,11 +141,11 @@ class DataAccessObject(abc.ABC):
     @typing.overload
     @abc.abstractmethod
     async def update(self,
-        to_update: BaseScheme,
+        to_update: "BaseScheme",
         path: typing.Optional[DALPath] = None,
         /,
         *filters: DALFilter,
-    ) -> BaseScheme:
+    ) -> "BaseScheme":
         ...
 
     @typing.overload
@@ -159,11 +160,11 @@ class DataAccessObject(abc.ABC):
 
     @abc.abstractmethod
     async def update(self,
-        to_update: dict | BaseScheme,
+        to_update: "dict | BaseScheme",
         path: typing.Optional[DALPath] = None,
         /,
         *filters: DALFilter,
-    ) -> dict | BaseScheme:
+    ) -> "dict | BaseScheme":
         
         '''更新
         
@@ -185,7 +186,7 @@ class DataAccessObject(abc.ABC):
         *filters: DALFilter,
         path: typing.Optional[DALPath] = None,
         fields: typing.Optional[typing.Iterable[str | enum.Enum]] = None,
-    ) -> typing.List[dict]:
+    ) -> typing.Tuple[dict, ...]:
         
         '''查询
 
@@ -201,7 +202,7 @@ class DataAccessObject(abc.ABC):
         '''
         pass
 
-    SELECT_SCHEME_TYPE = typing.TypeVar('SELECT_SCHEME_TYPE', bound=BaseScheme)
+    SELECT_SCHEME_TYPE = typing.TypeVar('SELECT_SCHEME_TYPE', bound="BaseScheme")
     async def select_a_scheme(self,
         scheme: typing.Type[SELECT_SCHEME_TYPE],
         *filters: DALFilter
@@ -240,14 +241,14 @@ class DataAccessObject(abc.ABC):
         pass
 
 
-def set_serv_dao(dao: DataAccessObject) -> None:
+def set_serv_dao(dao: DataAccessObject, dao_cls: typing.Type[DataAccessObject]) -> None:
     
     '''设置服务角色数据访问对象（全局实例）
     '''
-    DataAccessObject.SERV_DAO = dao
+    dao_cls.SERV_DAO = dao
 
-def set_anon_dao(dao: DataAccessObject) -> None:
+def set_anon_dao(dao: DataAccessObject, dao_cls: typing.Type[DataAccessObject]) -> None:
         
     '''设置匿名角色数据访问对象（全局实例）
     '''
-    DataAccessObject.ANON_DAO = dao
+    dao_cls.ANON_DAO = dao
