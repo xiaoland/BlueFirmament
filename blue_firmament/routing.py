@@ -8,6 +8,7 @@ from .transport import TransportOperationType
 from .scheme.validator import AnyValidator, BaseValidator, get_validator_by_type
 from .scheme import BaseScheme
 from .utils.type import is_annotated, get_origin
+from .utils import call_function
 from .middleware import BaseMiddleware
 
 
@@ -483,14 +484,13 @@ class RouteRecord(BaseMiddleware):
         kwargs = {key: getter(env) for key, getter in self.__handler_kwargs.items()}
 
         # call handler
-        if inspect.iscoroutinefunction(self.target):
-            result = await self.target(**kwargs)
-        else:
-            result = self.target(**kwargs)
+        result = await call_function(self.target, **kwargs)
 
         # process result
         # TODO process result correctly
         if isinstance(result, dict):
+            response.body = JsonResponseBody(result)
+        elif isinstance(result, BaseScheme):
             response.body = JsonResponseBody(result)
         else:
             # TODO
