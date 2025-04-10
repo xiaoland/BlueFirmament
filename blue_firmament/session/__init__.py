@@ -135,12 +135,15 @@ class Session:
         :param **kwargs: 其他字段（用于upsert）
         '''
         try:
-            return cls.__sessions__[_id]
+            res = cls.__sessions__[_id]
         except KeyError:
             if upsert:
-                return cls(_id, **kwargs)
+                res = cls(_id, **kwargs)
+                cls.__sessions__[_id] = res
             else:
                 raise KeyError(f'Session with id {_id} not found')
+            
+        return res
     
     @classmethod
     def from_request(cls, request: 'Request') -> typing.Self:
