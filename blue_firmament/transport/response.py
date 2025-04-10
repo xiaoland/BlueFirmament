@@ -4,6 +4,7 @@ import json
 
 from . import ResponseStatus
 from .base import Cookie
+from ..scheme import BaseScheme
 from ..utils import singleton
 from ..utils.type import JsonDumpable
 
@@ -15,7 +16,7 @@ class ResponseBody(abc.ABC, typing.Generic[ResponseBodyDataType]):
     """
 
     def __init__(self, data: ResponseBodyDataType = None) -> None:
-        self.__data: ResponseBodyDataType = data
+        self._data: ResponseBodyDataType = data
 
     @abc.abstractmethod
     def dump_to_dict(self) -> dict:
@@ -54,15 +55,17 @@ class JsonResponseBody(ResponseBody[JsonDumpable]):
         super().__init__(data)
 
     def dump_to_dict(self) -> dict:
-        if not isinstance(self.__data, dict):
-            raise TypeError('data is not dict, cannot dump as dict, try dump_as_json() instread')
-        return self.__data
+        if not isinstance(self._data, dict) and not isinstance(self._data, BaseScheme):
+            raise TypeError('data is not dict or BaseScheme, cannot dump as dict, try dump_as_json() instread')
+        if isinstance(self._data, BaseScheme):
+            return self._data.dump_to_dict()
+        return self._data
 
     def dump_to_bytes(self) -> bytes:
-        return json.dumps(self.__data).encode('utf-8')
+        return json.dumps(self.dump_to_dict()).encode('utf-8')
 
     def dump_to_json(self) -> str:
-        return json.dumps(self.__data)
+        return json.dumps(self.dump_to_dict())
 
 
 class Response:
