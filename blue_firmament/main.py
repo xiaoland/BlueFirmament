@@ -258,11 +258,13 @@ class BlueFirmamentApp:
         - 通过会话数据访问对象更新要创建的数据模型实例
         - 数据模型实例使用部分化的数据模型类，数据为请求体（ ``body`` ）
         '''
+        partial_cls = make_partial(cls)
+
         async def wrapper(
             request: CommonSesstionRequest, 
-            id, body: typing.Annotated[BaseScheme, cls]
+            id, body: typing.Annotated[BaseScheme, partial_cls]
         ):
-            ins = make_partial(cls)(**body)
+            ins = partial_cls(**body)
             return await request.session.dao.update(
                 ins, None, EqFilter(cls.get_primary_key(), id)
             )
