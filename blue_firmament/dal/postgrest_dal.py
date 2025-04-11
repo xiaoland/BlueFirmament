@@ -33,6 +33,7 @@ class PostgrestDataAccessObject(DataAccessObject):
         default_table: typing.Optional[str | enum.Enum] = None,
         default_schema: typing.Optional[str | enum.Enum] = None,
         token: typing.Optional[str] = None,
+        supabase_api_key: typing.Optional[str] = None,
     ) -> None:
         
         '''实例化
@@ -40,19 +41,22 @@ class PostgrestDataAccessObject(DataAccessObject):
         :param url: PostgREST的URL地址
         :param schema: 操作的表组
         :param token: PostgREST的认证令牌 会被附加到 ``Authorization`` 请求头中，添加 ``Bearer `` 前缀
+        :param supabase_api_key: Supabase的API密钥 会被附加到 ``apiKey`` 请求头中；不提供默认使用anon_key
         '''
         base_url = url or get_dal_setting().postgrest_url
         default_schema = default_schema or get_dal_setting().postgrest_default_schema
         default_table = default_table or get_dal_setting().postgres_default_table
+        supabase_api_key = supabase_api_key or get_dal_setting().postgrest_anonymous_token
 
         self.__headers = {
             'X-Client-Info': f'{__package_name__}/{__version__}',
+            'apiKey': supabase_api_key,
         }
-        if token:
-            self.__headers[HeaderName.AUTHORIZATION.value] = f'Bearer {token}'
-            self.__headers['apiKey'] = token
         '''PostgREST客户端使用的请求头'''
 
+        if token:
+            self.__headers[HeaderName.AUTHORIZATION.value] = f'Bearer {token}'
+        
         self.__client = postgrest.AsyncPostgrestClient(
             base_url=base_url,
             schema=dump_enum(default_schema),
@@ -75,12 +79,16 @@ class PostgrestDataAccessObject(DataAccessObject):
     def set_token(self, token: str) -> None:
 
         '''设置认证令牌
+
+        NEED TEST
         '''
         self.__headers[HeaderName.AUTHORIZATION.value] = f'Bearer {token}'
 
     def unset_token(self) -> None:
             
         '''取消认证令牌
+
+        NEED TEST
         '''
         if HeaderName.AUTHORIZATION.value in self.__headers:
             del self.__headers[HeaderName.AUTHORIZATION.value]
@@ -203,16 +211,24 @@ class PostgrestDataAccessObject(DataAccessObject):
         to_update: dict | BaseScheme, path: DALPath | None = None, /, *filters: DALFilter
     ) -> dict | BaseScheme:
         
+        if not path and isinstance(to_update, BaseScheme):
+            path = DALPath((to_update.__table_name__, to_update.__schema_name__))
+
+        if not filters:
+            raise ValueError("At least one filter is required for update.")
+
         base_query = self.__get_base_query_from_path(path)
         base_query = base_query.update(
             json=to_update.dump_to_dict() if isinstance(to_update, BaseScheme) else to_update
         )
         base_query = self.__apply_filters_to_base_query(base_query, filters)
         res = await base_query.execute()
+
+        # TODO 因为RLS导致的失败也应该有Exception
         
         # parse res to the same as to_update
         if isinstance(to_update, BaseScheme):
-            return to_update.__class__(**res.data[0])
+            return to_update.__class__(**res.data[0])  # TODO if partial scheme, use full scheme to parse
         elif isinstance(to_update, dict):
             return res.data[0]
         
