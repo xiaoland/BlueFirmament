@@ -1,6 +1,6 @@
 from ..dal import DataAccessObject
 from ..dal.postgrest_dal import PostgrestDataAccessObject
-from ..data.settings.transport import get_setting as get_transport_setting
+from ..data.settings.session import get_setting as get_session_setting
 from . import Session, SessionField
 from ..transport import HeaderName
 from ..log import get_logger
@@ -81,15 +81,23 @@ class CommonSession(Session):
                 else:
                     jwt_str = jwt_str.value
 
-            jwt_payload: dict = jwt.decode(
-                jwt_str,
-                get_transport_setting().jwt_secret_key,
-                algorithms=(get_transport_setting().jwt_algorithm,)
-            )
-            session_id = jwt_payload.get('session_id')
+            try:
+                jwt_payload: dict = jwt.decode(
+                    jwt_str,
+                    get_session_setting().jwt_secret_key,
+                    options={
+                        'verify_signature': False
+                    },
+                    algorithms=(get_session_setting().jwt_algorithm,)
+                )
+            except jwt.exceptions.PyJWTError as e:
+                logger.warning('JWT decode failed', e)
+                raise ValueError('JWT decode failed')
+            else:
+                session_id = jwt_payload.get('session_id')
 
-            if not isinstance(session_id, str):
-                raise ValueError('_JWT_PAYLOAD_FIELD_NAME not found or invalid')
+                if not isinstance(session_id, str):
+                    raise ValueError('_JWT_PAYLOAD_FIELD_NAME not found or invalid')
         except ValueError:
             session_id = uuid.uuid4().hex
 
