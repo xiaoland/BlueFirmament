@@ -15,12 +15,21 @@ def is_annotated(val: typing.Any) -> typing.TypeGuard[typing.Annotated]:
     '''
     return hasattr(val, '__origin__') and hasattr(val, '__metadata__')
 
-def get_origin(type: typing.Any) -> typing.Type:
-    res = None
+def get_origin(type: typing.Type) -> typing.Type:
+
+    '''
+    兼容typing.Annotated和typing.NewType的get_origin方法
+    '''
+    
     if getattr(type, '__class__') == typing.NewType:
         type = type.__supertype__
     
-    return typing.get_origin(type) or type
+    res = typing.get_origin(type) or type
+
+    if res == typing.Annotated:
+        return typing.cast(typing.Type, type.__origin__)
+    
+    return res
 
 
 JsonDumpable = typing.Union[
