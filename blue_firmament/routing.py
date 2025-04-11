@@ -340,7 +340,56 @@ class RouteRecord(BaseMiddleware):
         return self.route_key.is_match(route_key)
     
     @staticmethod
-    def parse_handler_kwargs(handler: RequestHandlerType) -> HandlerKwargsType:
+    def __get_path_query_param_getter(key: str, validator: BaseValidator):
+
+        """获取路径参数或查询参数的获取器
+        
+        传入参数名称和校验器，返回一个获取器函数用以按照名称和类型从path, query_params中解析参数
+        """
+        def get_path_query_param(env: RequestHandlerEnv):
+
+            try:
+                return validator(env['path_params'][key])
+            except KeyError:
+                try:
+                    return validator(env['request'].query_params[key])
+                except KeyError:
+                    raise ValueError(f'{key} not found in path or query params')
+        
+        return get_path_query_param
+    
+    @staticmethod
+    def __get_body_getter1(validator: typing.Type[BaseScheme]):
+
+        """获取一类请求体参数获取器
+
+        一类：BaseScheme
+        """
+        def get_body_1(env: RequestHandlerEnv):
+            request = env['request']
+            if isinstance(request.body, dict):
+                return validator(**request.body)
+            else:
+                raise ValueError('body must be dict')
+            
+        return get_body_1
+    
+    @staticmethod
+    def __get_body_getter2(validator: BaseValidator):
+
+        """获取二类请求体参数获取器
+
+        二类：原样
+        """
+        def get_body_2(env: RequestHandlerEnv):
+            request = env['request']
+            return validator(request.body)
+        
+        return get_body_2
+        
+    
+    @classmethod
+    def parse_handler_kwargs(cls, handler: RequestHandlerType) -> HandlerKwargsType:
 
         '''解析处理器参数
 
@@ -383,10 +432,10 @@ class RouteRecord(BaseMiddleware):
         kwargs: RouteRecord.HandlerKwargsType = {}
 
         for key, param in handler_params.items():
-            anno = get_origin(param.annotation)
-            # 兼容 typing.Annotated, typing.NewType 和一般标注
-            if is_annotated(anno):
-                validator = anno.__metadata__[0]
+            
+            anno = get_origin(param.annotation) 
+            if is_annotated(param.annotation): 
+                validator = param.annotation.__metadata__[0]
             else:
                 validator = get_validator_by_type(anno)
 
@@ -397,41 +446,21 @@ class RouteRecord(BaseMiddleware):
                 kwargs[key] = lambda env: env['response']
                 continue
             
-            # TODO by name 
-
-            def get_path_query_param(env: RequestHandlerEnv):
-                try:
-                    return validator(env['path_params'][key])
-                except KeyError:
+            if key == HANDLER_BODY_KW:
+                if issubclass(anno, BaseScheme):
                     try:
-                        return validator(env['request'].query_params[key])
-                    except KeyError:
-                        raise ValueError(f'{key} not found in path or query params')
+                        if not issubclass(validator, BaseScheme):  # type: ignore
+                            raise TypeError
+                    except TypeError:
+                        raise TypeError('When annotation is BaseScheme, the validator (typing.Annotated arg 1) must be BaseScheme too')
+                    
+                    kwargs[HANDLER_BODY_KW] = cls.__get_body_getter1(validator)
+                else:
+                    kwargs[HANDLER_BODY_KW] = cls.__get_body_getter2(validator)
 
-            kwargs[key] = get_path_query_param
+                continue
 
-        if HANDLER_BODY_KW in handler_params:
-            body_anno = get_origin(handler_params[HANDLER_BODY_KW].annotation)
-            if is_annotated(body_anno):
-                body_validator = body_anno.__metadata__[0]  # 一般来说是 BaseScheme 的子类
-            else:
-                body_validator = get_validator_by_type(body_anno)
-
-            if issubclass(body_anno, BaseScheme):
-                def get_body_1(env: RequestHandlerEnv):
-                    request = env['request']
-                    if isinstance(request.body, dict):
-                        return body_validator(**request.body)
-                    else:
-                        raise ValueError('body must be dict')
-                
-                kwargs[HANDLER_BODY_KW] = get_body_1
-            else:
-                def get_body_2(env: RequestHandlerEnv):
-                    request = env['request']
-                    return body_validator(request.body)
-                
-                kwargs[HANDLER_BODY_KW] = get_body_2
+            kwargs[key] = cls.__get_path_query_param_getter(key, validator)
 
         return kwargs
     
