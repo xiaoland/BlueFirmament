@@ -13,11 +13,11 @@ class SchemeMetaclass(type):
     """碧霄数据模型元类
 
     Rational
-    ^^^^^^^^^^^
+    ---------
     - 允许数据模型通过类属性定义字段
 
     Attributes
-    ^^^^^^^^^^^^^
+    -----------
     - ``__table_name__``：表名
     - ``__schema_name__``：数据库名
     - ``__fields__``：字段字典
@@ -38,9 +38,8 @@ class SchemeMetaclass(type):
     ```
     
     可以直接使用`BlueFirmamentField`定义字段，也可以直接使用值定义字段。值将会作为字段的默认值，类变量名将自动作为字段名。
-    
 
-    名称为下列的类变量会被解析为内置字段：
+    名称为下列的类变量会被解析为内置字段：（不会继承）
     - ``_table_name``：表名
     - ``_schema_name``：数据库名/表组名（来源于PostgreSQL，相当于MySQL的数据库）
 
@@ -105,7 +104,7 @@ class SchemeMetaclass(type):
         # 解析当前类的字段定义
         for k, v in attrs.items():
 
-            # 跳过魔法属性
+            # 跳过魔法属性（根据名称调过）
             if k.startswith('__') and k.endswith('__'):
                 continue
 
@@ -153,6 +152,17 @@ class SchemeMetaclass(type):
             anno = attrs.get('__annotations__', {}).get(k)
             if anno:
                 private_fields[k].set_validator_from_type(anno)
+
+        # 处理没有值，只有类型注解的字段
+        for k, v in attrs.get('__annotations__', {}).items():
+
+            # 跳过魔法属性
+            if k.startswith('__') and k.endswith('__'):
+                continue
+
+            if k not in fields and k not in private_fields:
+                fields[k] = BlueFirmamentField(default=UndefinedValue, name=k)
+                fields[k].set_validator_from_type(v)
         
         attrs['__fields__'] = fields
         attrs['__private_fields__'] = private_fields
@@ -344,17 +354,21 @@ def make_partial(cls: typing.Type[BaseScheme]):
     class PartialScheme(cls):
 
         __name__ = f'Partial{cls.__name__}'
-        __partial_fields__: typing.Set[str] = set()
-        '''缺失的字段'''
+
+        _schema_name = cls.__schema_name__
+        _table_name = cls.__table_name__
 
         def __init__(self, /, **kwargs: typing.Any):
+
+            self.__partial_fields: typing.Set[str] = set()
+            '''缺失的字段'''
             
             for k, v in self.__fields__.items():
                 if k in kwargs:
                     setattr(self, k, v.validate(kwargs[k]))
                 else:
                     setattr(self, k, UndefinedValue)
-                    self.__partial_fields__ |= {k}
+                    self.__partial_fields |= {k}
 
             # 初始化私有字段
             self._init_private_fields(self, kwargs)
@@ -362,7 +376,7 @@ def make_partial(cls: typing.Type[BaseScheme]):
         def dump_to_dict(self) -> dict:
 
             data = dict()
-            for k in (self.__fields__.keys() - self.__partial_fields__):
+            for k in (self.__fields__.keys() - self.__partial_fields):
                 data[k] = getattr(self, k)  
             return data
 
