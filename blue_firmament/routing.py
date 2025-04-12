@@ -7,10 +7,10 @@ from .transport.request import Request
 from .transport import TransportOperationType
 from .scheme.validator import AnyValidator, BaseValidator, get_validator_by_type
 from .scheme import BaseScheme
-from .utils.type import is_annotated, get_origin, ismethodorigin, getmethodclass
+from .utils.type import is_annotated, get_origin, ismethodorigin, isclassmethod
 from .utils import call_function_as_async
 from .middleware import BaseMiddleware
-from .manager import Manager
+from .manager import BaseManager
 from .transport.response import Response, JsonResponseBody
 
 
@@ -296,7 +296,10 @@ class RouteRecord(BaseMiddleware):
     HandlerKwargsType = typing.Dict[str, typing.Callable[[RequestHandlerEnv], typing.Any]]
     TargetType = typing.Union[RequestHandlerType, 'Router']
     
-    def __init__(self, key: RouteKey, value: TargetType):
+    def __init__(self, 
+        key: RouteKey, value: TargetType,
+        handler_manager: typing.Optional[typing.Type[BaseManager]] = None,
+    ):
 
         """
         Initialize a route record.
@@ -305,19 +308,21 @@ class RouteRecord(BaseMiddleware):
         ----------
         - `route_key`: The route key that this record matches
         - `target`: Either a handler function or another router that processes the request
+        - `handler_manager`: If the target is a manager method, this is the manager class. 
+        
+        handler_manager
+        ^^^^^^^^^^^^^^
+        Static method and class method is not counted as a handler on manager.
+        Only `Class.method` is counted.
         """
         self.__route_key = key
         self.__target = value
-        self.__handler_kwargs: RouteRecord.HandlerKwargsType = {}
+        self.__method_manager_cls = handler_manager
 
         # parse handler kwargs
+        self.__handler_kwargs: RouteRecord.HandlerKwargsType = {}
         if not isinstance(self.__target, Router):
             self.__handler_kwargs = self.parse_handler_kwargs(self.__target)
-
-        # is manager methods
-        self.__method_manager_cls: typing.Optional[typing.Type[Manager]] = None
-        if ismethodorigin(self.__target, Manager):
-            self.__method_manager_cls = getmethodclass(self.__target)
 
     @property
     def route_key(self) -> RouteKey:
@@ -518,7 +523,7 @@ class RouteRecord(BaseMiddleware):
         """
         assert not isinstance(self.__target, Router), "Target is not handler."
         
-        # get params
+        # get kwargs
         env: RequestHandlerEnv = {
             'request': request,
             'response': response,
@@ -526,12 +531,15 @@ class RouteRecord(BaseMiddleware):
         }
         kwargs = {key: getter(env) for key, getter in self.__handler_kwargs.items()}
 
-        # call handler
+        # get args
+        args = []
+        # [self] don't add other arg parser before this one
         if self.__method_manager_cls:
             manager = self.__method_manager_cls(request.session)
-            result = await call_function_as_async(self.__target, manager, **kwargs)
-        else:
-            result = await call_function_as_async(self.__target, **kwargs)
+            args.append(manager)
+
+        # call handler
+        result = await call_function_as_async(self.__target, *args, **kwargs)
 
         # process result
         # TODO process result correctly
@@ -572,7 +580,8 @@ class Router:
         
     def add_route_record(
         self, operation: TransportOperationType, path: str, 
-        handler: RequestHandlerType | 'Router'
+        handler: RequestHandlerType | 'Router',
+        handler_manager: typing.Optional[typing.Type[BaseManager]] = None
     ):
         
         """
@@ -580,12 +589,12 @@ class Router:
         
                                                                                                                                                
         :param operation: The operation type (GET, POST, etc.)
-        :param path: A URL-like path, which can include parameters (e.g., '/users/:id')
+        :param path: A URL-like path, which can include parameters (e.g., '/users/{id}')
         :param handler: Either a handler function that processes the request,
                               or another router that continues the routing process
         """
         route_key = RouteKey(operation, path)
-        record = RouteRecord(route_key, handler)
+        record = RouteRecord(route_key, handler, handler_manager)
         
         self.__records.append(record)
 
@@ -642,4 +651,33 @@ class Router:
                         continue
 
         raise KeyError(f"Route key {route_key} not matching a record in router {self.name}")
+
+    def get_manager_handler_route_record_register(self,
+        manager: typing.Type[BaseManager], path_prefix: str = '',
+        use_manager_name_as_prefix: bool = True,
+    ) -> typing.Callable[
+        [TransportOperationType, str, RequestHandlerType], None
+    ]:
+        
+        '''获取管理器处理器的路由注册器
+
+        省去了 ``add_route_record`` 的 ``handler_manager`` 参数，并提供了一个路径前缀
+
+        :param manager: 管理器类
+        :param path_prefix: 路径前缀
+        :param use_manager_name_as_prefix: 是否使用管理器名称作为前缀
+        '''
+        def add_route_record(
+            operation: TransportOperationType, path: str,
+            handler: RequestHandlerType
+        ):
+            
+            if use_manager_name_as_prefix and not path_prefix:
+                path = f'/{manager.__name__}{path}'
+            elif path_prefix:
+                path = f'/{path_prefix}{path}'
+            
+            self.add_route_record(operation, path, handler, manager)
+
+        return add_route_record
 

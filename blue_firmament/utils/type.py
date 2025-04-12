@@ -34,36 +34,42 @@ def get_origin(type: typing.Type) -> typing.Type:
 
 
 T = typing.TypeVar('T', bound=typing.Type)
-def ismethodorigin(param, origin: T) -> typing.TypeGuard[T]:
+def ismethodorigin(func, origin: T) -> typing.TypeGuard[T]:
     
     '''判断是否为某个类的方法
 
-    类方法包括实例方法、类方法
+    包括实例方法、类方法：
+    
+    ```python
+    class A:
+        def method(self):
+            pass
+        @classmethod
+        def cls_method(cls):
+            pass
+    
+    A.method # no
+    A.cls_method # yes
+    a = A()
+    a.method # yes
+    ```
 
     :param param: 要检查的参数
     :param origin: 要检查的类
     '''
 
-    if inspect.ismethod(param):
-        instance = param.__self__
-        return isinstance(instance, origin)
-    # Handling class methods (often caught here)
-    elif hasattr(param, '__func__') and hasattr(param, '__self__') and inspect.isclass(param.__self__):
-         cls = param.__self__
-         return cls is origin
+    if inspect.ismethod(func):
+        return isinstance(func.__self__, origin)
+    elif isclassmethod(func):
+         return func.__self__ is origin
     
     return False
 
-def getmethodclass(param):
+def isclassmethod(func: typing.Any) -> bool:
 
-    '''获取方法的类
-
-    :param param: 实例方法
+    '''Check if the function is a classmethod
     '''
-    if inspect.ismethod(param):
-        return param.__self__.__class__
-    
-    return param.__self__
+    return inspect.ismethod(func) and hasattr(func, '__self__') and func.__self__ is not None
 
 
 JsonDumpable = typing.Union[

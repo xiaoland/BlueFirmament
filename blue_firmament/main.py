@@ -9,8 +9,6 @@ from .transport import TransportOperationType
 from .transport.base import (
     Connection, BlueFirmamentTransporter
 )
-from .transport.http import HTTPTransporter
-from .session.common import CommonSession
 from .scheme import BaseScheme, make_partial
 from .utils import call_function_as_async
 from .routing import Router
@@ -42,10 +40,12 @@ class BlueFirmamentApp:
         
         self.__name__ = name
         self.__transports = transports or []
-        
-        if router is None:
-            router = Router('root')
-        self.__router = router
+        self.__router: Router = router or Router('root')
+
+    @property
+    def router(self) -> Router:
+        """获取应用根路由器实例"""
+        return self.__router
 
     def add_transporter(self, transporter: BlueFirmamentTransporter):
 
