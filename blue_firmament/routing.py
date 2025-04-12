@@ -7,11 +7,10 @@ from .transport.request import Request
 from .transport import TransportOperationType
 from .scheme.validator import AnyValidator, BaseValidator, get_validator_by_type
 from .scheme import BaseScheme
-from .utils.type import is_annotated, get_origin
+from .utils.type import is_annotated, get_origin, ismethodorigin, getmethodclass
 from .utils import call_function_as_async
 from .middleware import BaseMiddleware
-
-
+from .manager import Manager
 from .transport.response import Response, JsonResponseBody
 
 
@@ -295,8 +294,9 @@ class RouteRecord(BaseMiddleware):
     """
 
     HandlerKwargsType = typing.Dict[str, typing.Callable[[RequestHandlerEnv], typing.Any]]
+    TargetType = typing.Union[RequestHandlerType, 'Router']
     
-    def __init__(self, key: RouteKey, value: typing.Union[RequestHandlerType, 'Router']):
+    def __init__(self, key: RouteKey, value: TargetType):
 
         """
         Initialize a route record.
@@ -306,16 +306,30 @@ class RouteRecord(BaseMiddleware):
         - `route_key`: The route key that this record matches
         - `target`: Either a handler function or another router that processes the request
         """
-        self.route_key = key
-        self.target = value
+        self.__route_key = key
+        self.__target = value
         self.__handler_kwargs: RouteRecord.HandlerKwargsType = {}
 
-        if not isinstance(self.target, Router):
-            self.__handler_kwargs = self.parse_handler_kwargs(self.target)
+        # parse handler kwargs
+        if not isinstance(self.__target, Router):
+            self.__handler_kwargs = self.parse_handler_kwargs(self.__target)
+
+        # is manager methods
+        self.__method_manager_cls: typing.Optional[typing.Type[Manager]] = None
+        if ismethodorigin(self.__target, Manager):
+            self.__method_manager_cls = getmethodclass(self.__target)
+
+    @property
+    def route_key(self) -> RouteKey:
+        return self.__route_key
+    
+    @property
+    def target(self) -> TargetType:
+        return self.__target
             
     
     def __hash__(self) -> int:
-        return hash(self.route_key)
+        return hash(self.__route_key)
     
     def __eq__(self, value) -> bool:
         
@@ -323,21 +337,21 @@ class RouteRecord(BaseMiddleware):
         如果是RouteKey，则直接与route_key比较；如果是RouteRecord，则比较route_key是否相等。
         '''
         if isinstance(value, RouteKey):
-            return self.route_key == value
+            return self.__route_key == value
         elif isinstance(value, RouteRecord):
-            return self.route_key == value.route_key
+            return self.__route_key == value.__route_key
         return False    
     
     @property
     def is_mapping_to_router(self) -> bool:
         """Check if this route record points to another router"""
-        return isinstance(self.target, Router)
+        return isinstance(self.__target, Router)
     
     def is_key_match(self, route_key: RouteKey):
         
         """判断路由键是否匹配        
         """
-        return self.route_key.is_match(route_key)
+        return self.__route_key.is_match(route_key)
     
     @staticmethod
     def __get_path_query_param_getter(key: str, validator: BaseValidator):
@@ -472,8 +486,8 @@ class RouteRecord(BaseMiddleware):
         **kwargs
     ):
         
-        if isinstance(self.target, Router):
-            self.target()  # type: ignore  调用不了自然报错
+        if isinstance(self.__target, Router):
+            self.__target()  # type: ignore  调用不了自然报错
             next()
         else:
             await self.execute_handler(request, response, path_params)
@@ -502,7 +516,7 @@ class RouteRecord(BaseMiddleware):
 
         
         """
-        assert not isinstance(self.target, Router), "Target is not handler."
+        assert not isinstance(self.__target, Router), "Target is not handler."
         
         # get params
         env: RequestHandlerEnv = {
@@ -513,7 +527,11 @@ class RouteRecord(BaseMiddleware):
         kwargs = {key: getter(env) for key, getter in self.__handler_kwargs.items()}
 
         # call handler
-        result = await call_function_as_async(self.target, **kwargs)
+        if self.__method_manager_cls:
+            manager = self.__method_manager_cls(request.session)
+            result = await call_function_as_async(self.__target, manager, **kwargs)
+        else:
+            result = await call_function_as_async(self.__target, **kwargs)
 
         # process result
         # TODO process result correctly
@@ -606,9 +624,9 @@ class Router:
                         params.update(sub_params)
                     
                     if record.is_mapping_to_router:
-                        new_route_key = route_key[len(record.route_key):]
+                        new_route_key = route_key[len(record.__route_key):]
                         record, sub_params = typing.cast(
-                            Router, record.target
+                            Router, record.__target
                         ).routing(
                             new_route_key, leaf_node
                         )
@@ -619,7 +637,7 @@ class Router:
                         return record, params
                     else:
                         # is fully match (leaf node must be fully matched)
-                        if len(route_key) == len(record.route_key):
+                        if len(route_key) == len(record.__route_key):
                             return record, params or None
                         continue
 

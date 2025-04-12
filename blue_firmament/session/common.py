@@ -42,7 +42,7 @@ class DAOSessionField(SessionField[DataAccessObject]):
 
 class CommonSession(Session):
 
-    '''通用状态类
+    '''通用会话类
 
     包含下列字段：
     - dao：数据访问对象（DAO）

@@ -1,6 +1,7 @@
 '''Utils related to type checking and type hinting.'''
 
 import typing
+import inspect
 from ..scheme import BaseScheme
 
 def is_annotated(val: typing.Any) -> typing.TypeGuard[typing.Annotated]:
@@ -30,6 +31,39 @@ def get_origin(type: typing.Type) -> typing.Type:
         return typing.cast(typing.Type, type.__origin__)
     
     return res
+
+
+T = typing.TypeVar('T', bound=typing.Type)
+def ismethodorigin(param, origin: T) -> typing.TypeGuard[T]:
+    
+    '''判断是否为某个类的方法
+
+    类方法包括实例方法、类方法
+
+    :param param: 要检查的参数
+    :param origin: 要检查的类
+    '''
+
+    if inspect.ismethod(param):
+        instance = param.__self__
+        return isinstance(instance, origin)
+    # Handling class methods (often caught here)
+    elif hasattr(param, '__func__') and hasattr(param, '__self__') and inspect.isclass(param.__self__):
+         cls = param.__self__
+         return cls is origin
+    
+    return False
+
+def getmethodclass(param):
+
+    '''获取方法的类
+
+    :param param: 实例方法
+    '''
+    if inspect.ismethod(param):
+        return param.__self__.__class__
+    
+    return param.__self__
 
 
 JsonDumpable = typing.Union[

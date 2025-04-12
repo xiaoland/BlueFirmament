@@ -261,16 +261,16 @@ class TestRouteRecord(unittest.TestCase):
         route_key = RouteKey(TransportOperationType.GET, '/users')
         record = RouteRecord(route_key, dummy_handler)
         
-        self.assertEqual(route_key, record.route_key)
-        self.assertEqual(dummy_handler, record.target)
+        self.assertEqual(route_key, record.__route_key)
+        self.assertEqual(dummy_handler, record.__target)
         self.assertFalse(record.is_mapping_to_router)
         
         # Router target
         router = Router()
         router_record = RouteRecord(route_key, router)
         
-        self.assertEqual(route_key, router_record.route_key)
-        self.assertEqual(router, router_record.target)
+        self.assertEqual(route_key, router_record.__route_key)
+        self.assertEqual(router, router_record.__target)
         self.assertTrue(router_record.is_mapping_to_router)
     
     def test_equality(self):
@@ -421,7 +421,7 @@ class TestRouter(unittest.TestCase):
         record, params = self.router.routing(route_key)
         
         self.assertIsNotNone(record)
-        self.assertEqual(self.users_handler, record.target)
+        self.assertEqual(self.users_handler, record.__target)
         self.assertIsNone(params)  # No parameters for this route
         
         # Route to posts handler
@@ -429,7 +429,7 @@ class TestRouter(unittest.TestCase):
         record, params = self.router.routing(route_key)
         
         self.assertIsNotNone(record)
-        self.assertEqual(self.posts_handler, record.target)
+        self.assertEqual(self.posts_handler, record.__target)
         self.assertIsNone(params)
     
     def test_routing_with_parameters(self):
@@ -439,7 +439,7 @@ class TestRouter(unittest.TestCase):
         record, params = self.router.routing(route_key)
         
         self.assertIsNotNone(record)
-        self.assertEqual(self.user_detail_handler, record.target)
+        self.assertEqual(self.user_detail_handler, record.__target)
         self.assertEqual({'id': '123'}, params)
         
         # Invoke the handler with extracted parameters
@@ -483,7 +483,7 @@ class TestRouter(unittest.TestCase):
         
         self.assertIsNotNone(record)
         self.assertEqual({'id': '42'}, params)
-        self.assertEqual(record.target(None, params), 'here')
+        self.assertEqual(record.__target(None, params), 'here')
     
     def test_routing_leave_node_false(self):
         """Test routing with leave_node=False"""
@@ -509,14 +509,14 @@ class TestRouter(unittest.TestCase):
         record, params = self.router.routing(route_key, leaf_node=True)
         
         self.assertIsNotNone(record)
-        self.assertEqual(nested_handler, record.target)
+        self.assertEqual(nested_handler, record.__target)
         
         # With leave_node=False, we should get the router record
         record, params = self.router.routing(route_key, leaf_node=False)
         
         self.assertIsNotNone(record)
         self.assertTrue(record.is_mapping_to_router)
-        self.assertEqual(nested_router, record.target)
+        self.assertEqual(nested_router, record.__target)
         
         # Test non-existent route with leaf_node=False
         route_key = RouteKey(TransportOperationType.GET, '/nonexistent')

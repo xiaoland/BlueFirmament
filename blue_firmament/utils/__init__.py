@@ -78,7 +78,9 @@ def get_when_truly(
     return getter(value) if value else fallback
 
 
-async def call_function_as_async(func: typing.Callable, *args, **kwargs) -> typing.Any:
+async def call_function_as_async(
+    func: typing.Callable, *args, **kwargs
+) -> typing.Any:
 
     """
     Calls the given function with the provided arguments, handling both
