@@ -82,3 +82,12 @@ Design
 --------
 - 基于 ``structlog``
 
+
+子设计文档
+-----------
+
+.. toctree:: 
+   :maxdepth: 2
+   :glob:
+
+   ./manager

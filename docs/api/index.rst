@@ -6,6 +6,7 @@ API Reference
    :caption: Contents:
 
    scheme/index
+   manager
 
 .. automodule:: blue_firmament
    :members:

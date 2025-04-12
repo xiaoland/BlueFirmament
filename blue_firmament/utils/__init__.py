@@ -107,8 +107,8 @@ async def call_function_as_async(
             return x * 3
             
         # Both can be called the same way
-        result1 = call_function(sync_func, 5)  # Returns 10
-        result2 = call_function(async_func, 5)  # Returns 15
+        result1 = await call_function_as_async(sync_func, 5)  # Returns 10
+        result2 = await call_function_as_async(async_func, 5)  # Returns 15
     ```
     """
     # process func is a instance with __call__ method
