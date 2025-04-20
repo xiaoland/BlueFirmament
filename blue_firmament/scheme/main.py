@@ -106,9 +106,23 @@ class SchemeMetaclass(type):
         if bases:
             for base in bases:
                 if hasattr(base, '__fields__'):
-                    fields.update(base.__fields__)
+                    forked_fields = {
+                        k: v.fork()
+                        for k, v in typing.cast(
+                            typing.Dict[str, BlueFirmamentField],
+                            base.__fields__
+                        ).items()
+                    }
+                    fields.update(forked_fields)
                 if hasattr(base, '__private_fields__'):
-                    private_fields.update(base.__private_fields__)
+                    forked_private_fields = {
+                        k: v.fork()
+                        for k, v in typing.cast(
+                            typing.Dict[str, BlueFirmamentPrivateField],
+                            base.__private_fields__
+                        ).items()
+                    }
+                    private_fields.update(forked_private_fields)
 
         # 解析当前类的字段定义
         for k, v in attrs.items():
@@ -130,48 +144,51 @@ class SchemeMetaclass(type):
             # 解析私有字段实例
             if isinstance(v, BlueFirmamentPrivateField):
                 private_fields[k] = v
-                v._set_name(k) # 如果没有配置名称，则使用类变量名作为字段名
+                v._set_name(k, True) # 如果没有配置名称，则使用类变量名作为字段名
+                v._set_in_scheme_name(k, True)
                 continue
 
             # 解析为字段实例
             if isinstance(v, BlueFirmamentField):
                 fields[k] = v
-                v._set_name(k) # 如果没有配置名称，则使用类变量名作为字段名
+                v._set_name(k, True) # 如果没有配置名称，则使用类变量名作为字段名
+                v._set_in_scheme_name(k, True)
             else:
                 
                 if k in fields:
                     fields[k] = fields[k].fork(
-                        default=v, name=k
+                        default=v, name=k, in_scheme_name=k,
                     )
                     continue
                 elif k in private_fields:  # `elif`: 不可能又私有又普通的
                     private_fields[k] = private_fields[k].fork(
-                        default=v, name=k
+                        default=v, name=k, in_scheme_name=k
                     )
                     continue
 
-                fields[k] = BlueFirmamentField(v, name=k)
+                fields[k] = BlueFirmamentField(v, name=k, in_scheme_name=k)
 
         # 根据类型注解设置校验器
-        for k in fields.keys():
+        for k, v in (fields | private_fields).items():
             anno = attrs.get('__annotations__', {}).get(k)
             if anno:
-                fields[k].set_validator_from_type(anno)
-        for k in private_fields.keys():
-            anno = attrs.get('__annotations__', {}).get(k)
-            if anno:
-                private_fields[k].set_validator_from_type(anno)
+                v.set_validator_from_type(anno)
 
         # 处理没有值，只有类型注解的字段
-        for k, v in attrs.get('__annotations__', {}).items():
+        cls_annotations = attrs.get('__annotations__', {})
+        for k, v in cls_annotations.items():
 
             # 跳过魔法属性
             if k.startswith('__') and k.endswith('__'):
                 continue
 
             if k not in fields and k not in private_fields:
-                fields[k] = BlueFirmamentField(default=UndefinedValue, name=k)
+                fields[k] = BlueFirmamentField(default=UndefinedValue(), name=k)
                 fields[k].set_validator_from_type(v)
+
+        # # 替换识别到的字段、私有字段值为字段实例
+        for k, v in (fields | private_fields).items():
+            attrs[k] = v
         
         attrs['__fields__'] = fields
         attrs['__private_fields__'] = private_fields
@@ -206,6 +223,17 @@ class SchemeMetaclass(type):
         init_method = init_sig + init_body
         
         exec(init_method, new_globals, attrs)
+
+        result_class = super().__new__(cls, name, bases, attrs)
+
+        # set fields' scheme
+        for k, v in (result_class.__fields__ | result_class.__private_fields__).items():
+            v._set_scheme_cls(
+                typing.cast(typing.Type["BaseScheme"], result_class), 
+                no_raise=True, force=True
+            )
+
+        return result_class
 
 
 class BaseScheme(metaclass=SchemeMetaclass):
