@@ -8,17 +8,16 @@ version = "0.1.1"
 description = "A python backend framework"
 readme = "README.md"
 requires-python = ">=3.12"
-license = {text = "MIT"}
+license = {text = "GNU General Public License v3 (GPLv3)"}
 authors = [
     {name = "Lan_zhijiang", email = "lanzhijiang@foxmail.com"}
 ]
 classifiers = [
     "Development Status :: 3 - Alpha",
     "Intended Audience :: Developers",
-    "License :: OSI Approved :: GPL-3.0 License",
+    "License :: OSI Approved :: GNU General Public License v3 (GPLv3)",
     "Natural Language :: Chinese (Simplified)",
     "Natural Language :: English",
-    "Typing :: Typed",
     "Programming Language :: Python :: 3",
     "Programming Language :: Python :: 3.12",
     "Topic :: Software Development :: Libraries :: Python Modules",
