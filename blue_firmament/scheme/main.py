@@ -270,20 +270,6 @@ class BaseScheme(metaclass=SchemeMetaclass):
     - 使用 ``get_scheme_field(Scheme, field_name)`` 来获取数据模型类的字段实例
     """
 
-    def __init__(self, /, **data: typing.Any):
-            
-        # 初始化普通字段
-        for k, v in self.__fields__.items():
-            if k in data:
-                setattr(self, k, v.validate(data[k]))
-            else:
-                setattr(self, k, v.default_value)
-
-        # 初始化私有字段
-        self._init_private_fields(self, data)
-
-        self.__post_init__()
-
     def __post_init__(self) -> None:
         '''数据模型实例化后执行的操作；可以被重写'''
         pass
@@ -298,7 +284,11 @@ class BaseScheme(metaclass=SchemeMetaclass):
                 setattr(obj, k, v.default_value)
 
     @classmethod
-    def get_primary_key(cls) -> str:
+    def dal_path(cls) -> DALPath:
+        return DALPath((cls.__table_name__, cls.__schema_name__))
+
+    @classmethod
+    def get_primary_key(cls) -> BlueFirmamentField:
         '''数据模型主键名称
         
         Behavior
@@ -308,26 +298,50 @@ class BaseScheme(metaclass=SchemeMetaclass):
         '''
         for i in cls.__fields__.values():
             if i.is_primary_key:
-                return i.name
+                return i
             
         raise KeyError(f'No primary key found in {cls.__name__}')
     
     @property
-    def primary_key_value(self) -> typing.Any:
-        '''
-        Exception
-        ^^^^^^^^^^^^
-        - ``KeyError``：没有主键字段
-        '''
-        return getattr(self, self.get_primary_key())
+    def primary_key_eqf(self) -> EqFilter:
+        pri_key = self.get_primary_key()
+        return EqFilter(
+            pri_key, self[pri_key]
+        )
 
-    def dump_to_dict(self) -> dict:
+    def dump_to_dict(self, 
+        only_dirty: bool = False,
+        exclude_primary_key: bool = False,
+    ) -> dict:
         
         """序列化为字典
+
+        :param only_dirty: 是否只序列化脏字段
+        :param exclude_primary_key: 是否排除主键字段
+
+        TODO
+        ----
+        - 应当使用字段的 dump_to_dict 方法来序列化字段
+        - 提供 `jsonable` 选项指示是否确保输出的字典是 JSON 可序列化的
+            - 需要特殊处理自定义类型
+
+        Behaviour
+        ----------
+        - 如果开启 `__proxy__`，则调用 FieldValueProxy 的 dump 来获取原始值
         """
         data = dict()
-        for k in self.__fields__.keys():
-            data[k] = getattr(self, k)
+
+        field_names: typing.Set[str] = set()
+        if only_dirty:
+            field_names = self.__dirty_fields__
+        else:
+            field_names = typing.cast(typing.Set[str], self.__fields__.keys())
+
+        if exclude_primary_key:
+            field_names = field_names - {self.get_primary_key().name}
+
+        for k in field_names:
+            data[k] = FieldValueProxy.dump(getattr(self, k))
         return data
     
     def dump(self) -> typing.Any:
@@ -394,8 +408,8 @@ class BaseScheme(metaclass=SchemeMetaclass):
         return self.__field_values__[field.in_scheme_name]
 
     @classmethod
-    async def from_primary_key(cls, primary_key_value, _dao: 'DataAccessObject') -> typing.Self:
-
+    def get_partial(cls):
+        return make_partial(cls)
     
     def mark_dirty(self, field: str | BlueFirmamentField) -> None:
 
@@ -419,11 +433,13 @@ def make_partial(cls: typing.Type[BaseScheme]):
 
     缺点：
     - 不与类型提示对齐
+
+    TODO
+    ^^^^
+    - 
     '''
 
     class PartialScheme(cls):
-
-        __name__ = f'Partial{cls.__name__}'
 
         _schema_name = cls.__schema_name__
         _table_name = cls.__table_name__
@@ -443,11 +459,26 @@ def make_partial(cls: typing.Type[BaseScheme]):
             # 初始化私有字段
             self._init_private_fields(self, kwargs)
 
-        def dump_to_dict(self) -> dict:
+        def dump_to_dict(self, 
+            only_dirty: bool = False,
+            exclude_primary_key: bool = False,
+        ) -> dict:
 
             data = dict()
-            for k in (self.__fields__.keys() - self.__partial_fields):
+
+            if only_dirty:
+                field_names = self.__dirty_fields__
+            else:
+                field_names = self.__fields__.keys() - self.__partial_fields
+
+            if exclude_primary_key:
+                field_names = field_names - {self.get_primary_key().name}
+
+            for k in field_names:
                 data[k] = getattr(self, k)  
             return data
 
+    PartialScheme.__name__ = f'Partial{cls.__name__}'
+
     return PartialScheme
+
