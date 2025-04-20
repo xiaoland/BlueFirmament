@@ -633,9 +633,9 @@ class Router:
                         params.update(sub_params)
                     
                     if record.is_mapping_to_router:
-                        new_route_key = route_key[len(record.__route_key):]
+                        new_route_key = route_key[len(record.route_key):]
                         record, sub_params = typing.cast(
-                            Router, record.__target
+                            Router, record.target
                         ).routing(
                             new_route_key, leaf_node
                         )
@@ -646,7 +646,7 @@ class Router:
                         return record, params
                     else:
                         # is fully match (leaf node must be fully matched)
-                        if len(route_key) == len(record.__route_key):
+                        if len(route_key) == len(record.route_key):
                             return record, params or None
                         continue
 
