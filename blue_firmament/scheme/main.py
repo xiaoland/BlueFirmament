@@ -309,22 +309,39 @@ class BaseScheme(metaclass=SchemeMetaclass):
         将本数据模型实例序列化为该数据模型推荐的格式
         '''
     
-    def __getitem__(self, key: str) -> typing.Any:
+    def __getitem__(self, key: str | BlueFirmamentField) -> BlueFirmamentField:
         
-        """通过字段名获取字段值
+        """通过字段名/字段获取字段值
 
-        不可以是其他属性，只可以是字段
+        Note: 不可以是其他属性，只可以是字段
         """
         if key in self.__fields__:
-            return getattr(self, key)
-
-    def keys(self) -> typing.Iterable[str]:
+            return getattr(self, dump_field_name(key))
         
-        """获取所有字段名
+        raise KeyError(f'{key} is not a field of {self.__class__.__name__}')
+    
+    def __setitem__(self, key: str | BlueFirmamentField, value: typing.Any) -> None:
+
+        """通过字段/字段名设置字段值
+
+        Note: 不可以是其他属性，只可以是字段
         """
-        return self.__fields__.keys()
+        field = self.__getitem__(key)
+        field.__set__(self, value)
 
     @classmethod
+    def keys(cls) -> typing.Iterable[str]:
+        
+        """获取所有字段的名称的集合
+        """
+        return cls.__fields__.keys()
+    
+    def values(self) -> typing.Iterable[typing.Any]:
+
+        """获取所有字段的值的集合
+        """
+        return self.__field_values__.values()
+    
     FieldValueType = typing.TypeVar("FieldValueType")
 
     def set_value(

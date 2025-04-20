@@ -215,6 +215,24 @@ class BlueFirmamentField(typing.Generic[FieldValueType]):
             vtype=vtype if not UndefinedValue.is_(vtype) else self.__origin__,
         )
     
+    def __hash__(self) -> int:
+        """哈希值
+
+        in_scheme_name or name
+        """
+        return hash(self.__in_scheme_name or self.__name)
+    
+    def __eq__(self, value) -> bool:
+
+        """
+        Make BlueFirmamentField(name='name') == 'name'
+        """
+        if isinstance(value, str):
+            return self.__name == value or self.__in_scheme_name == value
+        elif isinstance(value, BlueFirmamentField):
+            # name, vtype
+            return self.__name == value.name and self.vtype == value.vtype
+        return False
 
     @property
     def name(self) -> str: 
