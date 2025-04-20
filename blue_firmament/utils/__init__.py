@@ -38,16 +38,22 @@ def dump_enum(enum_member: enum.Enum | DumpEnumValueType) -> DumpEnumValueType:
         return enum_member.value
     return enum_member
 
-def get_enum_member(
-    enum_class: typing.Type[enum.Enum], name: str | int,
-    fallback_value: DumpEnumValueType
-) -> DumpEnumValueType:
+EnumType = typing.TypeVar('EnumType', bound=enum.Enum)
+def load_enum(
+    enum_class: typing.Type[EnumType], 
+    name: str | int | EnumType,
+) -> EnumType:
 
     '''获取枚举类中对应值的成员'''
-    try:
-        return enum_class(name)
-    except AttributeError:
-        return fallback_value
+    if isinstance(name, enum.Enum):
+        return name
+    else:
+        try:
+            return enum_class(name)
+        except ValueError as e:
+            raise ValueError(
+                f"Value '{name}' is not a valid member of enum '{enum_class.__name__}'"
+            ) from e
 
 def try_convert_str(value: str) -> typing.Union[str, int, float, bool, None]:
         
@@ -75,6 +81,13 @@ FallbackType = typing.TypeVar('FallbackType')
 def get_when_truly(
     value: T, getter: typing.Callable[[T], GetterReturnType] = lambda x: x, fallback: FallbackType = None
 ) -> GetterReturnType | FallbackType:
+    
+    """
+    TODO
+    ----
+    - merge with get_optional
+    """
+
     return getter(value) if value else fallback
 
 
@@ -123,3 +136,14 @@ async def call_function_as_async(
     else:
         # Function is synchronous, call it directly
         return func(*args, **kwargs)
+
+
+def get_optional(value: T | None, default: T) -> T:
+    
+    """
+    Returns the value if it is not None, otherwise returns the default value.
+    
+    :param value: The value to check
+    :param default: The default value to return if value is None
+    """
+    return value if value is not None else default

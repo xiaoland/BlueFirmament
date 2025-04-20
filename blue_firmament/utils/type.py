@@ -108,6 +108,42 @@ def is_json_dumpable(val: typing.Any) -> typing.TypeGuard[JsonDumpable]:
         return True
     
     return False
+
+def is_union_type(tp):
+  """Checks if a type hint is a union type (typing.Union or |)."""
+  origin = typing.get_origin(tp)
+  return origin is typing.Union or origin is types.UnionType
+
+
+def add_type_to_namespace(type_: typing.Type, namespace: dict):
+
+    '''将类型添加到命名空间
+
+    :param type: 要添加的类型
+    :param namespace: 命名空间
+    '''
+    try:
+        namespace[type_.__name__] = type_
+    except AttributeError:
+        raise ValueError('Cannnot process this type %s' % type_)
+
+
+def is_mutable(value: typing.Any) -> bool:
+    
+    '''判断一个值是否为可变对象
+
+    :param value: 要判断的值
+    '''
+    if isinstance(value, (list, dict, set)):
+        return True
+    elif hasattr(value, '__hash__'):
+        return False  # not strict enough
+    elif hasattr(value, '__dict__'):
+        return True  # need verification
+    else:
+        return False
+
+
 def safe_issubclass(
     obj: typing.Any, classinfo: T
 ) -> typing.TypeGuard[T]:
