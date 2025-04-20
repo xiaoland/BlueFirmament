@@ -11,6 +11,10 @@ References
 import functools
 import typing
 
+from ..utils.type import is_mutable
+
+from ..dal.filters import EqFilter
+
 from .validator import BaseValidator, get_validator_by_type
 
 if typing.TYPE_CHECKING:
@@ -151,7 +155,8 @@ class BlueFirmamentField(typing.Generic[FieldValueType]):
     - 使用定义的序列化器序列化字段值
     """
 
-    __origin__: FieldValueType
+    __origin__: typing.Type[FieldValueType]
+    '''字段值的类型'''
 
     def __init__(
         self, 
@@ -269,9 +274,31 @@ class BlueFirmamentField(typing.Generic[FieldValueType]):
         self.__in_scheme_name = value
 
     @property
+    def scheme_cls(self) -> typing.Type["BaseScheme"]: 
+        if self.__scheme_cls is None: raise ValueError('Field scheme is not defined')
+        return self.__scheme_cls
+
+    def _set_scheme_cls(self, 
+        scheme_cls: typing.Optional[typing.Type["BaseScheme"]],
+        no_raise: bool = False,
+        force: bool = False
+    ) -> None:
+        """设置字段所属的数据模型
+
+        如果已经设置过数据模型，则抛出错误
+
+        :param force: 是否强制设置 \n
+            建议使用 :meth:`fork` 来设置值（但元类是特例）
+        """
+        if self.__scheme_cls is not None and not force:
+            if no_raise: return None
+            raise ValueError('Field scheme is immutable')
+        self.__scheme_cls = scheme_cls
+
+    @property
     def is_primary_key(self) -> bool: return self.__is_primary_key
 
-    def set_validator_from_type(self, annotation: FieldValueType):
+    def set_validator_from_type(self, annotation: typing.Type[FieldValueType]):
 
         """从类型注解设置校验器
         """
@@ -302,6 +329,22 @@ class BlueFirmamentField(typing.Generic[FieldValueType]):
             return self.__validator(value)
         else:
             return value
+        
+    def equals(self, other: typing.Any) -> EqFilter:
+        
+        '''Get an EqFilter of this field
+        '''
+        return EqFilter(self, other)
+    
+    def get_dict(self, value: FieldValueType) -> dict[str, FieldValueType]:
+
+        """获取字段及其值组成的字典
+
+        :param value: 字段值；会先由校验器处理
+        """
+        return {
+            self.name: self.validate(value)
+        }
 
     @property
     def default_value(self) -> FieldValueType:
@@ -382,6 +425,25 @@ class BlueFirmamentField(typing.Generic[FieldValueType]):
             )
         return value  # 已经是代理对象了
 
+    def create_scheme(self) -> typing.Type["BaseScheme"]:
+
+        """
+        根据字段实例创建数据模型
+
+        这个数据模型只包含本字段
+        """
+
+        exec_namespace = {
+            "BaseScheme": BaseScheme,
+            "Field": self,
+        }
+        exec_result = {}
+
+        class_sig = "class AnonymousScheme(BaseScheme):\n"
+        class_body = f"    {self.name} = Field\n"
+
+        exec(class_sig + class_body, exec_namespace, exec_result)
+        return exec_result["AnonymousScheme"]
 
 
 T = typing.TypeVar('T')
