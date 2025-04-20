@@ -1,13 +1,17 @@
 
 
 import typing
+import enum
 
+from ..utils.type import safe_issubclass
 from ..utils import singleton
 
+if typing.TYPE_CHECKING:
+    from .main import BaseScheme
 
-ValidatorModeType = typing.Literal['base'] | typing.Literal['strict']
 
 ValidateResultType = typing.TypeVar('ValidateResultType')
+ValidatorModeType = typing.Literal['base'] | typing.Literal['strict']
 class BaseValidator(typing.Generic[ValidateResultType]):
     
     """碧霄校验器基类
@@ -35,17 +39,50 @@ class BaseValidator(typing.Generic[ValidateResultType]):
         raise NotImplementedError('`__call__` method must be implemented in subclass')
 
 
-def get_validator_by_type(type: typing.Any) -> BaseValidator:
+# BUG type problem to solve
+BaseSchemeType = typing.TypeVar('BaseSchemeType', bound="BaseScheme")
+EnumType = typing.TypeVar('EnumType', bound=enum.Enum)
+@typing.overload
+def get_validator_by_type(  # type: ignore
+    type: typing.Type["BaseSchemeType"]
+) -> typing.Type[BaseSchemeType]:
+    ...
+@typing.overload
+def get_validator_by_type(
+    type: typing.Type[EnumType]
+) -> typing.Type[EnumType]:
+    ...
+@typing.overload
+def get_validator_by_type(  # type: ignore
+    type: typing.Type
+) -> BaseValidator:
+    ...
+def get_validator_by_type(
+    type: typing.Union[
+        typing.Type, typing.Type[BaseSchemeType],
+        typing.Type[EnumType]
+    ]
+) -> typing.Union[
+    BaseValidator, 
+    typing.Type[BaseSchemeType],
+    typing.Type[EnumType]
+]:
     
     """根据类型获取校验器
 
     Behaviour
     ---------
     - 找不到合适的校验器则返回通用校验器
+    - 如果是 enum 的子类，则返回 enum 本身
+    - 如果是 BaseScheme 的子类，则返回本身
     """
-    if type == int:
+    from .main import BaseScheme
+    if safe_issubclass(type, BaseScheme):
+        return type  # type: ignore
+    if safe_issubclass(type, enum.Enum):
+        return type  # type: ignore
+    if type is int:
         return IntValidator()
-
     
     return AnyValidator()
 
