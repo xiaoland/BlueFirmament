@@ -656,7 +656,7 @@ class Router:
 
     def get_manager_handler_route_record_register(self,
         manager: typing.Type[BaseManager], path_prefix: str = '',
-        use_manager_name_as_prefix: bool = True,
+        use_manager_prefix: bool = True,
     ) -> typing.Callable[
         [TransportOperationType, str, RequestHandlerType], None
     ]:
@@ -667,15 +667,15 @@ class Router:
 
         :param manager: 管理器类
         :param path_prefix: 路径前缀
-        :param use_manager_name_as_prefix: 是否使用管理器名称作为前缀
+        :param use_manager_name_as_prefix: 是否使用管理器配置的路径前缀
         '''
         def add_route_record(
             operation: TransportOperationType, path: str,
             handler: RequestHandlerType
         ):
             
-            if use_manager_name_as_prefix and not path_prefix:
-                path = f'/{manager.__name__}{path}'
+            if use_manager_prefix and not path_prefix:
+                path = f'/{manager.__path_prefix__}{path}'
             elif path_prefix:
                 path = f'/{path_prefix}{path}'
             
