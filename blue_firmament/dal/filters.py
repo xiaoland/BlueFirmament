@@ -15,7 +15,8 @@ Documentation
 import enum
 import typing
 import abc
-from ..utils import dump_enum
+
+from . import FieldLikeType, dump_field_like
 
 
 class DALFilter(abc.ABC):
@@ -38,54 +39,73 @@ class DALFilter(abc.ABC):
         return (self.__filter_name__, None)
 
 
-class EqFilter(DALFilter):
+class HasField:
+
+    def __init__(self, field: FieldLikeType) -> None:
+        self.__field = field
+
+    @property
+    def field(self): 
+        return dump_field_like(self.__field)
+    
+class HasValue:
+
+    def __init__(self, value: typing.Any) -> None:
+        self.__value = value
+
+    @property
+    def value(self):
+        return self.__value
+
+
+class EqFilter(DALFilter, HasField, HasValue):
 
     __filter_name__ = 'eq'
 
-    def __init__(self, field: str | enum.Enum, value: typing.Any) -> None:
-        super().__init__()
-        self.__field = field
-        self.__value = value
-
-    @property
-    def field(self): return self.__field
-    @property
-    def value(self): return self.__value
+    def __init__(self, field: FieldLikeType, value: typing.Any) -> None:
+        
+        HasField.__init__(self, field)
+        HasValue.__init__(self, value)
     
     def dump_to_sql(self) -> str:
-        return f"{self.__field} = {repr(self.__value)}"
+        return f"{self.field} = {repr(self.value)}"
     
-    def dump_to_tuple(self) -> typing.Tuple[str, typing.Tuple[str, typing.Any]]:
-        return (self.__filter_name__, (dump_enum(self.__field), self.__value))
+    def dump_to_tuple(self):
+        return (self.__filter_name__, (self.field, self.value))
 
-class IsFilter(DALFilter):
+class IsFilter(DALFilter, HasField, HasValue):
 
-    __filter_name__ = 'is'
+    __filter_name__ = 'is_'
     
-    def __init__(self, field: str | enum.Enum, value: bool | None) -> None:
-        super().__init__()
-        self.__field = field
-        self.__value = value
+    def __init__(self, field: FieldLikeType, value: bool | None) -> None:
+        
+        HasField.__init__(self, field)
+        HasValue.__init__(self, value)
     
     def dump_to_sql(self) -> str:
-        return f"{self.__field} IS {repr(self.__value)}"
+        return f"{self.field} IS {repr(self.value)}"
     
-    def dump_to_tuple(self) -> typing.Tuple[str, typing.Tuple[str, bool | None]]:
-        return (self.__filter_name__, (dump_enum(self.__field), self.__value))
+    def dump_to_tuple(self):
+        return (self.__filter_name__, (self.field, self.value))
 
-class SingleFilter(DALFilter):
+class LimitFilter(DALFilter):
 
-    '''响应应当只有一个记录
+    '''响应应当只有X个记录
     
     Behaviour
     ----------
-    如果多于一个记录，则报错 ``DuplicateRecord``
+    如果多于X记录，则报错 ``?``
     '''
 
-    __filter_name__ = 'single'
+    __filter_name__ = 'limit'
+    
+    def __init__(self, size: int = 1) -> None:
+        
+        super().__init__()
+        self.__size = size
 
     def dump_to_sql(self) -> str:
         raise NotImplementedError('SingleFilter does not support SQL dump')
 
-    def dump_to_tuple(self) -> typing.Tuple[typing.Literal['single'], None]:
-        return ("single", None)
+    def dump_to_tuple(self) -> typing.Tuple[str, typing.Tuple[int]]:
+        return ("limit", (self.__size,))

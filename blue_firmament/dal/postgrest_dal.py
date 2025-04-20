@@ -3,12 +3,20 @@ import postgrest
 import typing
 import asyncio
 import enum
+from typing import Optional as Opt
 
-from blue_firmament.dal import DALPath
-from blue_firmament.dal.filters import DALFilter
+from ..utils.type import safe_issubclass
+from .exceptions import NotFound, UpdateFailure
+from ..scheme.field import BlueFirmamentField, FieldValueProxy, FieldValueType
+from ..dal.filters import *
+from .base import DataAccessObject
 from .. import __version__, __name__ as __package_name__
+from . import (
+    DALPath, FieldLikeType, FilterLikeType, dump_field_like, dump_filters_like
+)
+from .filters import DALFilter
 from ..utils import dump_enum
-from . import DataAccessObject, StrictDALPath
+from . import StrictDALPath
 from ..data.settings.dal import get_setting as get_dal_setting
 from ..transport import HeaderName
 from ..scheme import BaseScheme
@@ -128,46 +136,41 @@ class PostgrestDataAccessObject(DataAccessObject):
                 base_query = f_func()
         return base_query
 
-    async def insert(self, to_insert, path = None):  # type: ignore[override]
+    BaseSchemeType = typing.TypeVar('BaseSchemeType', bound="BaseScheme")
+
+    @typing.overload
+    async def insert(self,
+        to_insert: dict,
+        path: typing.Optional[DALPath] = None,
+        exclude_primary_key: bool = True,
+    ) -> dict:
+        pass
+
+    @typing.overload
+    async def insert(self,
+        to_insert: BaseSchemeType,
+        path: typing.Optional[DALPath] = None,
+        exclude_primary_key: bool = True,
+    ) -> BaseSchemeType:
+        pass
+
+    async def insert(self, 
+        to_insert: dict | BaseSchemeType, 
+        path = None,
+        exclude_primary_key: bool = True,
+    ) -> dict | BaseSchemeType: 
         
-        processed_to_insert = []
-        if isinstance(to_insert, list):
-            for item in to_insert:
-                if isinstance(item, dict):
-                    processed_to_insert.append(item)
-                elif isinstance(item, BaseScheme):
-                    processed_to_insert.append(item.dump_to_dict())
-                else:
-                    raise TypeError(f'Invalid type of to_insert item: {type(item)}')
-        elif isinstance(to_insert, dict) or isinstance(to_insert, BaseScheme):
-            processed_to_insert.append(to_insert)
-        else:
-            raise TypeError(f'Invalid type of to_insert: {type(to_insert)}')
+        if isinstance(to_insert, BaseScheme):
+            to_insert = to_insert.dump_to_dict(exclude_primary_key=exclude_primary_key)
         
         if isinstance(to_insert, BaseScheme) and path is None:
             path = DALPath((to_insert.__table_name__, to_insert.__schema_name__))
         base_query = self.__get_base_query_from_path(path)
         res = await base_query.insert(
-            json=processed_to_insert
+            json=to_insert
         ).execute()
         
-        if isinstance(to_insert, list):
-            res_data: typing.List[dict | BaseScheme] = []
-            for i in to_insert:
-                if isinstance(i, BaseScheme):
-                    primary_key = i.get_primary_key()
-                    for res_item in res.data:
-                        # BUG 如果 primary_key 字段在数据模型中的名称和字段.name不一致，会导致错误（AttributeNotFound）
-                        if res_item[primary_key] == getattr(i, primary_key):
-                            res_data.append(i.__class__(**res_item))
-                            break
-
-                    # 不可能出现找不到的情况，因为事务是原子性的
-                elif isinstance(i, dict):
-                    res_data.append(i)
-
-            return res_data
-        elif isinstance(to_insert, BaseScheme):
+        if isinstance(to_insert, BaseScheme):
             scheme_ins: BaseScheme = to_insert.__class__(**res.data[0])
             return scheme_ins
         elif isinstance(to_insert, dict):
@@ -175,60 +178,199 @@ class PostgrestDataAccessObject(DataAccessObject):
         
         assert False
 
-    async def select(self, 
-        *filters: DALFilter, 
-        path: DALPath | None = None, 
-        fields: typing.Iterable[str | enum.Enum] | None = None
+    FieldValueType = typing.TypeVar('FieldValueType')
+
+    @typing.overload
+    async def select(self,
+        to_select: typing.Type[BaseSchemeType],
+        *filters: FilterLikeType,
+        path: typing.Optional[DALPath] = None,
+    ) -> typing.Tuple[BaseSchemeType, ...]:
+        ...
+
+    @typing.overload
+    async def select(self,
+        to_select: "BlueFirmamentField[FieldValueType]",
+        *filters: FilterLikeType,
+        path: typing.Optional[DALPath] = None,
+    ) -> typing.Tuple[FieldValueType, ...]:
+        ...
+
+    @typing.overload
+    async def select(self,
+        to_select: typing.Iterable[FieldLikeType] | None,
+        *filters: FilterLikeType,
+        path: typing.Optional[DALPath] = None,
     ) -> typing.Tuple[dict, ...]:
+        ...
+
+    async def select(self,
+        to_select: typing.Union[
+            typing.Type[BaseSchemeType], 
+            "BlueFirmamentField[FieldValueType]",
+            typing.Iterable[FieldLikeType],
+            None
+        ],
+        *filters: FilterLikeType,
+        path: typing.Optional[DALPath] = None,
+    ) -> typing.Union[
+            typing.Tuple[BaseSchemeType, ...],
+            typing.Tuple[FieldValueType, ...],
+            typing.Tuple[dict, ...]
+        ]:
         
-        if fields is None:
+        # process to_select to fields
+        if to_select is None:
+            fields = ("*",)
+        elif isinstance(to_select, BlueFirmamentField):
+            fields = (to_select.name,)
+        elif isinstance(to_select, typing.Iterable):
+            fields = tuple(
+                dump_field_like(i) for i in to_select
+            )
+        elif issubclass(to_select, BaseScheme):
             fields = ("*",)
         else:
-            fields = tuple(dump_enum(i) for i in fields)
+            raise ValueError(f"Invalid type for to_select, {type(to_select)}")
+        
+        # process filters
+        processed_filters: typing.Iterable[DALFilter] = dump_filters_like(
+            *filters, scheme=to_select
+        )
+
+        # preprocess path
+        if path is None:
+            if isinstance(to_select, type) and safe_issubclass(to_select, BaseScheme): 
+                path = to_select.dal_path()
+            elif isinstance(to_select, BlueFirmamentField):
+                path = to_select.scheme_cls.dal_path()
 
         # construct query
         base_query = self.__get_base_query_from_path(path)
-        base_query = base_query.select(
-            *fields
-        )
-        base_query = self.__apply_filters_to_base_query(base_query, filters)
-
+        base_query = base_query.select(*fields)
+        base_query = self.__apply_filters_to_base_query(base_query, processed_filters)
         res = await base_query.execute()
-        if isinstance(res.data, dict):
-            res_data = (res.data,)
+
+        if len(res.data) == 0:
+            raise NotFound(path, self, filters=processed_filters)
+        
+        # parse res to the same as to_selec
+        if isinstance(to_select, BlueFirmamentField):
+            return tuple(
+                i[to_select.name] for i in res.data
+            )
+        elif isinstance(to_select, type) and safe_issubclass(to_select, BaseScheme): 
+            return tuple(
+                to_select(**instance_dict) for instance_dict in res.data
+            )
         else:
-            res_data = tuple(res.data)
-        return res_data
+            return tuple(res.data)
     
-    async def delete(self, *filters: DALFilter, path: DALPath | None = None) -> None:
+    async def delete(self, 
+        to_delete: BaseSchemeType | typing.Type[BaseSchemeType],
+        *filters: FilterLikeType,
+        path: Opt[DALPath] = None,
+    ) -> None:
+        
+        if path is None:
+            if isinstance(to_delete, BaseScheme) or issubclass(to_delete, BaseScheme):
+                path = to_delete.dal_path()
+        
+        if not filters:
+            if isinstance(to_delete, BaseScheme):
+                filters += (to_delete.primary_key_eqf,)
         
         base_query = self.__get_base_query_from_path(path)
         base_query = base_query.delete()
-        base_query = self.__apply_filters_to_base_query(base_query, filters)
-        res = await base_query.execute()
+        base_query = self.__apply_filters_to_base_query(
+            base_query, dump_filters_like(*filters, scheme=to_delete)
+        )
+        await base_query.execute()
 
-    async def update(self, # type: ignore[override]
-        to_update: dict | BaseScheme, path: DALPath | None = None, /, *filters: DALFilter
-    ) -> dict | BaseScheme:
+    DictType = typing.TypeVar('DictType', bound=dict)
+
+    @typing.overload
+    async def update(self,
+        to_update: BaseSchemeType,
+        *filters: DALFilter,
+        path: Opt[DALPath] = None,
+        only_dirty: bool = True,
+    ) -> BaseSchemeType:
+        ...
+
+    @typing.overload
+    async def update(self,
+        to_update: DictType,
+        *filters: DALFilter,
+        path: Opt[DALPath] = None,
+        only_dirty: bool = True,
+    ) -> DictType:
+        ...
+
+    @typing.overload
+    async def update(self,
+        to_update: "FieldValueProxy[FieldValueType]" | FieldValueType,
+        *filters: DALFilter,
+        path: Opt[DALPath] = None,
+        only_dirty: bool = True,
+    ) -> FieldValueType:
+        ...
+
+    async def update(self,
+        to_update: typing.Union[
+            DictType, BaseSchemeType,
+            "FieldValueProxy[FieldValueType]",
+            FieldValueType
+        ],
+        *filters: DALFilter,
+        path: Opt[DALPath] = None,
+        only_dirty: bool = True,
+    ) -> typing.Union[
+            DictType, BaseSchemeType, FieldValueType,
+        ]:
         
-        if not path and isinstance(to_update, BaseScheme):
-            path = DALPath((to_update.__table_name__, to_update.__schema_name__))
+        # preprocess path
+        if path is None: 
+            if isinstance(to_update, BaseScheme):
+                path = to_update.dal_path()
+            elif isinstance(to_update, FieldValueProxy):
+                path = to_update.scheme.dal_path()
 
+        # preprocess filters
         if not filters:
-            raise ValueError("At least one filter is required for update.")
+            if isinstance(to_update, BaseScheme):
+                filters += (
+                    to_update.primary_key_eqf,
+                )
+            elif isinstance(to_update, FieldValueProxy):
+                filters += (
+                    to_update.scheme.primary_key_eqf,
+                )
+        
+        # process to_update
+        processed_to_update: typing.Dict[str, typing.Any]
+        if isinstance(to_update, BaseScheme):
+            processed_to_update = to_update.dump_to_dict(only_dirty=only_dirty)
+        elif isinstance(to_update, FieldValueProxy):
+            processed_to_update = { to_update.field.name: to_update.obj }
+        elif isinstance(to_update, dict):
+            processed_to_update = to_update
+        else:
+            raise ValueError(f"Invalid type for to_update, {type(to_update)}")
 
         base_query = self.__get_base_query_from_path(path)
-        base_query = base_query.update(
-            json=to_update.dump_to_dict() if isinstance(to_update, BaseScheme) else to_update
-        )
+        base_query = base_query.update(json=processed_to_update)
         base_query = self.__apply_filters_to_base_query(base_query, filters)
         res = await base_query.execute()
 
-        # TODO 因为RLS导致的失败也应该有Exception
+        if len(res.data) == 0:
+            raise UpdateFailure(path, self)
         
         # parse res to the same as to_update
         if isinstance(to_update, BaseScheme):
-            return to_update.__class__(**res.data[0])  # TODO if partial scheme, use full scheme to parse
+            return to_update.__class__(**res.data[0]) 
+        elif isinstance(to_update, FieldValueProxy):
+            return res.data[0][to_update.field.name]
         elif isinstance(to_update, dict):
             return res.data[0]
         
