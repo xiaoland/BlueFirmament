@@ -24,9 +24,6 @@ from .scheme import BaseScheme, Field
 from .utils.importer import import_modules
 from typing import Optional
 from . import __name__ as PACKAGE_NAME
-import structlog
-
-logger = structlog.get_logger(__name__)
 
 
 class Setting(BaseScheme):
@@ -35,18 +32,20 @@ class Setting(BaseScheme):
     配置
     """
     
-    _setting_name: str = PrivateField()
+    _proxy = False
+    
+    _setting_name = PrivateField(vtype=str)
     """配置名称"""
-    _setting_path: str | None = PrivateField(None)
+    _setting_path = PrivateField(None, vtype=str)
     """
     配置文件路径
     
     如果是打包在包内的配置文件，使用相对路径（不要用slash开头） \n
     如果是可以基于当前工作目录的配置文件，使用`./`或不使用任何前缀开头
     """
-    _is_packaged: bool = PrivateField(True)
+    _is_packaged = PrivateField(True, vtype=bool)
     """是否打包在包内"""
-    _package_name: str = PrivateField(PACKAGE_NAME)
+    _package_name = PrivateField(PACKAGE_NAME, vtype=str)
     """所属包的包名"""
 
     @property
@@ -94,16 +93,19 @@ class JsonFileSetting(Setting):
     JSON文件配置
     """
 
-    def __init__(self):
+    @classmethod
+    def load(cls) -> typing.Self:
 
         # 仍然需要使用 field_as_class_var，因为此时数据模型没有被实例化
-        fp = field_as_class_var(self._setting_path)
+        fp = field_as_class_var(cls._setting_path)
         if fp:
-            data = load_json_file(self.get_resource_path(fp))
+            data = load_json_file(cls.get_resource_path(fp))
             try:
-                return super().__init__(**data)
+                return cls(**data)
             except ValueError as e:
-                logger.error(f"Validation error in JsonSettingLoader {field_as_class_var(self._setting_path)}: {e}")
+                from .log import get_logger
+                logger = get_logger(__name__)
+                logger.error(f"Validation error in JsonSettingLoader {field_as_class_var(cls._setting_path)}: {e}")
                 raise e
         else:
             raise ValueError("Setting path is not set")
@@ -114,10 +116,11 @@ class EnvJsonSetting(Setting):
     多环境JSON配置
     """
 
-    _setting_env: Optional[str] = PrivateField(default_factory=lambda: os.environ.get("ENV", "production"))
+    _setting_env = PrivateField(default_factory=lambda: os.environ.get("ENV", "production"), vtype=str)
     """配置环境"""
 
-    def __init__(self):
+    @classmethod
+    def load(cls) -> typing.Self:
 
         """
         加载多环境JSON配置文件
@@ -130,10 +133,13 @@ class EnvJsonSetting(Setting):
         可能抛出的错误：
         - ValidationError: 配置文件不符合数据模型定义
         """
-        setting_name = field_as_class_var(self._setting_name)
-        setting_path = field_as_class_var(self._setting_path)
-        setting_env = field_as_class_var(self._setting_env)
-        package_name = field_as_class_var(self._package_name) if field_as_class_var(self._is_packaged) else None
+        from .log import get_logger
+        logger = get_logger(__name__)
+        
+        setting_name = field_as_class_var(cls._setting_name)
+        setting_path = field_as_class_var(cls._setting_path)
+        setting_env = field_as_class_var(cls._setting_env)
+        package_name = field_as_class_var(cls._package_name) if field_as_class_var(cls._is_packaged) else None
 
         logger.debug(f"Loading setting {setting_name} in {setting_env} environment")
 
@@ -143,9 +149,11 @@ class EnvJsonSetting(Setting):
         data.update(load_json_file(f"{setting_path}/{setting_name}.local.json", package=package_name))
 
         try:
-            return super().__init__(**data)
+            return cls(**data)
         except ValueError as e:
-            logger.error(f"Validation error in {field_as_class_var(self._setting_name)} EnvJsonSetting loader: {e}")
+            from .log import get_logger
+            logger = get_logger(__name__)
+            logger.error(f"Validation error in {field_as_class_var(cls._setting_name)} EnvJsonSetting loader: {e}")
             raise e
 
 class PythonScriptSetting(Setting):
@@ -157,7 +165,9 @@ class PythonScriptSetting(Setting):
     """
 
     def __init__(self):
-
+        
+        from .log import get_logger
+        logger = get_logger(__name__)
         logger.debug(f"Loading python script setting: {field_as_class_var(self._setting_path)}")
 
         py_setting = __import__(
@@ -171,23 +181,23 @@ def make_setting_singleton(
     cls_ins: ClsType
 ) -> typing.Tuple[typing.Callable[[], ClsType], typing.Callable[[ClsType], None]]:
     
-    '''使用单例模式来获取配置实例
+    """使用单例模式来获取配置实例
     
     该函数返回两个函数：一个用于获取配置实例，一个用于设置配置实例
 
     Example
     ^^^^^^^
-    ```python
-    from blue_firmament.setting import make_setting_singleton, Setting
 
-    class MySetting(Setting):
-    
-        _setting_name = "my_setting"
-        some_setting_field: str = 'a'
+    .. code-block:: python
+        from blue_firmament.setting import make_setting_singleton, Setting
 
-    
-    get_setting, set_setting = make_setting_singleton(MySetting())
-    '''
+        class MySetting(Setting):
+
+            _setting_name = "my_setting"
+            some_setting_field: str = 'a'
+        
+        get_setting, set_setting = make_setting_singleton(MySetting())
+    """
 
     _setting_ins = cls_ins
 
