@@ -1,10 +1,10 @@
 import abc
 import typing
 
-from . import ResponseStatus
+from . import HeaderName, ResponseStatus
 from .base import Cookie
 from ..scheme import BaseScheme
-from ..utils import singleton
+from ..utils import dump_enum, singleton, load_enum
 from ..utils.type import JsonDumpable
 from ..utils.json import dumps_to_json
 
@@ -80,11 +80,33 @@ class Response:
         body: 'ResponseBody' = EmptyResponseBody(),
         headers: typing.Dict[str, str] = {},
         cookies: typing.Dict[str, Cookie] = {},
+        encoding: str = 'utf-8'
     ):
         self.__body: ResponseBody = body
         self.__response_status: ResponseStatus = response_status
         self.__headers: typing.Dict[str, str] = headers
         self.__cookies: typing.Dict[str, Cookie] = cookies
+        self.__encoding: str = encoding
+
+    @property
+    def headers(self) -> typing.Iterable[
+        typing.Tuple[typing.ByteString, typing.ByteString]
+    ]:
+        '''响应头'''
+
+        base = [
+            (dump_enum(k).encode(self.__encoding), v.encode(self.__encoding)) 
+            for k, v in self.__headers.items()
+        ]
+
+        # add cookie
+        for cookie in self.__cookies.values():
+            base.append((
+                HeaderName.SET_COOKIE.value.encode(self.__encoding),
+                cookie.dump().encode(self.__encoding) 
+            ))
+
+        return base
 
     @property
     def body(self) -> 'ResponseBody':
@@ -100,8 +122,34 @@ class Response:
     def response_status(self) -> ResponseStatus:
         '''响应状态'''
         return self.__response_status
+    
+    @response_status.setter
+    def response_status(self, value: ResponseStatus | int) -> None:
+        '''设置响应状态'''
+        self.__response_status = load_enum(ResponseStatus, value)
 
     @property
     def http_status_code(self) -> int:
         '''HTTP响应状态码'''
         return self.__response_status.value
+    
+    def set_header(self, key: HeaderName | str, value: str) -> None:
+        
+        '''设置响应头'''
+        self.__headers[typing.cast(str, dump_enum(key))] = value
+
+    def set_cookie(self, 
+        name: typing.Optional[str] = None,
+        value: typing.Optional[str] = None,
+        cookie: typing.Optional[Cookie] = None
+    ) -> None:
+        
+        '''设置响应Cookie'''
+
+        if cookie is None:
+            if name and value is not None:
+                cookie = Cookie(name=name, value=value)
+            else:
+                raise ValueError('Cookie name and value cannot be None when cookie is None')
+        
+        self.__cookies[cookie.name] = cookie
