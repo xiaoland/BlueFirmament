@@ -1,13 +1,16 @@
 import inspect
-import types
 import typing
-from .field import BlueFirmamentPrivateField, BlueFirmamentField
-from .field import UndefinedValue
+import types
 
-if typing.TYPE_CHECKING:
-    from ..dal import DataAccessObject
+from ..dal import DALPath
+from ..dal.filters import EqFilter
+from .field import (
+    BlueFirmamentPrivateField, BlueFirmamentField, dump_field_name
+)
+from .field import UndefinedValue, FieldValueProxy
 
 
+@typing.dataclass_transform(kw_only_default=True)
 class SchemeMetaclass(type):
 
     """碧霄数据模型元类
@@ -59,19 +62,25 @@ class SchemeMetaclass(type):
 
     """
 
-    if typing.TYPE_CHECKING:
-        __builtin_fields__: typing.Iterable[str]
-        '''碧霄数据模型的内置字段；必须是``_<name>``形式'''
-        __fields__: typing.Dict[str, BlueFirmamentField]
-        '''数据模型的字段字典；键为字段名，值为字段实例'''
-        __private_fields__: typing.Dict[str, BlueFirmamentPrivateField]
-        '''数据模型的私有字段字典；键为字段名，值为私有字段实例'''
-        __table_name__: typing.Optional[str] = None
-        '''表名'''
-        __schema_name__: typing.Optional[str] = None
-        '''表组名'''
+    # if typing.TYPE_CHECKING:
+    __builtin_fields__: typing.Iterable[str]
+    '''碧霄数据模型的内置字段；必须是``_<name>``形式'''
+    __fields__: typing.Dict[str, BlueFirmamentField]
+    '''数据模型的字段字典；键为字段名，值为字段实例'''
+    __private_fields__: typing.Dict[str, BlueFirmamentPrivateField]
+    '''数据模型的私有字段字典；键为字段名，值为私有字段实例'''
+    __field_values__: typing.Dict[str, typing.Any]
+    '''数据模型的字段值字典；键为字段名，值为字段值；包括私有字段'''
+    __dirty_fields__: typing.Set[str]
+    '''数据模型的脏字段集合；不包括私有字段'''
+    __table_name__: typing.Optional[str] = None
+    '''表名'''
+    __schema_name__: typing.Optional[str] = None
+    '''表组名'''
+    __proxy__: bool = False
+    '''是否对字段值进行代理'''
 
-    __builtin_fields__ = ('_table_name', '_schema_name')
+    __builtin_fields__ = ('_table_name', '_schema_name', '_proxy')
     
 
     def __new__(
@@ -167,7 +176,36 @@ class SchemeMetaclass(type):
         attrs['__fields__'] = fields
         attrs['__private_fields__'] = private_fields
 
-        return super().__new__(cls, name, bases, attrs)
+        # 生成 __init__ 方法
+        init_params = []
+        init_assignments = []
+        new_globals = globals().copy()
+        for k, v in (fields | private_fields).items():
+            type_: typing.Type | types.UnionType | None = cls_annotations.get(k, None)
+            if type_ is None:
+                type_str = 'typing.Any'
+            elif isinstance(type_, types.UnionType):
+                type_str = '|'.join([t.__name__ for t in type_.__args__])
+                type_str = type_str.replace('NoneType', 'None')
+            else:
+                type_str = type_.__name__
+                new_globals[type_str] = type_
+
+            init_params.append(f"{k}: {type_str} = UndefinedValue()")
+            init_assignments.append(f"    self.{k} = {k}")  # self.k is a field instance (descriptor)
+        
+        if init_params:
+            init_sig = f"def __init__(self, *, {', '.join(init_params)}, **kwargs):\n"
+        else:
+            init_sig = f"def __init__(self, **kwargs):\n"
+        init_body = '    self.__field_values__ = dict()\n'
+        init_body += '    self.__dirty_fields__ = set()\n'
+        init_body += '\n'.join(init_assignments)
+        init_body += '\n    self.__post_init__()\n'
+
+        init_method = init_sig + init_body
+        
+        exec(init_method, new_globals, attrs)
 
 
 class BaseScheme(metaclass=SchemeMetaclass):
@@ -287,55 +325,42 @@ class BaseScheme(metaclass=SchemeMetaclass):
         return self.__fields__.keys()
 
     @classmethod
-    async def from_insert(cls, /, _dao = None, **kwargs) -> typing.Self:
-        
-        """插入数据模型到数据持久层（简易版）
+    FieldValueType = typing.TypeVar("FieldValueType")
 
-        传入字段键值对作为数据模型的初始化参数并存储到数据持久层中，返回实例化的数据模型。
+    def set_value(
+        self, field: BlueFirmamentField[FieldValueType], 
+        value: "FieldValueProxy[FieldValueType]" | FieldValueType
+    ) -> None:
 
-        特性
-        ^^^^^
-        - 不指定主键值则根据定义的主键类型自动生成
+        """设置字段值
+
+        :param field: 字段名或字段实例
         """
-        return cls(**kwargs)
-    
+        self.__field_values__[field.in_scheme_name] = value
+
+    def get_value(
+        self, field: BlueFirmamentField[FieldValueType]
+    ) -> "FieldValueProxy[FieldValueType]" | FieldValueType:
+
+        """获取字段值
+
+        :param field: 字段名或字段实例
+        """
+        return self.__field_values__[field.in_scheme_name]
+
     @classmethod
     async def from_primary_key(cls, primary_key_value, _dao: 'DataAccessObject') -> typing.Self:
 
-        """基于主键实例化数据模型
-
-        :param primary_key_value: 主键值；（没有校验主键值的类型与数据模型定义的主键类型一致）
-
-        Warning
-        ^^^^^^^
-        推荐使用 ``DataAccessObject().select_a_scheme_from_primary_key`` 方法来获取数据模型实例而不是本方法 \n
-        因为本方法要求调用者传入DAO，这增加了调用者的心智负担
-        """
-        raise NotImplementedError('cls.from_primary_key must be implemented by subclass')
     
-    async def insert(self, _dao = None) -> None:
-        
-        """将当前数据实例插入到数据持久层中
+    def mark_dirty(self, field: str | BlueFirmamentField) -> None:
 
-        :param _dao: 数据访问对象；不传入则默认使用全局DAO
+        """标记字段为脏字段
+
+        :param field: 字段名或字段实例
         """
-        pass
-
-    async def update(self, *fields, _dao = None) -> None:
-
-        """更新数据持久层中的当前数据实例
-
-        :param _dao: 数据访问对象；不传入则默认使用全局DAO
-        """
-        pass
-
-    async def delete(self, _dao = None) -> None:
-        
-        """从数据持久层删除当前数据实例
-
-        :param _dao: 数据访问对象；不传入则默认使用全局DAO
-        """
-        pass
+        if isinstance(field, str):
+            field = self.__fields__[field]
+        self.__dirty_fields__.add(field.name)
 
 
 def make_partial(cls: typing.Type[BaseScheme]):
