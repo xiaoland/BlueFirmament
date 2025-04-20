@@ -1,8 +1,11 @@
 '''Utils related to type checking and type hinting.'''
 
 import typing
+import types
 import inspect
-from ..scheme import BaseScheme
+
+if typing.TYPE_CHECKING:
+    from ..scheme import BaseScheme
 
 def is_annotated(val: typing.Any) -> typing.TypeGuard[typing.Annotated]:
     '''Check if the value is typing.Annotated
@@ -77,9 +80,37 @@ JsonDumpable = typing.Union[
     typing.List['JsonDumpable'], 
     typing.Tuple['JsonDumpable', ...],
     typing.Dict[str, 'JsonDumpable'],
-    BaseScheme
+    typing.Set['JsonDumpable'],
+    "BaseScheme"
 ]
 '''可以序列化为JSON的类型
 
-其中BaseScheme实际上不能被json.dumps处理，需要通过我们自定义的json_dumps来处理
+其中BaseScheme实际上不能被json.dumps处理， \n
+需要通过我们自定义的json_dumps来处理，调用 :func:`utils.json.dumps_to_json`
 '''
+def is_json_dumpable(val: typing.Any) -> typing.TypeGuard[JsonDumpable]:
+
+    """
+
+    TODO
+    ----
+    - 对于容器类型，没有进一步对元素判断
+    """
+    if val is None:
+        return True
+
+    from ..scheme import BaseScheme
+    if isinstance(val, (
+        str, int, float, bool,
+        list, tuple, dict, set,
+        BaseScheme
+    )):
+        return True
+    
+    return False
+def safe_issubclass(
+    obj: typing.Any, classinfo: T
+) -> typing.TypeGuard[T]:
+    
+    return isinstance(obj, type) and issubclass(obj, classinfo)
+

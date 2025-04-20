@@ -7,7 +7,9 @@ from .transport.request import Request
 from .transport import TransportOperationType
 from .scheme.validator import AnyValidator, BaseValidator, get_validator_by_type
 from .scheme import BaseScheme
-from .utils.type import is_annotated, get_origin, ismethodorigin, isclassmethod
+from .utils.type import (
+    is_annotated, get_origin, is_json_dumpable, safe_issubclass
+)
 from .utils import call_function_as_async
 from .middleware import BaseMiddleware
 from .manager import BaseManager
@@ -421,6 +423,8 @@ class RouteRecord(BaseMiddleware):
         ----------
         参数解析规则
         ^^^^^^^^^^^^^^^
+        - 跳过这些名称的参数
+            - `self`, `cls`
         - 基于类型解析系统信息
             - `Response`, `Request`
         - 基于名称解析请求体参数（只能有一个，名称为 `HANDLER_BODY_KW` ）
@@ -451,6 +455,9 @@ class RouteRecord(BaseMiddleware):
         kwargs: RouteRecord.HandlerKwargsType = {}
 
         for key, param in handler_params.items():
+
+            if key in ('self', 'cls'):
+                continue
             
             anno = get_origin(param.annotation) 
             if is_annotated(param.annotation): 
@@ -458,19 +465,16 @@ class RouteRecord(BaseMiddleware):
             else:
                 validator = get_validator_by_type(anno)
 
-            if issubclass(anno, Request):
+            if safe_issubclass(anno, Request):
                 kwargs[key] = lambda env: env['request']
                 continue
-            elif issubclass(anno, Response):
+            elif safe_issubclass(anno, Response):
                 kwargs[key] = lambda env: env['response']
                 continue
             
             if key == HANDLER_BODY_KW:
-                if issubclass(anno, BaseScheme):
-                    try:
-                        if not issubclass(validator, BaseScheme):  # type: ignore
-                            raise TypeError
-                    except TypeError:
+                if safe_issubclass(anno, BaseScheme):
+                    if not safe_issubclass(validator, BaseScheme):
                         raise TypeError('When annotation is BaseScheme, the validator (typing.Annotated arg 1) must be BaseScheme too')
                     
                     kwargs[HANDLER_BODY_KW] = cls.__get_body_getter1(validator)
@@ -543,9 +547,7 @@ class RouteRecord(BaseMiddleware):
 
         # process result
         # TODO process result correctly
-        if isinstance(result, dict):
-            response.body = JsonResponseBody(result)
-        elif isinstance(result, BaseScheme):
+        if is_json_dumpable(result):
             response.body = JsonResponseBody(result)
         else:
             # TODO
