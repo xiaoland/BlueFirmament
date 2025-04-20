@@ -56,6 +56,7 @@ class HeaderName(enum.Enum):
     CONTENT_TYPE = "content-type"
     CONTENT_ENCODING = "content-encoding"
     COOKIE = "cookie"
+    SET_COOKIE = "set-cookie"
 
 
 class ContentType(enum.Enum):
@@ -82,3 +83,7 @@ class ResponseStatus(enum.Enum):
     CONFLICT = 409
     UNAVAILABLE_FOR_LEGAL_REASONS = 451
     INTERNAL_SERVER_ERROR = 500
+
+
+
+from .response import Response

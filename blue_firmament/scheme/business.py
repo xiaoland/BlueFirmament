@@ -1,5 +1,5 @@
 
-from ..dal import DataAccessObject
+from ..dal.base import DataAccessObject
 from ..dal.filters import EqFilter
 from .field import Field
 from .main import BaseScheme
@@ -30,7 +30,8 @@ class BusinessScheme(BaseScheme, typing.Generic[BusinessSchemeIDType]):
     - 自动在路由器注册Restful风格的CURD接口
     """
 
-    _id: BusinessSchemeIDType = Field(is_primary_key=True)
+    _id: BusinessSchemeIDType = Field(is_primary_key=True) # type: ignore[assignment]
+    # TODO 似乎没有对 TypeVar 进行处理
 
     @classmethod
     async def simple_fetch(cls, /, _id: BusinessSchemeIDType, _dao = None, **kwargs) -> typing.Tuple[dict, ...]:

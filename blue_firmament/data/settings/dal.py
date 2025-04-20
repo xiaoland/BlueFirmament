@@ -15,6 +15,8 @@ class DALSetting(Setting):
     '''PostgreSQL的默认表名（table）'''
     postgrest_anonymous_token: str = ''
     '''PostgREST的匿名访问令牌（仅在Supabase Postgrest中使用）'''
+    postgrest_service_token: str = ''
+    '''PostgREST的服务访问令牌（仅在Supabase Postgrest中使用）'''
 
 
 get_setting, set_setting = make_setting_singleton(DALSetting())

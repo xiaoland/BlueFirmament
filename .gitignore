@@ -35,3 +35,6 @@ venv.bak/
 .vscode/
 *.swp
 
+# System
+.DS_Store
+Thumbs.db
