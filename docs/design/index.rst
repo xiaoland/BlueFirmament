@@ -91,3 +91,5 @@ Design
    :glob:
 
    ./manager
+   ./dal
+   ./auth
