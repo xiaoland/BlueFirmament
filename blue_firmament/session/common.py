@@ -1,4 +1,12 @@
-from ..dal import DataAccessObject
+"""
+TODO
+----
+- 复用从 request 解析 JWT 的逻辑
+- 复用同一 request 的 JWT 解析结果
+"""
+
+
+from ..dal.base import DataAccessObject
 from ..dal.postgrest_dal import PostgrestDataAccessObject
 from ..data.settings.session import get_setting as get_session_setting
 from . import Session, SessionField
@@ -39,6 +47,37 @@ class DAOSessionField(SessionField[DataAccessObject]):
         return cls(dao)
 
 
+class JWTSubSessionField(SessionField[str | None]):
+
+    def __init__(self, value: str | None):
+        super().__init__(value)
+
+    @classmethod
+    def from_request(cls, request):
+
+        jwt_str = request.get_header(HeaderName.AUTHORIZATION)
+        if jwt_str:
+            jwt_str = jwt_str[7:]  # strip 'Bearer ' prefix
+            try:
+                payload = jwt.decode(
+                    jwt_str,
+                    get_session_setting().jwt_secret_key,
+                    algorithms=(get_session_setting().jwt_algorithm,),
+                    options={
+                        'verify_signature': False
+                    },
+                )
+                sub = payload.get('sub')
+                if not isinstance(sub, str):
+                    raise ValueError('sub not found or invalid')
+            except jwt.exceptions.PyJWTError as e:
+                logger.warning('JWT decode failed', e)
+                raise ValueError('JWT decode failed')
+        else:
+            sub = None
+
+        return cls(sub)
+
 
 class CommonSession(Session):
 
@@ -46,19 +85,29 @@ class CommonSession(Session):
 
     包含下列字段：
     - dao：数据访问对象（DAO）
+    - account_id: 当前会话使用的凭证（JWT）是哪个用户的
     '''
 
     def __init__(self, _id, /,
-        dao: SessionField[DataAccessObject]
+        dao: SessionField[DataAccessObject],
+        account_id: SessionField[str] = SessionField(''),
     ) -> None:
 
         super().__init__(_id)
 
         self.__dao: SessionField[DataAccessObject] = dao
+        self.__account_id: SessionField[str] = account_id
 
     @property
     def dao(self):
         return self.__dao.value
+    
+    @property
+    def account_id(self):
+        return self.__account_id.value
+    
+    def is_me(self, other_account_id: str) -> bool:
+        return self.account_id == other_account_id
 
     @classmethod
     def from_request(cls, request) -> typing.Self:
@@ -104,4 +153,9 @@ class CommonSession(Session):
         # get dao
         dao = DAOSessionField.from_request(request)
 
-        return cls.get(session_id, True, dao=dao)
+        # get account_id
+        account_id = JWTSubSessionField.from_request(request)
+
+        return cls.get(session_id, True, dao=dao, account_id=account_id)
+    
+    
