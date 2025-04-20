@@ -101,7 +101,9 @@ class HTTPTransporter(BlueFirmamentTransporter):
                 headers=headers,
                 cookies=cookies
             )
-            response = Response()
+            response = Response(
+                encoding=content_encoding
+            )
             
             await call_function_as_async(self._request_handler, request, response)
 
@@ -110,6 +112,7 @@ class HTTPTransporter(BlueFirmamentTransporter):
                 await send({
                     "type": "http.response.start",
                     "status": response.http_status_code,
+                    "headers": response.headers
                 })
                 await send({
                     "type": "http.response.body",
