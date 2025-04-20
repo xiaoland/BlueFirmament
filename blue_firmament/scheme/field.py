@@ -23,16 +23,21 @@ class UndefinedValue:
     """
     
     def __repr__(self):
-        return 'BlueFirmamentUndefined'
+        return 'BlueFirmamentUndefinedValue'
     
     @classmethod
     def is_(cls, value: typing.Any) -> typing.TypeGuard['UndefinedValue']:
         """判断值是否为未定义值
+
+        value 是 UndefineValue 或 UndefinedValue 的实例都被视为未定义值
         """
-        return value is cls()
+        return value is cls or isinstance(value, cls)
     
     def __bool__(self) -> bool:
         return False
+    
+    def __hash__(self) -> int:
+        return hash('BlueFirmamentUndefinedValue')
 
 
 FieldValueType = typing.TypeVar('FieldValueType')
@@ -292,7 +297,7 @@ class BlueFirmamentField(typing.Generic[FieldValueType]):
         """
         if self.__default_factory:
             return self.__default_factory()
-        elif not isinstance(self.__default, UndefinedValue):
+        elif not isinstance(self.__default, UndefinedValue) or self.__default is UndefinedValue: # why type guard not work
             return self.__default
         else:
             raise ValueError('No default value provided for field')
