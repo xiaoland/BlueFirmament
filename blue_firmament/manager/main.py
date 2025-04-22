@@ -1,10 +1,10 @@
 import typing
 import typing_extensions
+import types
 
 from blue_firmament.scheme.field import BlueFirmamentField
-from ..dal.base import DataAccessObject
+from blue_firmament.transport import TransportOperationType
 from ..session import Session
-from ..session.common import CommonSession
 from ..scheme import BaseScheme
 
 if typing.TYPE_CHECKING:
@@ -92,16 +92,58 @@ class BaseManager(typing.Generic[SchemeType, SessionType]):
         self.__scheme = scheme
 
     @classmethod
-    def get_route_record_register(cls,
-        app: "BlueFirmamentApp"
-    ):
+    def get_route_register(cls, app: "BlueFirmamentApp") -> "ManagerRouteRegister":
+        """获取路由注册器
 
-        '''获取路由记录注册器
-
-        这个注册器可以被用于注册本管理器中的处理器到该 app 的**根**路由器中
-        '''
-
-        return app.router.get_manager_handler_route_record_register(
-            manager=cls, # type: ignore , this type error is brought by typevar default
+        :return: 路由注册器
+        """
+        return ManagerRouteRegister(
+            app=app, manager_cls=cls, 
             use_manager_prefix=True
         )
+
+
+class ManagerRouteRegister:
+
+    """管理器路由注册器
+
+    用于将管理器中的处理器注册到 App 的根路由器中。
+    """
+    
+    def __init__(self,
+        app: "BlueFirmamentApp",
+        manager_cls: typing.Type[BaseManager],
+        use_manager_prefix: bool = True
+    ) -> None:
+        
+        self._app = app
+        self._manager_cls = manager_cls
+        self._use_manager_prefix = use_manager_prefix
+        self._register = self._app.router.get_manager_route_resigter(
+            manager=self._manager_cls,
+            use_manager_prefix=self._use_manager_prefix
+        )
+
+    def __enter__(self) -> typing.Self:
+        return self
+
+    def __exit__(self,
+        exc_type: typing.Optional[typing.Type[BaseException]],
+        exc_val: typing.Optional[BaseException],
+        exc_tb: typing.Optional[types.TracebackType]
+    ) -> None:
+        # No specific cleanup needed for now
+        pass
+
+    def __call__(self,
+        operation: TransportOperationType,
+        path: str,
+        handler: typing.Callable,
+    ):
+        
+        """注册一个路由记录
+        """
+        return self._register(operation, path, handler)
+
+
+

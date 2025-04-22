@@ -369,7 +369,7 @@ def common_handler_adder(
     def wrapper(manager_cls: typing.Type[ManagerType]):
 
         if app:
-            register = manager_cls.get_route_record_register(app)
+            register = manager_cls.get_route_register(app)
         else:
             register = None
 
