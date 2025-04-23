@@ -7,31 +7,68 @@ import inspect
 if typing.TYPE_CHECKING:
     from ..scheme import BaseScheme
 
-def is_annotated(val: typing.Any) -> typing.TypeGuard[typing.Annotated]:
-    '''Check if the value is typing.Annotated
+def is_annotated(tp: typing.Type) -> typing.TypeGuard[typing.Annotated]:
 
-    :param val: The value to check.
-    :return: True if the value is annotated, False otherwise.
+    '''Check if the tp is typing.Annotated
 
-    Imple
-    -----
-    Check if the value has the `__origin__` and `__metadata__` attributes,
+    Example
+    -------
+    >>> is_annotated(typing.get_origin(typing.Annotated[str, ...]))
+    True
+    >>> is_annotated(typing.Annotated[str, ...])
+    True
     '''
-    return hasattr(val, '__origin__') and hasattr(val, '__metadata__')
+    if tp is not typing.Annotated:
+        return typing.get_origin(tp) is typing.Annotated
+    else:
+        return True
 
-def get_origin(type: typing.Type) -> typing.Type:
+
+@typing.overload
+def get_origin(tp: types.UnionType) -> types.UnionType:
+    ...
+@typing.overload
+def get_origin(tp: typing.Type) -> typing.Type:
+    ...
+def get_origin(tp: typing.Type | types.UnionType) -> typing.Type | types.UnionType:
 
     '''
-    兼容typing.Annotated和typing.NewType的get_origin方法
+    获取复杂类型的原始类型
+
+    Behavior
+    --------
+    - typing.Annotated -> args[0]
+    - typing.NewType -> __supertype__
+    - typing.Union, types.UnionType 不会被处理，直接返回
+
+    Example
+    -------
+    >>> get_origin(typing.Annotated[str, ...])
+    str
+    >>> get_origin(typing.NewType('MyStr', str))
+    str
+    >>> get_origin(typing.NewType('MyStr', typing.NewType('MyInt', int)))
+    int
+    >>> get_origin(typing.Union[str, int])
+    typing.Union[str, int]
+    >>> get_origin(str | int)
+    str | int
+    >>> get_origin(str)
+    str
     '''
+    if isinstance(tp, typing.NewType):
+        tp_ = tp.__supertype__
+        while isinstance(tp_, typing.NewType):
+            tp_ = tp_.__supertype__
+        return tp_
     
-    if getattr(type, '__class__') == typing.NewType:
-        type = type.__supertype__
-    
-    res = typing.get_origin(type) or type
+    res = typing.get_origin(tp) or tp
 
-    if res == typing.Annotated:
-        return typing.cast(typing.Type, type.__origin__)
+    if res is typing.Union or res is types.UnionType:
+        return tp
+
+    if res is typing.Annotated:
+        return typing.get_args(tp)[0]
     
     return res
 
