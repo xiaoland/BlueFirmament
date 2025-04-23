@@ -386,14 +386,12 @@ def common_handler_adder(
                 raise ValueError('primary key is required for get')
             
             exec_namespaces = globals().copy()
-            add_type_to_namespace(
-                primary_key_field.vtype, exec_namespaces
-            )
+            exec_namespaces["pk_validator"] = primary_key_field.validator
             
             get_handler_name = f'get_{manager_name}'
             primary_key_name = f"{manager_name}_id"
             func_sig = f"async def {get_handler_name}(self, \n"
-            func_sig += f"{primary_key_name}: {primary_key_field.vtype.__name__}"
+            func_sig += f"{primary_key_name}: typing.Annotated[typing.Any, pk_validator]"
             func_sig += "):\n"
             func_body = f"    return await self._get(_id={primary_key_name})\n"
             func_str = func_sig + func_body
@@ -418,9 +416,7 @@ def common_handler_adder(
                 raise ValueError('primary key is required for put_a_field')
             
             exec_namespaces = globals().copy()
-            add_type_to_namespace(
-                primary_key_field.vtype, exec_namespaces
-            )
+            exec_namespaces["pk_validator"] = primary_key_field.validator
             
             fields = put_a_field_options.get('fields')
             for field in fields:
@@ -428,7 +424,7 @@ def common_handler_adder(
                 put_a_field_handler_name = f'put_{field.name}'
                 primary_key_name = f"{manager_name}_id"
                 func_sig = f"async def {put_a_field_handler_name}(self, body, \n"
-                func_sig += f"{primary_key_name}: {primary_key_field.vtype.__name__}"
+                func_sig += f"{primary_key_name}: typing.Annotated[typing.Any, pk_validator]"
                 func_sig += "):\n"
                 func_body = f"    return await self._put_a_field(_id={primary_key_name},\n"
                 func_body += f"        field=self.scheme_cls.{field.in_scheme_name},\n"
@@ -456,9 +452,7 @@ def common_handler_adder(
                 raise ValueError('primary key is required for get_a_field')
             
             exec_namespaces = globals().copy()
-            add_type_to_namespace(
-                primary_key_field.vtype, exec_namespaces
-            )
+            exec_namespaces["pk_validator"] = primary_key_field.validator
             
             fields = get_a_field_options.get('fields')
             for field in fields:
@@ -466,7 +460,7 @@ def common_handler_adder(
                 get_a_field_handler_name = f'get_{field.name}'
                 primary_key_name = f"{manager_name}_id"
                 func_sig = f"async def {get_a_field_handler_name}(self, \n"
-                func_sig += f"    {primary_key_name}: {primary_key_field.vtype.__name__}"
+                func_sig += f"    {primary_key_name}: typing.Annotated[typing.Any, pk_validator]"
                 func_sig += "):\n"
                 func_body = f"    return await self._get_a_field(_id={primary_key_name}, \n"
                 func_body += f"        field=self.scheme_cls.{field.in_scheme_name}\n"
@@ -493,16 +487,14 @@ def common_handler_adder(
                 raise ValueError('primary key is required for insert_item')
             
             exec_namespaces = globals().copy()
-            add_type_to_namespace(
-                primary_key_field.vtype, exec_namespaces
-            )
+            exec_namespaces["pk_validator"] = primary_key_field.validator
             
             fields = insert_item_options.get('fields')
             for field in fields:
                 insert_item_handler_name = f'insert_{field.name}'
                 primary_key_name = f"{manager_name}_id"
                 func_sig = f"async def {insert_item_handler_name}(self, body: typing.Sequence, \n"
-                func_sig += f"{primary_key_name}: {primary_key_field.vtype.__name__},\n"
+                func_sig += f"{primary_key_name}: typing.Annotated[typing.Any, pk_validator],\n"
                 func_sig += "at: typing.Optional[int] = None, mode: str = 'append',\n"
                 func_sig += "):\n"
                 func_body = f"    return await self._insert_item(_id={primary_key_name}, \n"
@@ -532,16 +524,14 @@ def common_handler_adder(
                 raise ValueError('primary key is required for delete_item')
             
             exec_namespaces = globals().copy()
-            add_type_to_namespace(
-                primary_key_field.vtype, exec_namespaces
-            )
+            exec_namespaces["pk_validator"] = primary_key_field.validator
             
             fields = delete_item_options.get('fields')
             for field in fields:
                 delete_item_handler_name = f'delete_{field.name}'
                 primary_key_name = f"{manager_name}_id"
                 func_sig = f"async def {delete_item_handler_name}(self, body: typing.Sequence, \n"
-                func_sig += f"{primary_key_name}: {primary_key_field.vtype.__name__}"
+                func_sig += f"{primary_key_name}: typing.Annotated[typing.Any, pk_validator],\n"
                 func_sig += "):\n"
                 func_body = f"    return await self._delete_item(_id={primary_key_name}, \n"
                 func_body += f"        field=self.scheme_cls.{field.in_scheme_name},\n"

@@ -437,7 +437,7 @@ class RouteRecord(BaseMiddleware):
         - 通过 `inspect.signature().parameters` 获取参数列表
         - 通过 `utils.type.get_origin(params['param_name'])` 获取参数的类型 \n
           从而兼容 `typing.Annotated` 和 `typing.NewType` 等非直接类型标注
-        - 当使用 `typing.Annotated` 时，元数据[0]会被用作校验器/转换器 \n
+        - 当使用 `typing.Annotated` 时，第一个元数据会被用作校验器/转换器 \n
           其他情况则使用 `scheme.validator.get_validator_by_type` 根据类型校验器/转换器
 
         Dependency
@@ -461,7 +461,7 @@ class RouteRecord(BaseMiddleware):
             
             anno = get_origin(param.annotation) 
             if is_annotated(param.annotation): 
-                validator = param.annotation.__metadata__[0]
+                validator = typing.get_args(param.annotation)[1]
             else:
                 validator = get_validator_by_type(anno)
 
