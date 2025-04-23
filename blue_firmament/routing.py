@@ -654,14 +654,14 @@ class Router:
 
         raise KeyError(f"Route key {route_key} not matching a record in router {self.name}")
 
-    def get_manager_handler_route_record_register(self,
+    def get_manager_route_resigter(self,
         manager: typing.Type[BaseManager], path_prefix: str = '',
         use_manager_prefix: bool = True,
     ) -> typing.Callable[
         [TransportOperationType, str, RequestHandlerType], None
     ]:
         
-        '''获取管理器处理器的路由注册器
+        '''获取注册管理器中处理器的函数
 
         省去了 ``add_route_record`` 的 ``handler_manager`` 参数，并提供了一个路径前缀
 
