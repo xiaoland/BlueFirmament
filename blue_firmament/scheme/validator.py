@@ -37,6 +37,10 @@ class BaseValidator(typing.Generic[ValidateResultType]):
     def __call__(self, value) -> ValidateResultType:
         
         raise NotImplementedError('`__call__` method must be implemented in subclass')
+    @property
+    @abc.abstractmethod
+    def type(self) -> typing.Type[ValidateResultType]:
+        ...
 
 
 # BUG type problem to solve

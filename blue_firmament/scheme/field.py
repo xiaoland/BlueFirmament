@@ -11,10 +11,8 @@ References
 import functools
 import typing
 
-from ..utils.type import is_mutable
-
+from typing import Optional as Opt
 from ..dal.filters import EqFilter
-
 from .validator import BaseValidator, get_validator_by_type
 
 if typing.TYPE_CHECKING:
@@ -155,9 +153,6 @@ class BlueFirmamentField(typing.Generic[FieldValueType]):
     - 使用定义的序列化器序列化字段值
     """
 
-    __origin__: typing.Type[FieldValueType]
-    '''字段值的类型'''
-
     def __init__(
         self, 
         default: UndefinedValue | FieldValueType = UndefinedValue(), 
@@ -166,8 +161,7 @@ class BlueFirmamentField(typing.Generic[FieldValueType]):
         in_scheme_name: typing.Optional[str] = None,
         scheme_cls: typing.Optional[typing.Type["BaseScheme"]] = None,
         is_primary_key: bool = False,
-        converter: typing.Optional[typing.Callable[[typing.Any], FieldValueType]] = None,
-        vtype: UndefinedValue | typing.Type[FieldValueType] = UndefinedValue()
+        converter: Opt[BaseValidator[FieldValueType]] = None,
     ):
 
         """
@@ -179,8 +173,7 @@ class BlueFirmamentField(typing.Generic[FieldValueType]):
         - `scheme`：数据模型；该字段所属的数据模型类；实例化设置后不可修改
         - `default_factory`：默认值工厂；默认值需要动态生成或者为可变对象时使用，应该是一个可调用对象
         - `is_primary_key`：是否为主键；默认为假
-        - `converter`：校验器；数据模型将用此校验字段值
-        - `vtype`：字段值类型；如果提供，基于此设置校验器（ ``converter`` 优先）
+        - `converter`：校验器；数据模型将用此校验字段值；用此名称是因为 PEP 484
         """
         self.__name = name
         self.__in_scheme_name = in_scheme_name or name
@@ -188,13 +181,7 @@ class BlueFirmamentField(typing.Generic[FieldValueType]):
         self.__default = default
         self.__default_factory = default_factory
         self.__is_primary_key = is_primary_key
-        self.__validator = converter or get_validator_by_type(vtype)
-        if not isinstance(vtype, UndefinedValue):
-            self.__origin__ = vtype
-
-    @property
-    def vtype(self):
-        return self.__origin__
+        self.__validator: BaseValidator | None = converter
         
     def fork(self, 
         default: UndefinedValue | FieldValueType = UndefinedValue(),
@@ -203,8 +190,7 @@ class BlueFirmamentField(typing.Generic[FieldValueType]):
         in_scheme_name: typing.Optional[str] = None,
         scheme_cls: typing.Optional[typing.Type["BaseScheme"]] = None,
         is_primary_key: bool = False,
-        validator: typing.Optional[typing.Callable[[typing.Any], FieldValueType]] = None,
-        vtype: UndefinedValue | typing.Type[FieldValueType] = UndefinedValue()
+        validator: Opt[BaseValidator[FieldValueType]] = None,
     ) -> typing.Self:
 
         """克隆字段实例
@@ -217,7 +203,6 @@ class BlueFirmamentField(typing.Generic[FieldValueType]):
             scheme_cls=scheme_cls or self.__scheme_cls,
             is_primary_key=is_primary_key or self.__is_primary_key,
             converter=validator or self.__validator,
-            vtype=vtype if not UndefinedValue.is_(vtype) else self.__origin__,
         )
     
     def __hash__(self) -> int:
@@ -236,7 +221,7 @@ class BlueFirmamentField(typing.Generic[FieldValueType]):
             return self.__name == value or self.__in_scheme_name == value
         elif isinstance(value, BlueFirmamentField):
             # name, vtype
-            return self.__name == value.name and self.vtype == value.vtype
+            return self.__name == value.name and self.value_type == value.value_type
         return False
 
     @property
@@ -301,9 +286,27 @@ class BlueFirmamentField(typing.Generic[FieldValueType]):
     def set_validator_from_type(self, annotation: typing.Type[FieldValueType]):
 
         """从类型注解设置校验器
+
+        如果不是 FieldT 协议，则通过 get_validator_by_type 获取校验器
+        否则解析出协议的泛型
         """
-        self.__origin__ = annotation
+
+        if type(annotation) is self.__class__:
+            annotation = typing.get_args(annotation)[0]
+
         self.__validator = get_validator_by_type(annotation)
+
+    @property
+    def value_type(self) -> typing.Type[FieldValueType]:
+        
+        """获取字段值类型
+
+        从校验器中获取
+        """
+        if self.__validator:
+            return self.__validator.type
+        else:
+            raise ValueError('Field value type is not defined')
 
     def dump_to_json(self) -> str:
 
@@ -318,6 +321,10 @@ class BlueFirmamentField(typing.Generic[FieldValueType]):
         序列化为Python原生类型
         """
         pass # TODO
+
+    @property
+    def validator(self) -> BaseValidator | None:
+        return self.__validator
 
     def validate(self, value: typing.Any) -> FieldValueType:
 
@@ -392,18 +399,6 @@ class BlueFirmamentField(typing.Generic[FieldValueType]):
             value_ = self._proxy_value(value, instance)
         else:
             value_ = value
-
-        # proxy value by override __getattribute__
-        # if not initialized:
-        #     if is_mutable(value):
-        #         setattr(value, '__getattribute__', 
-        #             FieldValueProxy.__getattr__
-        #         )
-
-        # add scheme, field info on value
-        # if not initialized:
-        #     setattr(value, '__scheme__', instance)
-        #     setattr(value, '__field__', self)
         
         instance.set_value(self, value_)  # save
 
@@ -452,8 +447,7 @@ def Field(
     default_factory: typing.Optional[typing.Callable[[], T]] = None,
     name: typing.Optional[str] = None,
     is_primary_key: bool = False,
-    converter: typing.Optional[BaseValidator] = None,
-    vtype: UndefinedValue | typing.Type[T] = UndefinedValue()
+    converter: typing.Optional[BaseValidator] = None
 ):
     
     return BlueFirmamentField[T](
@@ -462,8 +456,8 @@ def Field(
         name=name, 
         is_primary_key=is_primary_key, 
         converter=converter,
-        vtype=vtype
     )
+
 
 class BlueFirmamentPrivateField[FieldValueType](BlueFirmamentField[FieldValueType]):
 
@@ -484,17 +478,15 @@ def PrivateField(
     default_factory: typing.Optional[typing.Callable[[], T]] = None,
     name: typing.Optional[str] = None,
     is_primary_key: bool = False,
-    converter: typing.Optional[BaseValidator] = None,
-    vtype: typing.Type[T] | UndefinedValue = UndefinedValue()
+    converter: typing.Optional[BaseValidator] = None
 ):
     
-    return BlueFirmamentPrivateField(
+    return BlueFirmamentPrivateField[T](
         default=default, 
         default_factory=default_factory, 
         name=name, 
         is_primary_key=is_primary_key, 
-        converter=converter,
-        vtype=vtype
+        converter=converter
     )
 
 

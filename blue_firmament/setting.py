@@ -17,8 +17,8 @@ import os
 import pkg_resources
 import typing
 
-from .scheme.field import field_as_class_var
-from .scheme.field import PrivateField
+from .scheme.field import field_as_class_var, PrivateField
+from .scheme import FieldT
 from .utils.file import load_json_file
 from .scheme import BaseScheme, Field
 from .utils.importer import import_modules
@@ -34,18 +34,24 @@ class Setting(BaseScheme):
     
     _proxy = False
     
-    _setting_name = PrivateField(vtype=str)
+    _setting_name: FieldT[str] = PrivateField()
     """配置名称"""
-    _setting_path = PrivateField(None, vtype=str)
+    _setting_path: FieldT[str | None] = PrivateField(None)
     """
     配置文件路径
     
     如果是打包在包内的配置文件，使用相对路径（不要用slash开头） \n
     如果是可以基于当前工作目录的配置文件，使用`./`或不使用任何前缀开头
+
+    Example
+    ^^^^^^^
+    - ``./config.json``: 相对于CWD
+    - ``data/config.json``: 相对于包
+    - ``data/config/base``: 相对于包（目录）
     """
-    _is_packaged = PrivateField(True, vtype=bool)
+    _is_packaged: FieldT[bool] = PrivateField(True)
     """是否打包在包内"""
-    _package_name = PrivateField(PACKAGE_NAME, vtype=str)
+    _package_name: FieldT[str] = PrivateField(PACKAGE_NAME)
     """所属包的包名"""
 
     @property
@@ -116,7 +122,7 @@ class EnvJsonSetting(Setting):
     多环境JSON配置
     """
 
-    _setting_env = PrivateField(default_factory=lambda: os.environ.get("ENV", "production"), vtype=str)
+    _setting_env: FieldT[str] = PrivateField(default_factory=lambda: os.environ.get("ENV", "production"))
     """配置环境"""
 
     @classmethod
@@ -168,10 +174,10 @@ class PythonScriptSetting(Setting):
         
         from .log import get_logger
         logger = get_logger(__name__)
-        logger.debug(f"Loading python script setting: {field_as_class_var(self._setting_path)}")
+        logger.debug(f"Loading python script setting: {self._setting_path}")
 
         py_setting = __import__(
-            name=field_as_class_var(self._setting_name), fromlist=["setting"]
+            name=self._setting_name, fromlist=["setting"]
         ).setting
         super().__init__(**py_setting)
 

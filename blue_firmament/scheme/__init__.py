@@ -4,4 +4,4 @@
 from .main import BaseScheme, make_partial
 from .business import BusinessScheme
 from .validator import BaseValidator
-from .field import Field, PrivateField
+from .field import Field, PrivateField, BlueFirmamentField as FieldT
