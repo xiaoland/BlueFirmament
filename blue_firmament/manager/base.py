@@ -1,9 +1,10 @@
 import typing
+import structlog
 import typing_extensions
 import types
 
-from blue_firmament.scheme.field import BlueFirmamentField
-from blue_firmament.transport import TransportOperationType
+from ..scheme.field import BlueFirmamentField
+from ..transport import TransportOperationType
 from ..session import Session
 from ..scheme import BaseScheme
 
@@ -19,6 +20,7 @@ SessionType = typing_extensions.TypeVar('SessionType', bound=Session, default=Se
 
 默认为 `session.common.CommonSession`
 '''
+T = typing.TypeVar('T')
 
 class BaseManager(typing.Generic[SchemeType, SessionType]):
 
@@ -34,36 +36,57 @@ class BaseManager(typing.Generic[SchemeType, SessionType]):
     - 蛇形小写
     - 建议与 所管理的数据模型的 DALPath[0] 对齐
     '''
+    __manager_name__: str = ""
+    '''管理器友好名称
+    '''
 
-    def __init__(self, session: SessionType) -> None:
+    def __init__(self, 
+        session: SessionType,
+        logger: structlog.stdlib.BoundLogger
+    ) -> None:
 
         self.__session: SessionType = session
+        self.__logger: structlog.stdlib.BoundLogger = logger.bind(name=self.__manager_name__)
         self.__scheme: typing.Optional[SchemeType] = None
+
+        # TODO also provide request and response
 
     @property
     def scheme_cls(self) -> typing.Type[SchemeType]:
-        '''本管理器管理的数据模型类'''
+        '''管理的数据模型类'''
         return self.__scheme_cls__
 
     @property
     def session(self) -> SessionType:
-        '''获取当前管理器的会话实例'''
+        '''当前会话'''
         return self.__session
     
     @property
+    def logger(self) -> structlog.stdlib.BoundLogger:
+        '''管理器级别日志记录器
+        
+        - 包含请求上下文信息
+        - 添加 name 字段，为当前管理器的名称
+        '''
+        return self.__logger
+    
+    @property
     def dal_path(self):
+        '''数据模型对应的 DALPath'''
         return self.scheme_cls.dal_path()
 
     @property
     def primary_key(self) -> BlueFirmamentField:
+        '''数据模型主键字段'''
         return self.scheme_cls.get_primary_key()
 
     def get_primary_key_eqf(self, value: typing.Any):
+        '''数据模型主键过滤器'''
         return self.scheme_cls.get_primary_key().equals(value)
 
     async def get_scheme(self, *args, **kwargs):
 
-        '''获取本管理器模型当前管理的的数据模型的实例
+        '''获取管理的数据模型的实例
 
         数据模型实例为空时抛出 ``ValueError`` 异常
         '''
@@ -90,6 +113,19 @@ class BaseManager(typing.Generic[SchemeType, SessionType]):
         :param scheme: 数据模型实例
         '''
         self.__scheme = scheme
+    
+    def derive_manager(self, manager_cls: typing.Type[T]) -> T:
+
+        """派生管理器实例
+
+        TODO 无需用户考虑 Session 是否匹配
+        """
+        if not issubclass(manager_cls, BaseManager):
+            raise TypeError(f"manager_cls must be a subclass of {BaseManager.__name__}")
+        
+        return manager_cls(
+            session=self.__session, logger=self.__logger
+        )
 
     @classmethod
     def get_route_register(cls, app: "BlueFirmamentApp") -> "ManagerRouteRegister":
@@ -98,7 +134,8 @@ class BaseManager(typing.Generic[SchemeType, SessionType]):
         :return: 路由注册器
         """
         return ManagerRouteRegister(
-            app=app, manager_cls=cls, 
+            app=app, 
+            manager_cls=cls, 
             use_manager_prefix=True
         )
 
