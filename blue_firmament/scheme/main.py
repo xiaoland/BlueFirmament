@@ -284,6 +284,16 @@ class BaseScheme(metaclass=SchemeMetaclass):
                 setattr(obj, k, v.default_value)
 
     @classmethod
+    def from_parents(cls, /, *parents: "BaseScheme") -> typing.Self:
+
+        """从父数据模型实例实例化本数据模型
+        """
+        data = {}
+        for parent in parents:
+            data.update(parent.__field_values__)
+
+        return cls(**data)
+    @classmethod
     def dal_path(cls) -> DALPath:
         return DALPath((cls.__table_name__, cls.__schema_name__))
 
