@@ -6,9 +6,12 @@ import inspect
 from .transport.request import Request
 from .transport import TransportOperationType
 from .scheme.validator import AnyValidator, BaseValidator, get_validator_by_type
+from .scheme.converter import AnyConverter, BaseConverter, get_converter_from_anno
+from .scheme.converter import AnyConverter, BaseConverter, SchemeConverter, get_converter_from_anno
 from .scheme import BaseScheme
 from .utils.type import (
     is_annotated, get_origin, is_json_dumpable, safe_issubclass
+    get_origin, is_json_dumpable, safe_issubclass
 )
 from .utils import call_function_as_async
 from .middleware import BaseMiddleware
@@ -54,6 +57,8 @@ class RouteKey(typing.Generic[RouteKeyParamTypesType]):
         self, operation: typing.Optional[TransportOperationType], raw_path: str,
         param_types: RouteKeyParamTypesType = {},
         param_validators: typing.Optional[typing.Dict[str, BaseValidator]] = None
+        param_validators: typing.Optional[typing.Dict[str, BaseConverter]] = None
+        param_converters: typing.Optional[typing.Dict[str, BaseConverter]] = None
     ):
         
         """
@@ -63,6 +68,7 @@ class RouteKey(typing.Generic[RouteKeyParamTypesType]):
         - `path`: A URL-like path, which can include parameters (e.g., '/users/{id}', 'users', 'users/')
         - `param_types`: A dictionary of parameter names and their types
         - `param_validators`: 参数的校验器映射表；如果未提供，自动从`param_types`推断
+        - `param_converters`: 参数的校验器映射表；如果未提供，自动从`param_types`推断
         """
         
         self._operation = operation
@@ -76,21 +82,23 @@ class RouteKey(typing.Generic[RouteKeyParamTypesType]):
         '''Record static segments'''
         if typing.TYPE_CHECKING:
             self.__param_validators: typing.Dict[str, BaseValidator]
+            self.__param_validators: typing.Dict[str, BaseConverter]
+            self.__param_converters: typing.Dict[str, BaseConverter]
             '''参数名称及其对应的校验器
             
             - 一定有所有参数的校验器
             - 如果参数没有指定类型，则使用通用校验器（AnyValidator）
             '''
         
-        if not param_validators:
-            self.__param_validators = {
-                param_name: get_validator_by_type(param_types[param_name]) if param_name in param_types else AnyValidator()
+        if not param_converters:
+            self.__param_converters = {
+                param_name: get_converter_from_anno(param_types[param_name]) if param_name in param_types else AnyConverter()
                 for param_name in [
                     self.__get_param_name(self.__segments[i]) for i in self.__param_indices
                 ] 
             }
         else:
-            self.__param_validators = param_validators
+            self.__param_converters = param_converters
         
     def __eq__(self, other):
 
@@ -118,9 +126,9 @@ class RouteKey(typing.Generic[RouteKeyParamTypesType]):
         使用slice获取子路由键
         '''
         if isinstance(key, slice):
-            return RouteKey(self._operation, '/'.join(self.__segments[key]), param_validators=self.__param_validators)
+            return RouteKey(self._operation, '/'.join(self.__segments[key]), param_converters=self.__param_converters)
         else:
-            return RouteKey(self._operation, self.__segments[key], param_validators=self.__param_validators)
+            return RouteKey(self._operation, self.__segments[key], param_converters=self.__param_converters)
     
     def __is_segment_match(self, other: str, segment_index: int) -> typing.Tuple[bool, typing.Any | None]:
         
@@ -144,9 +152,9 @@ class RouteKey(typing.Generic[RouteKeyParamTypesType]):
             return self.segments[segment_index] == other, None
         elif segment_index in self.__param_indices:
             param_name = self.__get_param_name(self.segments[segment_index])
-            param_validator = self.__param_validators[param_name]  # 不可能发生KeyError
+            param_converter = self.__param_converters[param_name]  # 不可能发生KeyError
             try:
-                res = param_validator(other)
+                res = param_converter(other)
                 return True, res
             except ValueError:
                 return False, None
@@ -209,8 +217,8 @@ class RouteKey(typing.Generic[RouteKeyParamTypesType]):
         for i in self.__param_indices:
             param_name = self.__get_param_name(self.__segments[i])
             try:
-                param_validator = self.__param_validators[param_name]
-                result[param_name] = param_validator(segments[i])
+                param_converter = self.__param_converters[param_name]
+                result[param_name] = param_converter(segments[i])
             except (IndexError, KeyError, ValueError):
                 # IndexError: 我方不存在对应的分段
                 # KeyError: 没有对应的参数校验器
@@ -362,6 +370,7 @@ class RouteRecord(BaseMiddleware):
     
     @staticmethod
     def __get_path_query_param_getter(key: str, validator: BaseValidator):
+    def __get_path_query_param_getter(key: str, validator: BaseConverter):
 
         """获取路径参数或查询参数的获取器
         
@@ -371,9 +380,11 @@ class RouteRecord(BaseMiddleware):
 
             try:
                 return validator(env['path_params'][key])
+                return converter(env._path_params[key])
             except KeyError:
                 try:
                     return validator(env['request'].query_params[key])
+                    return converter(env._query_params[key])
                 except KeyError:
                     raise ValueError(f'{key} not found in path or query params')
         
@@ -381,6 +392,7 @@ class RouteRecord(BaseMiddleware):
     
     @staticmethod
     def __get_body_getter1(validator: typing.Type[BaseScheme]):
+    def __get_body_getter1(converter: SchemeConverter):
 
         """获取一类请求体参数获取器
 
@@ -390,6 +402,7 @@ class RouteRecord(BaseMiddleware):
             request = env['request']
             if isinstance(request.body, dict):
                 return validator(**request.body)
+                return converter(**request.body)
             else:
                 raise ValueError('body must be dict')
             
@@ -397,6 +410,7 @@ class RouteRecord(BaseMiddleware):
     
     @staticmethod
     def __get_body_getter2(validator: BaseValidator):
+    def __get_body_getter2(validator: BaseConverter):
 
         """获取二类请求体参数获取器
 
@@ -405,6 +419,7 @@ class RouteRecord(BaseMiddleware):
         def get_body_2(env: RequestHandlerEnv):
             request = env['request']
             return validator(request.body)
+            return converter(request.body)
         
         return get_body_2
         
@@ -418,6 +433,7 @@ class RouteRecord(BaseMiddleware):
         ---------
         - 此处假设处理器的签名是静态的，所以可以在路由记录实例化时解析参数备用，无需每次调用处理器之前重新解析
         - ``__call__`` 等调用处理器时将会
+        - ``__call__`` 等调用处理器时将会使用解析的结果来自动注入参数
 
         Behaviour
         ----------
@@ -443,6 +459,7 @@ class RouteRecord(BaseMiddleware):
         Dependency
         -----------
         - `scheme.validator.get_validator_by_type`
+        - :meth:`scheme.converter.get_converter_from_anno`
         - `utils.type.get_origin`
 
         Returns
@@ -464,6 +481,8 @@ class RouteRecord(BaseMiddleware):
                 validator = typing.get_args(param.annotation)[1]
             else:
                 validator = get_validator_by_type(anno)
+                validator = get_converter_from_anno(anno)
+            converter = get_converter_from_anno(param.annotation)
 
             if safe_issubclass(anno, Request):
                 kwargs[key] = lambda env: env['request']
@@ -474,16 +493,16 @@ class RouteRecord(BaseMiddleware):
             
             if key == HANDLER_BODY_KW:
                 if safe_issubclass(anno, BaseScheme):
-                    if not safe_issubclass(validator, BaseScheme):
-                        raise TypeError('When annotation is BaseScheme, the validator (typing.Annotated arg 1) must be BaseScheme too')
+                    if not isinstance(converter, SchemeConverter):
+                        raise TypeError('wrong converter for BaseScheme type body')
                     
-                    kwargs[HANDLER_BODY_KW] = cls.__get_body_getter1(validator)
+                    kwargs[HANDLER_BODY_KW] = cls.__get_body_getter1(converter)
                 else:
-                    kwargs[HANDLER_BODY_KW] = cls.__get_body_getter2(validator)
+                    kwargs[HANDLER_BODY_KW] = cls.__get_body_getter2(converter)
 
                 continue
 
-            kwargs[key] = cls.__get_path_query_param_getter(key, validator)
+            kwargs[key] = cls.__get_path_query_param_getter(key, converter)
 
         return kwargs
     

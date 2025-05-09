@@ -14,6 +14,7 @@ import typing
 from typing import Optional as Opt
 from ..dal.filters import EqFilter
 from .validator import BaseValidator, get_validator_by_type
+from .converter import BaseConverter, get_converter_from_anno
 
 if typing.TYPE_CHECKING:
     from .main import BaseScheme
@@ -182,6 +183,7 @@ class BlueFirmamentField(typing.Generic[FieldValueType]):
         self.__default_factory = default_factory
         self.__is_primary_key = is_primary_key
         self.__validator: BaseValidator | None = converter
+        self.__validator: BaseConverter | None = converter
         
     def fork(self, 
         default: UndefinedValue | FieldValueType = UndefinedValue(),
@@ -191,6 +193,7 @@ class BlueFirmamentField(typing.Generic[FieldValueType]):
         scheme_cls: typing.Optional[typing.Type["BaseScheme"]] = None,
         is_primary_key: bool = False,
         validator: Opt[BaseValidator[FieldValueType]] = None,
+        validator: Opt[BaseConverter[FieldValueType]] = None,
     ) -> typing.Self:
 
         """克隆字段实例
@@ -295,6 +298,7 @@ class BlueFirmamentField(typing.Generic[FieldValueType]):
             annotation = typing.get_args(annotation)[0]
 
         self.__validator = get_validator_by_type(annotation)
+        self.__validator = get_converter_from_anno(annotation)
 
     @property
     def value_type(self) -> typing.Type[FieldValueType]:
@@ -448,6 +452,7 @@ def Field(
     name: typing.Optional[str] = None,
     is_primary_key: bool = False,
     converter: typing.Optional[BaseValidator] = None
+    converter: typing.Optional[BaseConverter] = None,
 ):
     
     return BlueFirmamentField[T](

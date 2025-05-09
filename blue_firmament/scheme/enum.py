@@ -8,7 +8,13 @@ from typing import Optional as Opt, Annotated as Anno, Literal as Lit
 from ..exceptions import InvalidStatusTransition
 
 
-MemberT = typing.TypeVar('MemberT', bound=enum.Enum)
+EnumClassTV = typing.TypeVar('EnumClassTV', bound=typing.Type[enum.Enum])
+"""枚举类类型变量"""
+EnumMemberTV = typing.TypeVar('EnumMemberTV', bound=enum.Enum)
+"""枚举成员类型变量
+
+也就是枚举实例
+"""
 
 class Status(enum.Enum):
 
@@ -37,9 +43,9 @@ class Status(enum.Enum):
     """
 
     def _to_target_status(self, 
-        target: MemberT,
+        target: EnumMemberTV,
         *allowed_from: "Status",
-    ) -> MemberT:
+    ) -> EnumMemberTV:
         
         """转换到目标状态
 
