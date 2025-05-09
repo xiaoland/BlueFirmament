@@ -470,28 +470,25 @@ class BlueFirmamentPrivateField[FieldValueType](BlueFirmamentField[FieldValueTyp
 
     - 不会被外部访问？（setting 那边的实践有问题）
     - 不会被序列化
-    - 不会与数据访问层交互
+    - 不会与数据访问层交互（无需代理）
+    - 不会被校验
     """
     
     @property
     def name(self) -> str:
         raise ValueError('Private field name is forbidden')
-
+    
+    def __set__(self, instance: "BaseScheme", value: FieldValueType) -> None:
+        instance.set_value(self, value)
 
 def PrivateField(
     default: T | UndefinedValue = UndefinedValue(),
     default_factory: typing.Optional[typing.Callable[[], T]] = None,
-    name: typing.Optional[str] = None,
-    is_primary_key: bool = False,
-    converter: typing.Optional[BaseValidator] = None
 ):
     
     return BlueFirmamentPrivateField[T](
         default=default, 
         default_factory=default_factory, 
-        name=name, 
-        is_primary_key=is_primary_key, 
-        converter=converter
     )
 
 

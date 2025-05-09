@@ -3,20 +3,18 @@
 import typing
 import inspect
 
+from .transport.context import RequestContext
 from .transport.request import Request
 from .transport import TransportOperationType
-from .scheme.validator import AnyValidator, BaseValidator, get_validator_by_type
-from .scheme.converter import AnyConverter, BaseConverter, get_converter_from_anno
 from .scheme.converter import AnyConverter, BaseConverter, SchemeConverter, get_converter_from_anno
 from .scheme import BaseScheme
 from .utils.type import (
-    is_annotated, get_origin, is_json_dumpable, safe_issubclass
     get_origin, is_json_dumpable, safe_issubclass
 )
 from .utils import call_function_as_async
 from .middleware import BaseMiddleware
 from .manager import BaseManager
-from .transport.response import Response, JsonResponseBody
+from .transport.response import Response, JsonResponseBody, ResponseBody
 
 
 PathParamsType = typing.Dict[str, typing.Any]
@@ -25,13 +23,6 @@ RequestHandlerType = typing.Union[
     typing.Callable[..., typing.Awaitable[typing.Any]]
 ]
 HANDLER_BODY_KW = 'body'
-class RequestHandlerEnv(typing.TypedDict):
-    
-    """请求处理器环境
-    """
-    request: Request
-    response: Response
-    path_params: PathParamsType
 
 RouteKeyParamTypesType = typing.TypeVar('RouteKeyParamTypesType', bound=typing.Dict[str, typing.Type])
 class RouteKey(typing.Generic[RouteKeyParamTypesType]):
@@ -56,8 +47,6 @@ class RouteKey(typing.Generic[RouteKeyParamTypesType]):
     def __init__(
         self, operation: typing.Optional[TransportOperationType], raw_path: str,
         param_types: RouteKeyParamTypesType = {},
-        param_validators: typing.Optional[typing.Dict[str, BaseValidator]] = None
-        param_validators: typing.Optional[typing.Dict[str, BaseConverter]] = None
         param_converters: typing.Optional[typing.Dict[str, BaseConverter]] = None
     ):
         
@@ -67,7 +56,6 @@ class RouteKey(typing.Generic[RouteKeyParamTypesType]):
         - `operation`: operation supported by BlueFirmament；None is wildcard
         - `path`: A URL-like path, which can include parameters (e.g., '/users/{id}', 'users', 'users/')
         - `param_types`: A dictionary of parameter names and their types
-        - `param_validators`: 参数的校验器映射表；如果未提供，自动从`param_types`推断
         - `param_converters`: 参数的校验器映射表；如果未提供，自动从`param_types`推断
         """
         
@@ -81,8 +69,6 @@ class RouteKey(typing.Generic[RouteKeyParamTypesType]):
         self.__static_indices: typing.Iterable[int] = set(range(len(self.__segments))) - set(self.__param_indices)
         '''Record static segments'''
         if typing.TYPE_CHECKING:
-            self.__param_validators: typing.Dict[str, BaseValidator]
-            self.__param_validators: typing.Dict[str, BaseConverter]
             self.__param_converters: typing.Dict[str, BaseConverter]
             '''参数名称及其对应的校验器
             
@@ -303,7 +289,7 @@ class RouteRecord(BaseMiddleware):
     路由记录将路由键映射到一个请求处理器或另一个路由器。路由记录被保存在路由器中，用于路由请求。
     """
 
-    HandlerKwargsType = typing.Dict[str, typing.Callable[[RequestHandlerEnv], typing.Any]]
+    HandlerKwargsType = typing.Dict[str, typing.Callable[[RequestContext], typing.Any]]
     TargetType = typing.Union[RequestHandlerType, 'Router']
     
     def __init__(self, 
@@ -369,21 +355,18 @@ class RouteRecord(BaseMiddleware):
         return self.__route_key.is_match(route_key)
     
     @staticmethod
-    def __get_path_query_param_getter(key: str, validator: BaseValidator):
-    def __get_path_query_param_getter(key: str, validator: BaseConverter):
+    def __get_path_query_param_getter(key: str, converter: BaseConverter):
 
         """获取路径参数或查询参数的获取器
         
         传入参数名称和校验器，返回一个获取器函数用以按照名称和类型从path, query_params中解析参数
         """
-        def get_path_query_param(env: RequestHandlerEnv):
+        def get_path_query_param(env: RequestContext):
 
             try:
-                return validator(env['path_params'][key])
                 return converter(env._path_params[key])
             except KeyError:
                 try:
-                    return validator(env['request'].query_params[key])
                     return converter(env._query_params[key])
                 except KeyError:
                     raise ValueError(f'{key} not found in path or query params')
@@ -391,17 +374,15 @@ class RouteRecord(BaseMiddleware):
         return get_path_query_param
     
     @staticmethod
-    def __get_body_getter1(validator: typing.Type[BaseScheme]):
     def __get_body_getter1(converter: SchemeConverter):
 
         """获取一类请求体参数获取器
 
-        一类：BaseScheme
+        一类：展开
         """
-        def get_body_1(env: RequestHandlerEnv):
-            request = env['request']
+        def get_body_1(env: RequestContext):
+            request = env._request
             if isinstance(request.body, dict):
-                return validator(**request.body)
                 return converter(**request.body)
             else:
                 raise ValueError('body must be dict')
@@ -409,16 +390,14 @@ class RouteRecord(BaseMiddleware):
         return get_body_1
     
     @staticmethod
-    def __get_body_getter2(validator: BaseValidator):
-    def __get_body_getter2(validator: BaseConverter):
+    def __get_body_getter2(converter: BaseConverter):
 
         """获取二类请求体参数获取器
 
         二类：原样
         """
-        def get_body_2(env: RequestHandlerEnv):
-            request = env['request']
-            return validator(request.body)
+        def get_body_2(env: RequestContext):
+            request = env._request
             return converter(request.body)
         
         return get_body_2
@@ -432,7 +411,6 @@ class RouteRecord(BaseMiddleware):
         Rationale
         ---------
         - 此处假设处理器的签名是静态的，所以可以在路由记录实例化时解析参数备用，无需每次调用处理器之前重新解析
-        - ``__call__`` 等调用处理器时将会
         - ``__call__`` 等调用处理器时将会使用解析的结果来自动注入参数
 
         Behaviour
@@ -448,17 +426,8 @@ class RouteRecord(BaseMiddleware):
             - 路径参数优先于查询参数
             - 名称匹配但类型不匹配会导致 `ValueError` 异常
 
-        参数类型读取
-        ^^^^^^^^^^^^^^
-        - 通过 `inspect.signature().parameters` 获取参数列表
-        - 通过 `utils.type.get_origin(params['param_name'])` 获取参数的类型 \n
-          从而兼容 `typing.Annotated` 和 `typing.NewType` 等非直接类型标注
-        - 当使用 `typing.Annotated` 时，第一个元数据会被用作校验器/转换器 \n
-          其他情况则使用 `scheme.validator.get_validator_by_type` 根据类型校验器/转换器
-
         Dependency
         -----------
-        - `scheme.validator.get_validator_by_type`
         - :meth:`scheme.converter.get_converter_from_anno`
         - `utils.type.get_origin`
 
@@ -466,7 +435,7 @@ class RouteRecord(BaseMiddleware):
         -------
         返回一个字典，键为处理器的参数名称，值为该参数的获取器。
 
-        参数获取器接收 `RequestHandlerEnv` 作为参数，从中解析出本参数需要的值。
+        参数获取器接收 :class:`blue_firmament.transport.context.RequestContext` 作为参数，从中解析出本参数需要的值。
         '''
         handler_params = inspect.signature(handler).parameters
         kwargs: RouteRecord.HandlerKwargsType = {}
@@ -477,18 +446,13 @@ class RouteRecord(BaseMiddleware):
                 continue
             
             anno = get_origin(param.annotation) 
-            if is_annotated(param.annotation): 
-                validator = typing.get_args(param.annotation)[1]
-            else:
-                validator = get_validator_by_type(anno)
-                validator = get_converter_from_anno(anno)
             converter = get_converter_from_anno(param.annotation)
 
             if safe_issubclass(anno, Request):
-                kwargs[key] = lambda env: env['request']
+                kwargs[key] = lambda env: env._request
                 continue
             elif safe_issubclass(anno, Response):
-                kwargs[key] = lambda env: env['response']
+                kwargs[key] = lambda env: env._response
                 continue
             
             if key == HANDLER_BODY_KW:
@@ -508,9 +472,7 @@ class RouteRecord(BaseMiddleware):
     
     async def __call__(self, *,
         next,
-        request: "Request", 
-        response: "Response",
-        path_params: PathParamsType = {},
+        request_context: RequestContext,
         **kwargs
     ):
         
@@ -518,14 +480,12 @@ class RouteRecord(BaseMiddleware):
             self.__target()  # type: ignore  调用不了自然报错
             next()
         else:
-            await self.execute_handler(request, response, path_params)
+            await self.execute_handler(request_context=request_context)
             next()
         
 
     async def execute_handler(self, 
-        request: "Request", 
-        response: "Response",
-        path_params: PathParamsType = {},
+        request_context: RequestContext,
     ):
 
         """调用处理器（中间件）
@@ -547,27 +507,25 @@ class RouteRecord(BaseMiddleware):
         assert not isinstance(self.__target, Router), "Target is not handler."
         
         # get kwargs
-        env: RequestHandlerEnv = {
-            'request': request,
-            'response': response,
-            'path_params': path_params
-        }
-        kwargs = {key: getter(env) for key, getter in self.__handler_kwargs.items()}
+        kwargs = {key: getter(request_context) for key, getter in self.__handler_kwargs.items()}
 
         # get args
         args = []
         # [self] don't add other arg parser before this one
         if self.__method_manager_cls:
-            manager = self.__method_manager_cls(request.session)
-            args.append(manager)
+            manager = self.__method_manager_cls(request_context=request_context)
+            args.append(manager)  # TODO why not args[0]?
 
         # call handler
         result = await call_function_as_async(self.__target, *args, **kwargs)
 
         # process result
         # TODO process result correctly
+        response = request_context._response
         if is_json_dumpable(result):
             response.body = JsonResponseBody(result)
+        elif isinstance(result, ResponseBody):
+            response.body = result
         else:
             # TODO
             response.body = JsonResponseBody({'error': 'Invalid response type'})

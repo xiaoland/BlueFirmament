@@ -2,6 +2,7 @@ import asyncio
 import typing
 
 from .log import get_logger
+from blue_firmament.transport.context import RequestContext
 from .transport import TransportOperationType
 from .transport.response import Response
 from .transport.request import CommonSesstionRequest, Request
@@ -41,6 +42,7 @@ class BlueFirmamentApp:
         self.__name__ = name
         self.__transports = transports or []
         self.__router: Router = router or Router('root')
+        self.__logger = get_logger(name)
 
     @property
     def router(self) -> Router:
@@ -109,8 +111,17 @@ class BlueFirmamentApp:
         middlewares: BaseMiddleware.MiddlewaresType = (
             route_record,
         )
+        request_context = RequestContext(
+            request=request,
+            response=response,
+            app_logger=self.__logger,
+            path_params=path_params
+        )
         await call_function_as_async(
             middlewares[0], next = BaseMiddleware.get_next(middlewares, **env), **env
+            middlewares[0], 
+            next=BaseMiddleware.get_next(middlewares, request_context=request_context), 
+            request_context=request_context
         )
 
     def handle_connection(self, conn: Connection):

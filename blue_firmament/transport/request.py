@@ -91,4 +91,5 @@ class Request(typing.Generic[RequestSessionType]):
         return self.__query_params
 
 
-CommonSesstionRequest = typing.NewType("CommonSesstionRequest", Request[CommonSession])
+CommonSesstionRequest = typing.NewType("CommonSesstionRequest", Request[CommonSession])CommonSessionRequest = typing.NewType("CommonSessionRequest", Request[CommonSession])
+CommonSessionRequest = typing.NewType("CommonSessionRequest", Request[CommonSession])
