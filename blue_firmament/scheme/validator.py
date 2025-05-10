@@ -21,10 +21,12 @@ if typing.TYPE_CHECKING:
     from .main import BaseScheme
 
 
-class BaseValidator(abc.ABC):
+T = typing.TypeVar("T")
+BaseSchemeTV = typing.TypeVar("BaseSchemeTV", bound="BaseScheme")
+class BaseValidator(abc.ABC, typing.Generic[T]):
 
     @abc.abstractmethod
-    def __call__(self, value: typing.Any, **kwargs) -> None:
+    def __call__(self, value: T, **kwargs) -> None:
 
         """Validate the value.
 
@@ -33,7 +35,7 @@ class BaseValidator(abc.ABC):
         """
 
 
-class FieldValidator(BaseValidator):
+class FieldValidator(BaseValidator[T], typing.Generic[T]):
 
     """Validator for a field.
 
@@ -50,7 +52,7 @@ class FieldValidator(BaseValidator):
         ],
         # await def func(self: BaseScheme, value: Any) -> None
         typing.Callable[
-            ["BaseScheme", typing.Any], 
+            [BaseSchemeTV, typing.Any], 
             typing.Union[
                 None, 
                 typing.Coroutine[None, None, None]
@@ -98,7 +100,7 @@ class FieldValidator(BaseValidator):
 
 
 def field_validator(
-    field: "BlueFirmamentField"
+    field: "BlueFirmamentField[T]"
 ): 
     
     """Decorator to create a field validator.
@@ -116,12 +118,12 @@ def field_validator(
             __table_name__ = "post"
             
             _id: int
-            status: str = "open"
+            status: FieldT(str) = Field("open")
 
         class Comment(BaseScheme):
             __table_name__ = "comment"
             
-            post: int
+            post: FieldT[int] = Field()
             ...
 
             @field_validator(post)
@@ -133,7 +135,23 @@ def field_validator(
         
     """
 
-    def wrapper(func: FieldValidator.FuncT) -> FieldValidator:
+    def wrapper(func: 
+        typing.Union[
+            typing.Callable[[T], 
+                typing.Union[
+                    None, 
+                    typing.Coroutine[None, None, None]
+                ]
+            ],
+            typing.Callable[
+                [BaseSchemeTV, T], 
+                typing.Union[
+                    None, 
+                    typing.Coroutine[None, None, None]
+                ]
+            ],
+        ]       
+    ) -> FieldValidator[T]:
         return FieldValidator(field, func)
 
     return wrapper
