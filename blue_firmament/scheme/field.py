@@ -12,12 +12,11 @@ import functools
 import typing
 
 from typing import Optional as Opt
-from ..dal.filters import EqFilter
-from .validator import BaseValidator, get_validator_by_type
 from .converter import BaseConverter, get_converter_from_anno
 
 if typing.TYPE_CHECKING:
     from .main import BaseScheme
+    from .validator import BaseValidator
 
 
 class UndefinedValue:
@@ -163,6 +162,8 @@ class BlueFirmamentField(typing.Generic[FieldValueType]):
         scheme_cls: typing.Optional[typing.Type["BaseScheme"]] = None,
         is_primary_key: bool = False,
         converter: Opt[BaseValidator[FieldValueType]] = None,
+        converter: Opt[BaseConverter[FieldValueType]] = None,
+        validators: Opt[typing.Iterable["BaseValidator"]] = None,
     ):
 
         """
@@ -175,6 +176,8 @@ class BlueFirmamentField(typing.Generic[FieldValueType]):
         - `default_factory`：默认值工厂；默认值需要动态生成或者为可变对象时使用，应该是一个可调用对象
         - `is_primary_key`：是否为主键；默认为假
         - `converter`：校验器；数据模型将用此校验字段值；用此名称是因为 PEP 484
+        - `converter`：转换器；更多见 :doc:`/design/scheme/converter`
+        - `validators`：校验器；更多见 :doc:`/design/scheme/validator`
         """
         self.__name = name
         self.__in_scheme_name = in_scheme_name or name
@@ -184,6 +187,8 @@ class BlueFirmamentField(typing.Generic[FieldValueType]):
         self.__is_primary_key = is_primary_key
         self.__validator: BaseValidator | None = converter
         self.__validator: BaseConverter | None = converter
+        self.__converter: BaseConverter | None = converter
+        self.__validators: typing.List["BaseValidator"] = list(validators or [])
         
     def fork(self, 
         default: UndefinedValue | FieldValueType = UndefinedValue(),
@@ -206,6 +211,7 @@ class BlueFirmamentField(typing.Generic[FieldValueType]):
             scheme_cls=scheme_cls or self.__scheme_cls,
             is_primary_key=is_primary_key or self.__is_primary_key,
             converter=validator or self.__validator,
+            converter=validator or self.__converter,
         )
     
     def __hash__(self) -> int:
@@ -286,19 +292,28 @@ class BlueFirmamentField(typing.Generic[FieldValueType]):
     @property
     def is_primary_key(self) -> bool: return self.__is_primary_key
 
-    def set_validator_from_type(self, annotation: typing.Type[FieldValueType]):
+    def _set_converter_from_anno(self, annotation: typing.Type[FieldValueType]):
 
-        """从类型注解设置校验器
+        """从类型注解设置转换器
 
-        如果不是 FieldT 协议，则通过 get_validator_by_type 获取校验器
-        否则解析出协议的泛型
+        - 支持 `BlueFirmamentField[type]`
+        - 用户不应当调用
         """
 
-        if type(annotation) is self.__class__:
+        if typing.get_origin(annotation) is BlueFirmamentField:
             annotation = typing.get_args(annotation)[0]
 
-        self.__validator = get_validator_by_type(annotation)
-        self.__validator = get_converter_from_anno(annotation)
+        self.__converter = get_converter_from_anno(annotation)
+
+    def _add_validator(self, validator: "BaseValidator") -> None:
+
+        """添加校验器
+
+        :param validator: 校验器
+
+        - 用户不应当调用
+        """
+        self.__validators.append(validator)
 
     @property
     def value_type(self) -> typing.Type[FieldValueType]:
@@ -307,8 +322,8 @@ class BlueFirmamentField(typing.Generic[FieldValueType]):
 
         从校验器中获取
         """
-        if self.__validator:
-            return self.__validator.type
+        if self.__converter:
+            return self.__converter.type
         else:
             raise ValueError('Field value type is not defined')
 
@@ -327,35 +342,10 @@ class BlueFirmamentField(typing.Generic[FieldValueType]):
         pass # TODO
 
     @property
-    def validator(self) -> BaseValidator | None:
-        return self.__validator
-
-    def validate(self, value: typing.Any) -> FieldValueType:
-
-        """校验字段值
-
-        返回处理后的值（如果无法处理会抛出错误）；没有定义校验器则直接返回值
-        """
-        if self.__validator:
-            return self.__validator(value)
-        else:
-            return value
-        
-    def equals(self, other: typing.Any) -> EqFilter:
-        
-        '''Get an EqFilter of this field
-        '''
-        return EqFilter(self, other)
-    
-    def get_dict(self, value: FieldValueType) -> dict[str, FieldValueType]:
-
-        """获取字段及其值组成的字典
-
-        :param value: 字段值；会先由校验器处理
-        """
-        return {
-            self.name: self.validate(value)
-        }
+    def converter(self) -> BaseConverter:
+        if self.__converter is None:
+            raise ValueError('validator is not defined')
+        return self.__converter
 
     @property
     def default_value(self) -> FieldValueType:
@@ -373,6 +363,31 @@ class BlueFirmamentField(typing.Generic[FieldValueType]):
             return self.__default
         else:
             raise ValueError('No default value provided for field')
+            raise ValueError('No default value provided for field %s' % self.in_scheme_name)
+    
+    def convert(self, value: typing.Any) -> FieldValueType:
+
+        """转换字段值
+
+        返回转换后的值（如果无法处理会抛出错误）；
+        没有定义转换器则直接返回值
+        """
+        if self.__converter:
+            return self.__converter(value)
+        else:
+            return value
+        
+    def validate(self, 
+        value: typing.Any,
+        scheme_ins: Opt["BaseScheme"] = None
+    ) -> None:
+
+        """校验字段值
+
+        :raises ValueError: 如果值不合法
+        """
+        for validator in self.__validators:
+            validator(value, scheme_ins=scheme_ins)
 
     @typing.overload
     def __get__(self, instance: None, owner) -> typing.Self:
@@ -398,6 +413,8 @@ class BlueFirmamentField(typing.Generic[FieldValueType]):
             value = self.default_value
         else:
             value = self.validate(value)
+        # validate value
+        self.validate(value, scheme_ins=instance)
 
         if instance.__proxy__:
             value_ = self._proxy_value(value, instance)
@@ -453,6 +470,8 @@ def Field(
     is_primary_key: bool = False,
     converter: typing.Optional[BaseValidator] = None
     converter: typing.Optional[BaseConverter] = None,
+    converter: Opt[BaseConverter] = None,
+    validators: Opt[typing.Iterable['BaseValidator']] = None,
 ):
     
     return BlueFirmamentField[T](
@@ -461,6 +480,7 @@ def Field(
         name=name, 
         is_primary_key=is_primary_key, 
         converter=converter,
+        validators=validators,
     )
 
 

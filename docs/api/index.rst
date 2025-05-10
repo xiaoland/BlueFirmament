@@ -6,6 +6,7 @@ API Reference
    :caption: Contents:
 
    scheme/index
+   scheme/validator
    manager
 
 .. automodule:: blue_firmament

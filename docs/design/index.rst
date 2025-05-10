@@ -90,6 +90,7 @@ Design
    :maxdepth: 2
    :glob:
 
+   ./scheme/validator
    ./manager
    ./dal
    ./auth
