@@ -1,8 +1,14 @@
-"""Blue Firmament - A Python backend framework"""
+"""Blue Firmament - A Python backend framework.
+"""
 
-__version__ = "0.1.0"
+__version__ = "0.1.2"
 __name__ = "blue_firmament"
+__all__ = [
+    "task",
+    "Method",
+    "BlueFirmamentApp"
+]
 
 
-from .dal.base import set_serv_dao
-from .dal.base import set_anon_dao
+from .core import BlueFirmamentApp
+from .task import task, Method

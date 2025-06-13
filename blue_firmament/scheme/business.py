@@ -1,77 +1,73 @@
+"""Scheme for business
+"""
 
-from ..dal.base import DataAccessObject
-from ..dal.filters import EqFilter
-from .field import Field
-from .main import BaseScheme
+__all__ = [
+    "BusinessScheme",
+    "EditableScheme"
+]
+
 import typing
+from typing import Optional as Opt, Annotated as Anno, Literal as Lit
+from blue_firmament.dal.base import DataAccessLayer
+from blue_firmament.dal.types import DALPath
+from ..dal.types import KeyableType
+from .field import field, Field as FieldT
+from .main import BaseScheme, NoProxyScheme
 
 
-BusinessSchemeIDType = typing.TypeVar('BusinessSchemeIDType')
-class BusinessScheme(BaseScheme, typing.Generic[BusinessSchemeIDType]):
+KeyTV = typing.TypeVar('KeyTV', bound=KeyableType)
+class BusinessScheme(
+    typing.Generic[KeyTV],
+    BaseScheme, 
+):
+    
+    def __init_subclass__(cls, 
+        key_type: Opt[typing.Type] = None,
+        dal_path: DALPath | None = None,
+        dal: type[DataAccessLayer] | None = None,
+        proxy: bool | None = None,
+        disable_log: bool | None = None,
+        partial: bool | None = None,
+        inherit_validators: bool | None = None
+    ) -> None:
+        super().__init_subclass__(dal_path, dal, proxy, disable_log, partial, inherit_validators)
+        if key_type:
+            cls._id._set_converter_from_anno(key_type)
 
-    """碧霄标准业务数据模型类
+    _id: FieldT[KeyTV] = field(is_key=True)
 
-    标准业务数据模型是其所在业务模块的核心数据模型，一定对应一张表。
+    @property
+    def _inserted(self):
+        """Is this instance inserted to P.DAL
 
-    你仍然可以基于基本数据模型类定义自己的业务数据模型类
-
-    特性
-    ------
-
-    主键
-    ^^^^^
-    主键为 ``_id`` （预定义）
-
-    与数据访问层交互
-    ^^^^^^^^^^^^^^^^
-
-    自动业务接口
-    ^^^^^^^^^^^^
-    - 自动在路由器注册Restful风格的CURD接口
-    """
-
-    _id: BusinessSchemeIDType = Field(is_primary_key=True) # type: ignore[assignment]
-    # TODO 似乎没有对 TypeVar 进行处理
-
-    @classmethod
-    async def simple_fetch(cls, /, _id: BusinessSchemeIDType, _dao = None, **kwargs) -> typing.Tuple[dict, ...]:
-
-        """从数据访问层获得数据模型实例
-
-        传入主键值或者其他字段键值对作为等值筛选器从数据访问层查询符合的原始记录。
-
-        特性
-        ^^^^^^
-
-        - 无结果时返回空元组
+        Behaviours
+        ----------
+        >>> BusinessScheme(_id=1)._inserted
+        True
+        >>> BusinessScheme(_id='abcd')._inserted
+        True
+        >>> BusinessScheme(_id=0)._inserted
+        False
+        >>> BusinessScheme(_id='')._inserted
+        False
+        >>> BusinessScheme(_id=CID(ida=1, idb=None))._inserted
+        False
+        >>> BusinessScheme(_id=CID(ida=1, idb='cc'))._inserted
+        True
         """
-        return ()  # TODO
+        if isinstance(self._id, int):
+            return self._id != 0
+        elif isinstance(self._id, str):
+            return self._id != ''
+        elif isinstance(self._id, BaseScheme):
+            return all(
+                bool(i)
+                for i in self._id.__field_values__.values()
+            )
 
-    @classmethod
-    async def from_fetch(cls, /, _id: BusinessSchemeIDType, _dao = None, **kwargs):
 
-        """从数据访问层获得数据模型实例
-
-        传入主键值或者其他字段键值对作为等值筛选器从数据访问层查询符合的记录并实例化本数据模型。
-
-        特性
-        ^^^^^^
-
-        - 只能实例化一个符合条件的数据模型，有多个结果或无结果会报错
-        """
-        res = await cls.simple_fetch(_id, **kwargs)
-
-        if len(res) > 1:
-            raise ValueError('Multiple records found.')  # TODO a better report
-        elif len(res) == 0:
-            raise ValueError('No record found.')
-        else:
-            return cls(**res[0])
-
-    @classmethod
-    async def from_primary_key(cls, primary_key_value, _dao: DataAccessObject = DataAccessObject.SERV_DAO) -> typing.Self:
-
-        return await _dao.select_a_scheme(
-            cls,
-            EqFilter(cls.get_primary_key(), primary_key_value)
-        )
+class EditableScheme(NoProxyScheme,
+    partial=True,
+    inherit_validators=True             
+):
+    pass

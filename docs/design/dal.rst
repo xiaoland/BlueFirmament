@@ -1,4 +1,4 @@
-DataAccessLayer Design
+DAL Design
 ======================
 
 DataAccessObject provide ``select``, ``insert``, ``update``, ``delete`` methods to operate data.
@@ -13,3 +13,8 @@ We design path, filters, modifiers and DAO to implement this target.
 - Modifier: transform the result of query.
 - Field: 
 - Schema: 
+
+
+With Task Context
+-----------------
+When return is scheme with task context, inject task context.

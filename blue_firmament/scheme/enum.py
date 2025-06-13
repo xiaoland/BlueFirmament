@@ -9,17 +9,15 @@ from ..exceptions import InvalidStatusTransition
 
 
 EnumClassTV = typing.TypeVar('EnumClassTV', bound=typing.Type[enum.Enum])
-"""枚举类类型变量"""
+"""TypeVar of Enum class"""
 EnumMemberTV = typing.TypeVar('EnumMemberTV', bound=enum.Enum)
-"""枚举成员类型变量
-
-也就是枚举实例
+"""TypeVar of Enum memebr(instance)
 """
 
+@enum.unique
 class Status(enum.Enum):
 
-    """状态
-
+    """
     Examples
     --------
     .. code-block:: python
@@ -47,12 +45,17 @@ class Status(enum.Enum):
         *allowed_from: "Status",
     ) -> EnumMemberTV:
         
-        """转换到目标状态
+        """Return target status if allowed (Idempotent)
 
-        :param target: 目标状态
-        :raises InvalidStatusTransition: 如果当前状态不处于 `allowed_from` 中 
-        :return: 目标状态
+        :param target: 
+        :param allowed_from: 
+            Allowed source status to go to the target status
+        :raises InvalidStatusTransition: 
+            When current status is not in `allowed_from`.
+            Not include case that is already at target status.
+        :return: The target status
         """
-        if self not in allowed_from:
-            raise InvalidStatusTransition.from_enum_member(self, target)
+        if self is not target:
+            if self not in allowed_from:
+                raise InvalidStatusTransition.from_enum_member(self, target)
         return target

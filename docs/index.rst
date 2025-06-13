@@ -8,8 +8,7 @@ Philosophy: do nothing, or do it happily.
 碧霄是一款Python后端框架。
 
 .. toctree::
-   :maxdepth: 2
-   :caption: Contents:
+   :maxdepth: 1
 
    installation
    usage

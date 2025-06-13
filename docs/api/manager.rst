@@ -1,4 +1,4 @@
-API Reference of Manager
+Manager API Reference
 ========================
 
 BaseManager

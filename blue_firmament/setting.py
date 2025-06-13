@@ -1,42 +1,37 @@
+"""BlueFirmament Setting Module
+
 """
-碧霄配置模块
 
-该模块提供了一个统一的配置加载器，支持从JSON文件、Python脚本等多种方式加载配置，支持多环境配置和本地配置的覆盖。
-
-Metadata
-^^^^^^^^
-- Authors:
-    - Lan_zhijiang lanzhijiang@foxmail.com
-
-
-Documentation
-^^^^^^^^^^^^^
-"""
+__all__ = [
+    "Setting",
+    "EnvSetting", 
+    "JsonFileSetting",
+    "EnvJsonSetting",
+    "PythonScriptSetting",
+    "make_setting_singleton",
+    "private_field", "field",
+]
 
 import os
 import pkg_resources
 import typing
-
-from .scheme.field import field_as_class_var, PrivateField
-from .scheme import FieldT
+from typing import Optional as Opt, Annotated as Anno, Literal as Lit
+from .scheme.field import get_default
+from .scheme import FieldT, field, private_field, BaseScheme
 from .utils.file import load_json_file
-from .scheme import BaseScheme, Field
-from .utils.importer import import_modules
-from typing import Optional
 from . import __name__ as PACKAGE_NAME
 
 
-class Setting(BaseScheme):
+class Setting(BaseScheme,
+    proxy=False,
+):
 
-    """
-    配置
+    """Setting base class.
     """
     
-    _proxy = False
-    
-    _setting_name: FieldT[str] = PrivateField()
+    _setting_name: FieldT[str] = private_field()
     """配置名称"""
-    _setting_path: FieldT[str | None] = PrivateField(None)
+    _setting_path: FieldT[str | None] = private_field(default=None)
     """
     配置文件路径
     
@@ -49,9 +44,9 @@ class Setting(BaseScheme):
     - ``data/config.json``: 相对于包
     - ``data/config/base``: 相对于包（目录）
     """
-    _is_packaged: FieldT[bool] = PrivateField(True)
+    _is_packaged: FieldT[bool] = private_field(default=True)
     """是否打包在包内"""
-    _package_name: FieldT[str] = PrivateField(PACKAGE_NAME)
+    _package_name: FieldT[str] = private_field(default=PACKAGE_NAME)
     """所属包的包名"""
 
     @property
@@ -71,9 +66,9 @@ class Setting(BaseScheme):
         :param file_path: str
             相对于该包的资源路径
         """
-        if field_as_class_var(cls._is_packaged):
+        if get_default(cls._is_packaged):
             return pkg_resources.resource_filename(
-                field_as_class_var(cls._package_name),
+                get_default(cls._package_name),
                 file_path
             )
 
@@ -92,6 +87,61 @@ class Setting(BaseScheme):
             return None
         return self.get_resource_path(self._setting_path)
 
+    @classmethod
+    def load(cls) -> typing.Self:
+        return cls()
+
+
+class EnvSetting(Setting,
+    partial=True
+):
+
+    """Load setting by environment.
+
+    Kinds of environments:
+    - base
+    - local
+    - your customized env, like production, development...
+
+    Guidance
+    --------
+    Your base env setting class should inherit this class.
+    And then define what field does this setting has in the base
+    env setting class.
+
+    Add more env like production, development or local (built-in) setting
+    by inheriting your base env setting class. (This will ensure field's type
+    safety)
+    """
+
+    __env_cls__: Opt[typing.List[typing.Type["EnvSetting"]]] = None
+
+    def __init_subclass__(cls) -> None:
+        if not cls.__env_cls__:
+            cls.__env_cls__ = []
+        cls.__env_cls__.append(cls)
+
+    _env: FieldT[str] = private_field()
+
+    @classmethod
+    def __find_env_cls(cls, env_name: str) -> typing.Type["EnvSetting"]:
+        if not cls.__env_cls__:
+            raise ValueError("no env cls registered")
+        for i in cls.__env_cls__:
+            if get_default(i._env) == env_name:
+                return i
+        raise ValueError(f"env {env_name} setting not found")
+
+    @classmethod
+    def load(cls) -> typing.Self:
+        base_cls = cls.__find_env_cls("base")
+        local_cls = cls.__find_env_cls("local")
+        env_cls = cls.__find_env_cls(os.environ.get("ENV", "production"))
+        
+        return typing.cast(typing.Self, 
+            base_cls(**env_cls(**local_cls()))
+        )
+
 
 class JsonFileSetting(Setting):
 
@@ -103,15 +153,15 @@ class JsonFileSetting(Setting):
     def load(cls) -> typing.Self:
 
         # 仍然需要使用 field_as_class_var，因为此时数据模型没有被实例化
-        fp = field_as_class_var(cls._setting_path)
+        fp = get_default(cls._setting_path)
         if fp:
             data = load_json_file(cls.get_resource_path(fp))
             try:
                 return cls(**data)
             except ValueError as e:
-                from .log import get_logger
+                from .log.main import get_logger
                 logger = get_logger(__name__)
-                logger.error(f"Validation error in JsonSettingLoader {field_as_class_var(cls._setting_path)}: {e}")
+                logger.error(f"Validation error in JsonSettingLoader {get_default(cls._setting_path)}: {e}")
                 raise e
         else:
             raise ValueError("Setting path is not set")
@@ -122,7 +172,7 @@ class EnvJsonSetting(Setting):
     多环境JSON配置
     """
 
-    _setting_env: FieldT[str] = PrivateField(default_factory=lambda: os.environ.get("ENV", "production"))
+    _setting_env: FieldT[str] = private_field(default_factory=lambda: os.environ.get("ENV", "production"))
     """配置环境"""
 
     @classmethod
@@ -139,13 +189,13 @@ class EnvJsonSetting(Setting):
         可能抛出的错误：
         - ValidationError: 配置文件不符合数据模型定义
         """
-        from .log import get_logger
+        from .log.main import get_logger
         logger = get_logger(__name__)
         
-        setting_name = field_as_class_var(cls._setting_name)
-        setting_path = field_as_class_var(cls._setting_path)
-        setting_env = field_as_class_var(cls._setting_env)
-        package_name = field_as_class_var(cls._package_name) if field_as_class_var(cls._is_packaged) else None
+        setting_name = get_default(cls._setting_name)
+        setting_path = get_default(cls._setting_path)
+        setting_env = get_default(cls._setting_env)
+        package_name = get_default(cls._package_name) if get_default(cls._is_packaged) else None
 
         logger.debug(f"Loading setting {setting_name} in {setting_env} environment")
 
@@ -157,9 +207,9 @@ class EnvJsonSetting(Setting):
         try:
             return cls(**data)
         except ValueError as e:
-            from .log import get_logger
+            from .log.main import get_logger
             logger = get_logger(__name__)
-            logger.error(f"Validation error in {field_as_class_var(cls._setting_name)} EnvJsonSetting loader: {e}")
+            logger.error(f"Validation error in {get_default(cls._setting_name)} EnvJsonSetting loader: {e}")
             raise e
 
 class PythonScriptSetting(Setting):
@@ -172,7 +222,7 @@ class PythonScriptSetting(Setting):
 
     def __init__(self):
         
-        from .log import get_logger
+        from .log.main import get_logger
         logger = get_logger(__name__)
         logger.debug(f"Loading python script setting: {self._setting_path}")
 

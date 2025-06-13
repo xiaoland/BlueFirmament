@@ -5,6 +5,9 @@ import types
 import inspect
 
 if typing.TYPE_CHECKING:
+    from ..task.result import JsonBody
+
+if typing.TYPE_CHECKING:
     from ..scheme import BaseScheme
 
 def is_annotated(tp: typing.Type) -> typing.TypeGuard[typing.Annotated]:
@@ -22,6 +25,21 @@ def is_annotated(tp: typing.Type) -> typing.TypeGuard[typing.Annotated]:
         return typing.get_origin(tp) is typing.Annotated
     else:
         return True
+    
+def get_annotated_args(tp: typing.Annotated) -> typing.Tuple[typing.Any, ...]:
+
+    '''获取 Annotated 的参数
+
+    Example
+    -------
+    >>> get_annotated_args(typing.Annotated[str, ...])
+    ()
+    >>> get_annotated_args(typing.Annotated[str, 1, 2])
+    (1, 2)
+    '''
+    return typing.get_args(tp)[1:]
+    
+    return ()
 
 
 @typing.overload
@@ -112,17 +130,18 @@ def isclassmethod(func: typing.Any) -> bool:
     return inspect.ismethod(func) and hasattr(func, '__self__') and func.__self__ is not None
 
 
-JsonDumpable = typing.Union[
+type JsonDumpable = typing.Union[
     str, int, float, bool, None, 
     typing.List['JsonDumpable'], 
     typing.Tuple['JsonDumpable', ...],
     typing.Dict[str, 'JsonDumpable'],
     typing.Set['JsonDumpable'],
-    "BaseScheme"
+    "BaseScheme",
+    "JsonBody",
 ]
 '''可以序列化为JSON的类型
 
-其中BaseScheme实际上不能被json.dumps处理， \n
+其中BaseScheme实际上不能被json.dumps处理， 
 需要通过我们自定义的json_dumps来处理，调用 :func:`utils.json.dumps_to_json`
 '''
 def is_json_dumpable(val: typing.Any) -> typing.TypeGuard[JsonDumpable]:
@@ -137,23 +156,23 @@ def is_json_dumpable(val: typing.Any) -> typing.TypeGuard[JsonDumpable]:
         return True
 
     from ..scheme import BaseScheme
+    from ..task.result import JsonBody
     if isinstance(val, (
         str, int, float, bool,
         list, tuple, dict, set,
-        BaseScheme
+        BaseScheme, JsonBody
     )):
         return True
     
     return False
 
 def is_union_type(tp):
-  """Checks if a type hint is a union type (typing.Union or |)."""
-  origin = typing.get_origin(tp)
-  return origin is typing.Union or origin is types.UnionType
+    """Checks if a type hint is a union type (typing.Union or |)."""
+    origin = typing.get_origin(tp)
+    return origin is typing.Union or origin is types.UnionType
 
 
 def add_type_to_namespace(type_: typing.Type, namespace: dict):
-
     '''将类型添加到命名空间
 
     :param type: 要添加的类型
@@ -166,7 +185,6 @@ def add_type_to_namespace(type_: typing.Type, namespace: dict):
 
 
 def is_mutable(value: typing.Any) -> bool:
-    
     '''判断一个值是否为可变对象
 
     :param value: 要判断的值
@@ -181,9 +199,12 @@ def is_mutable(value: typing.Any) -> bool:
         return False
 
 
+# TODO rename to `try_issubclass`
 def safe_issubclass(
     obj: typing.Any, classinfo: T
 ) -> typing.TypeGuard[T]:
-    
     return isinstance(obj, type) and issubclass(obj, classinfo)
 
+
+def is_namedtuple(obj: typing.Type) -> typing.TypeGuard[typing.NamedTuple]:
+    return safe_issubclass(obj, tuple) and hasattr(obj, '_fields')

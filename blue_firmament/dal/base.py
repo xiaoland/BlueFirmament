@@ -1,23 +1,36 @@
+"""DataAccessLayer Moule Base
+"""
 
-from .filters import *
-from .exceptions import *
-from . import DALPath, FilterLikeType, StrictDALPath, FieldLikeType
-from .filters import DALFilter, LimitFilter
-from ..utils import dump_enum
+__all__ = [
+    'DataAccessLayer',
+    'TableLikeDataAccessLayer',
+    'KVLikeDataAccessLayer',
+    'QueueLikeDataAccessLayer',
+    'DataAccessObject', 
+    'DataAccessObjects'
+]
+
 import abc
 import typing
 from typing import Optional as Opt
+from .types import DALPath, FilterLikeType, StrictDALPath, FieldLikeType
+from .filters import LimitModifier
+from ..utils import dump_enum
+from .._types import Undefined, _undefined
 
 if typing.TYPE_CHECKING:
-    from ..scheme import BaseScheme
-    from ..scheme.field import BlueFirmamentField, FieldValueProxy
+    from ..auth import AuthSession
+    from ..scheme.field import Field, FieldValueProxy
+    from blue_firmament.task.context import ExtendedTaskContext
 
 
-class DataAccessObject(abc.ABC):
+SchemeTV = typing.TypeVar('SchemeTV', bound="BaseScheme")
+FieldValueTV = typing.TypeVar('FieldValueTV')
+class DataAccessLayer(abc.ABC):
 
     '''碧霄数据访问对象基类
 
-    一个DAO实例负责对一个数据源的操作
+    一个DAL实例负责对一个数据源的操作
 
     关键概念
     ----------
@@ -45,21 +58,23 @@ class DataAccessObject(abc.ABC):
     ----------
     - 数组(Array), JSONB 数组, -> list
     - JSONB 对象 -> dict
+
+    异常
+    -----
+    - 令牌过期无法访问数据，抛出 :meth:`exceptions.Unauthorized`
     '''
 
-    SERV_DAO: 'DataAccessObject' = None  # type: ignore[assignment]
-    '''服务角色数据访问对象（全局实例）'''
-    ANON_DAO: 'DataAccessObject' = None  # type: ignore[assignment]
-    '''匿名角色数据访问对象（全局实例）'''
+    def __init__(self, 
+        session: "AuthSession"
+    ) -> None:
+        self._session = session
 
-    def __init__(self, default_path: StrictDALPath) -> None:
-
-        '''
-        :param default_path: 默认路径；将作为完整路径（不可以有None条目）
-        '''
-
-        self.__default_path = default_path
-        '''默认路径'''
+    def __init_subclass__(
+        cls,
+        default_path: Opt[StrictDALPath] = None
+    ) -> None:
+        if default_path is not None:
+            cls.__default_path = default_path
 
     def dump_path(self, path: Opt[DALPath]) -> StrictDALPath:
 
@@ -69,43 +84,48 @@ class DataAccessObject(abc.ABC):
             return self.__default_path
 
         return StrictDALPath(tuple(
-            dump_enum(i) if i is not None else j for i, j in zip(path, self.__default_path)
+            dump_enum(i) if i is not None else j 
+            for i, j in zip(path, self.__default_path)
         ))
 
-    BaseSchemeType = typing.TypeVar('BaseSchemeType', bound="BaseScheme")
-    FieldValueType = typing.TypeVar('FieldValueType')
+
+class TableLikeDataAccessLayer(DataAccessLayer):
 
     @typing.overload
     @abc.abstractmethod
     async def insert(self,
         to_insert: dict,
         path: Opt[DALPath] = None,
+        exclude_key: bool = True,
     ) -> dict:
         pass
 
     @typing.overload
     @abc.abstractmethod
     async def insert(self,
-        to_insert: BaseSchemeType,
+        to_insert: SchemeTV,
         path: Opt[DALPath] = None,
-    ) -> BaseSchemeType:
+        exclude_key: bool = True,
+    ) -> SchemeTV:
         pass
 
     @abc.abstractmethod
     async def insert(self,
-        to_insert: dict| BaseSchemeType,
+        to_insert: dict | SchemeTV,
         path: Opt[DALPath] = None,
-    ) -> dict | BaseSchemeType:
-
+        exclude_key: bool = True,
+    ) -> dict | SchemeTV:
         '''插入
 
         :param to_insert: 要插入的数据，可以是字典、数据模型实例
         :param path: 路径；如果未提供且要插入的数据是数据模型实例，则使用数据模型提供的路径信息
+        :param exclude_key: 是否排除键；默认开启
+            在数据库自动生成主键的场景下很有用
         '''
 
     @abc.abstractmethod
     async def delete(self,
-        to_delete: BaseSchemeType | typing.Type[BaseSchemeType],
+        to_delete: SchemeTV | typing.Type[SchemeTV],
         *filters: FilterLikeType,
         path: Opt[DALPath] = None,
     ) -> None:
@@ -117,61 +137,87 @@ class DataAccessObject(abc.ABC):
         :param path: 路径；如果不提供且要删除的数据是数据模型，则使用数据模型提供的路径信息
         """
 
-    DictType = typing.TypeVar('DictType', bound=dict)
-
     @typing.overload
     @abc.abstractmethod
     async def update(self,
-        to_update: BaseSchemeType,
-        *filters: DALFilter,
+        to_update: SchemeTV,
+        *filters: FilterLikeType,
         path: Opt[DALPath] = None,
         only_dirty: bool = True,
-    ) -> BaseSchemeType:
+        exclude_key: bool = True,
+    ) -> SchemeTV:
         ...
 
     @typing.overload
     @abc.abstractmethod
     async def update(self,
-        to_update: DictType,
-        *filters: DALFilter,
+        to_update: dict,
+        *filters: FilterLikeType,
         path: Opt[DALPath] = None,
         only_dirty: bool = True,
-    ) -> DictType:
+        exclude_key: bool = True,
+    ) -> dict:
         ...
 
     @typing.overload
     @abc.abstractmethod
     async def update(self,
-        to_update: "FieldValueProxy[FieldValueType]" | FieldValueType,
-        *filters: DALFilter,
+        to_update: "FieldValueProxy[FieldValueTV]" | FieldValueTV,
+        *filters: FilterLikeType,
         path: Opt[DALPath] = None,
         only_dirty: bool = True,
-    ) -> FieldValueType:
+        exclude_key: bool = True,
+    ) -> FieldValueTV:
+        ...
+
+    @typing.overload
+    @abc.abstractmethod
+    async def update(self,
+        to_update: typing.Tuple["Field[FieldValueTV]", FieldValueTV],
+        *filters: FilterLikeType,
+        path: Opt[DALPath] = None,
+        only_dirty: bool = True,
+        exclude_key: bool = True,
+    ) -> FieldValueTV:
         ...
 
     @abc.abstractmethod
     async def update(self,
         to_update: typing.Union[
-            DictType, BaseSchemeType,
-            "FieldValueProxy[FieldValueType]",
-            FieldValueType  # only for type hint
+            dict, SchemeTV,
+            "FieldValueProxy[FieldValueTV]",
+            FieldValueTV,  # only for type hint
+            typing.Tuple["Field[FieldValueTV]", FieldValueTV]
         ],
-        *filters: DALFilter,
+        *filters: FilterLikeType,
         path: Opt[DALPath] = None,
         only_dirty: bool = True,
+        exclude_key: bool = True,
     ) -> typing.Union[
-            DictType, BaseSchemeType, FieldValueType,
+            dict, 
+            SchemeTV, 
+            FieldValueTV,
         ]:
 
         '''更新
 
-        :param to_update: 要更新的数据，\n
-            可以是字典、数据模型实例、字段值代理实例 \n
-            `{}`, `MyScheme.field_a`, `my_scheme.field_a`
+        只支持更新单例
+
+        :param to_update: 要更新的数据
+
+            可以是字典、数据模型实例、字段值代理实例 
+            （`{}`, `MyScheme.field_a`, `my_scheme.field_a`）
         :param *filters: 筛选器列表（同时作用）；更多详情见下面
         :param path: 路径；更多详情见下面
         :param only_dirty: 是否只更新脏字段；仅当 ``to_update`` 为数据模型实例时有效
+        :param exclude_key:
         :raises UpdateFailure: 更新失败
+        
+        :returns: 
+
+            - 如果 `to_update` 为数据模型实例，则返回更新后的数据模型实例 
+            - 如果 `to_update` 为字段值代理实例，则返回更新后的字段值 
+            - 如果 `to_update` 为字典，则返回受到更新的整个记录（字典格式）
 
         Behaviour
         ---------
@@ -194,46 +240,51 @@ class DataAccessObject(abc.ABC):
 
         '''
 
+    # TODO update that returns all affected records
+
     @typing.overload
     @abc.abstractmethod
     async def select(self,
-        to_select: typing.Type[BaseSchemeType],
+        to_select: typing.Type[SchemeTV],
         *filters: FilterLikeType,
         path: Opt[DALPath] = None,
-    ) -> typing.Tuple[BaseSchemeType, ...]:
+        task_context: Opt["ExtendedTaskContext"] = None,
+    ) -> typing.Tuple[SchemeTV, ...]:
         pass
 
     @typing.overload
     @abc.abstractmethod
     async def select(self,
-        to_select: "BlueFirmamentField[FieldValueType]",
+        to_select: "Field[FieldValueTV]",
         *filters: FilterLikeType,
         path: Opt[DALPath] = None,
-    ) -> typing.Tuple[FieldValueType, ...]:
+        task_context: Opt["ExtendedTaskContext"] = None,
+    ) -> typing.Tuple[FieldValueTV, ...]:
         pass
 
     @typing.overload
     @abc.abstractmethod 
     async def select(self,
-        to_select: typing.Iterable[FieldLikeType] | None,
+        to_select: typing.Iterable[FieldLikeType],
         *filters: FilterLikeType,  # 实际上此时 str, int 不支持
         path: Opt[DALPath] = None,
+        task_context: Opt["ExtendedTaskContext"] = None,
     ) -> typing.Tuple[dict, ...]:
         pass
 
     @abc.abstractmethod
     async def select(self,
         to_select: typing.Union[
-            typing.Type[BaseSchemeType], 
-            "BlueFirmamentField[FieldValueType]",
+            typing.Type[SchemeTV], 
+            "Field[FieldValueTV]",
             typing.Iterable[FieldLikeType],
-            None
         ],
         *filters: FilterLikeType,
         path: Opt[DALPath] = None,
+        task_context: Opt["ExtendedTaskContext"] = None,
     ) -> typing.Union[
-            typing.Tuple[BaseSchemeType, ...],
-            typing.Tuple[FieldValueType, ...],
+            typing.Tuple[SchemeTV, ...],
+            typing.Tuple[FieldValueTV, ...],
             typing.Tuple[dict, ...]
         ]:
 
@@ -274,40 +325,43 @@ class DataAccessObject(abc.ABC):
 
     @typing.overload
     async def select_one(self,
-        to_select: typing.Type[BaseSchemeType],
+        to_select: typing.Type[SchemeTV],
         *filters: FilterLikeType,
         path: Opt[DALPath] = None,
-    ) -> BaseSchemeType:
+        task_context: Opt["ExtendedTaskContext"] = None,
+    ) -> SchemeTV:
         ...
 
     @typing.overload
     async def select_one(self,
-        to_select: "BlueFirmamentField[FieldValueType]",
+        to_select: "Field[FieldValueTV]",
         *filters: FilterLikeType,
         path: Opt[DALPath] = None,
-    ) -> FieldValueType:
+        task_context: Opt["ExtendedTaskContext"] = None,
+    ) -> FieldValueTV:
         ...
 
     @typing.overload
     async def select_one(self,
-        to_select: typing.Iterable[FieldLikeType] | None,
+        to_select: typing.Iterable[FieldLikeType],
         *filters: FilterLikeType,
         path: Opt[DALPath] = None,
+        task_context: Opt["ExtendedTaskContext"] = None,
     ) -> dict:
         ...
 
     async def select_one(self,
         to_select: typing.Union[
-            typing.Type[BaseSchemeType], 
-            "BlueFirmamentField[FieldValueType]",
+            typing.Type[SchemeTV], 
+            "Field[FieldValueTV]",
             typing.Iterable[FieldLikeType],
-            None
         ],
         *filters: FilterLikeType,
         path: Opt[DALPath] = None,
+        task_context: Opt["ExtendedTaskContext"] = None,
     ) -> typing.Union[
-        BaseSchemeType,
-        FieldValueType,
+        SchemeTV,
+        FieldValueTV,
         dict
     ]:
 
@@ -318,8 +372,9 @@ class DataAccessObject(abc.ABC):
 
         return (await self.select(
             to_select,
-            *filters, LimitFilter(1),
-            path=path
+            *filters, LimitModifier(1),
+            path=path,
+            task_context=task_context
         ))[0]
 
     @abc.abstractmethod
@@ -327,15 +382,203 @@ class DataAccessObject(abc.ABC):
         pass
 
 
-def set_serv_dao(dao: DataAccessObject, dao_cls: typing.Type[DataAccessObject]) -> None:
+class KVLikeDataAccessLayer(DataAccessLayer):
 
-    '''设置服务角色数据访问对象（全局实例）
-    '''
-    dao_cls.SERV_DAO = dao
+    @abc.abstractmethod
+    async def get(self, key: str) -> Opt[typing.Any]:
+        ...
+
+    @abc.abstractmethod
+    async def set(self, key: str, value: typing.Any) -> None:
+        ...
+
+class QueueLikeDataAccessLayer(DataAccessLayer):
+
+    @abc.abstractmethod
+    async def push(self, queue: str, item: typing.Any) -> None:
+        """Push an item to the head of the queue.
+        """
+        ...
+
+    @abc.abstractmethod
+    async def pop(self, queue: str) -> typing.Any:
+        """Pop the first item of the queue.
+        """
+        ...
+
+    def try_pop(self, queue: str) -> Opt[typing.Any]:
+        try:
+            return self.pop(queue)
+        except Exception:
+            return None
+
+    @abc.abstractmethod
+    def pop_and_push(self, queue: str, dst_queue: str) -> typing.Any:
+        """Pop an item and then push it to another queue.
+        """
+
+    def try_pop_and_push(self, queue: str, dst_queue: str) -> Opt[typing.Any]:
+        try:
+            return self.pop_and_push(queue, dst_queue)
+        except Exception:
+            return None
+
+    @abc.abstractmethod
+    def blocking_pop_and_push(
+        self,
+        queue: str,
+        dst_queue: str,
+        timeout: float = 0
+    ) -> typing.Any:
+        """Pop and push an item to another queue,
+        blocking until an item is available.
+        """
 
 
-def set_anon_dao(dao: DataAccessObject, dao_cls: typing.Type[DataAccessObject]) -> None:
+class DataAccessObject(
+    typing.Generic[SchemeTV]
+):
+    
+    def __init__(self, 
+        dal: DataAccessLayer,
+        scheme_cls: typing.Type[SchemeTV],
+    ) -> None:
+        self.__dal = dal
+        self.__scheme_cls = scheme_cls
 
-    '''设置匿名角色数据访问对象（全局实例）
-    '''
-    dao_cls.ANON_DAO = dao
+    def select(self,
+        *filters: FilterLikeType,
+        task_context: Opt["ExtendedTaskContext"] = None,
+    ):
+        return self.__dal.select(  
+            to_select=self.__scheme_cls,
+            *filters,
+            task_context=task_context
+        )
+        
+    def select_fields(self,
+        to_select: typing.Iterable[FieldLikeType],
+        *filters: FilterLikeType,
+        task_context: Opt["ExtendedTaskContext"] = None,
+    ):
+        return self.__dal.select(  
+            to_select=to_select,
+            *filters,
+            task_context=task_context
+        ) 
+        
+    def select_field(self,
+        to_select: "Field[FieldValueTV]",
+        *filters: FilterLikeType,
+        task_context: Opt["ExtendedTaskContext"] = None,
+    ):
+        return self.__dal.select(  
+            to_select=to_select,
+            *filters,
+            task_context=task_context
+        ) 
+
+    def select_one(self, 
+        *filters: FilterLikeType,
+        task_context: Opt["ExtendedTaskContext"] = None,
+    ):
+        return self.__dal.select_one(
+            to_select=self.__scheme_cls,
+            *filters,
+            task_context=task_context
+        ) 
+        
+    def select_a_field(self, 
+        to_select: "Field[FieldValueTV]",
+        *filters: FilterLikeType,
+        task_context: Opt["ExtendedTaskContext"] = None,
+    ):
+        return self.__dal.select_one(
+            to_select=to_select,
+            *filters,
+            task_context=task_context
+        )
+    
+    def insert(self, 
+        to_insert: SchemeTV,
+        exclude_key: bool = True,
+    ):
+        return self.__dal.insert(
+            to_insert=to_insert, 
+            exclude_key=exclude_key
+        )
+    
+    @typing.overload
+    async def update(self,
+        to_update: SchemeTV,
+        *filters: FilterLikeType,
+        only_dirty: bool = True,
+        exclude_key: bool = True,
+    ) -> SchemeTV:
+        ...
+
+    @typing.overload
+    async def update(self,
+        to_update: FieldValueTV,
+        *filters: FilterLikeType,
+        only_dirty: bool = True,
+        exclude_key: bool = True,
+    ) -> FieldValueTV:
+        ...
+
+    @typing.overload
+    async def update(self,
+        to_update: typing.Tuple["Field[FieldValueTV]", FieldValueTV],
+        *filters: FilterLikeType,
+        only_dirty: bool = True,
+        exclude_key: bool = True,
+    ) -> FieldValueTV:
+        ...
+    
+    def update(self,
+        to_update: typing.Union[
+            SchemeTV,
+            FieldValueTV,
+            typing.Tuple["Field[FieldValueTV]", FieldValueTV]
+        ],
+        *filters: FilterLikeType,
+        only_dirty: bool = True,
+        exclude_key: bool = True,
+    ):
+        return self.__dal.update(
+            to_update=to_update,
+            *filters,
+            only_dirty=only_dirty,
+            exclude_key=exclude_key
+        )
+    
+    def delete(self, 
+        to_delete: Opt[SchemeTV] = None, 
+        *filters: FilterLikeType
+    ):
+        return self.__dal.delete(
+            to_delete=to_delete or self.__scheme_cls,
+            *filters
+        )
+
+
+class DataAccessObjects:
+
+    def __init__(self,
+        session: "AuthSession"
+    ) -> None:
+        self.__session = session
+        self.__dals: dict[typing.Type[DataAccessLayer], DataAccessLayer] = {}
+
+    def __call__(self, scheme_cls: typing.Type[SchemeTV]) -> DataAccessObject[SchemeTV]:
+        if scheme_cls.__dal__ is None:
+            raise ValueError("scheme don't has a dal")
+        try:
+            dal = self.__dals[scheme_cls.__dal__]
+        except KeyError:
+            dal = scheme_cls.__dal__(session=self.__session)
+            self.__dals[scheme_cls.__dal__] = dal
+        
+        return DataAccessObject(
+            dal=dal, scheme_cls=scheme_cls
+        )

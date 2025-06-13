@@ -1,9 +1,10 @@
 
 from ...setting import Setting, make_setting_singleton
+from ...scheme import private_field, FieldT
 
 class BaseSetting(Setting):
 
-    _setting_name: str = "base"
+    _setting_name: FieldT[str] = private_field(default="base")
 
     timezone_delta: int = 8
     '''时区偏移量（相较于UTC+0时区）'''

@@ -36,10 +36,7 @@ def get_datetimez(
     :param timestamp: 时间戳（秒级浮点）
     :param iso8601: ISO8601格式时间字符串，如"2024-11-10 12:00:00"
     :param timezone: 时区对象，如get_timezone(8)
-
-    Exceptions
-    ^^^^^^^^^^
-    - ValueError: 如果rfc3339或iso8601都未提供，则抛出异常
+    :raise ValueError: 如果rfc3339或iso8601都未提供，则抛出异常
     """
     if timestamp:
         return datetime.datetime.fromtimestamp(timestamp, tz=timezone)

@@ -15,7 +15,7 @@ def load_json_file(
 
     :return 转换为字典的JSON数据（异常返回空字典）
     """
-    from ..log import get_logger
+    from ..log.main import get_logger
     logger = get_logger(__name__)
     
     try:

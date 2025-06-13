@@ -1,4 +1,4 @@
-Scheme Package API Reference
+Scheme API Reference
 =============================
 
 .. automodule:: blue_firmament.scheme.main

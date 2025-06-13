@@ -2,8 +2,11 @@
 import threading
 import typing
 import enum
+import time
 import asyncio
+import nest_asyncio
 import inspect
+
 
 T = typing.TypeVar('T')
 
@@ -56,7 +59,6 @@ def load_enum(
             ) from e
 
 def try_convert_str(value: str) -> typing.Union[str, int, float, bool, None]:
-        
     """
     Attempts to convert a string value to a Python primitive type.
     """
@@ -91,7 +93,17 @@ def get_when_truly(
     return getter(value) if value else fallback
 
 
-async def call_function_as_async(
+def unwrap_callable(callbale: typing.Callable):
+
+    # process func is a instance with __call__ method
+    if hasattr(callbale, '__call__') and not (
+        inspect.isfunction(callbale) or inspect.ismethod(callbale)
+    ):
+        return callable.__call__  # type: ignore[assignment]
+    
+    return callable
+
+async def call_as_async(
     func: typing.Callable, *args, **kwargs
 ) -> typing.Any:
 
@@ -124,19 +136,90 @@ async def call_function_as_async(
         result2 = await call_function_as_async(async_func, 5)  # Returns 15
     ```
     """
-    # process func is a instance with __call__ method
-    if hasattr(func, '__call__') and not (
-        inspect.isfunction(func) or inspect.ismethod(func)
-    ):
-        func = func.__call__  # type: ignore[assignment]
+    func = unwrap_callable(func)
 
     if inspect.iscoroutinefunction(func):
-        # Function is async, run it with asyncio
+        # Function is async, run it with await
         return await func(*args, **kwargs)
     else:
         # Function is synchronous, call it directly
         return func(*args, **kwargs)
+    
+def call_function(func: typing.Callable, *args, **kwargs) -> typing.Any:
 
+    """Call both sync and async function.
+    """
+
+    res = func(*args, **kwargs)
+    if isinstance(res, typing.Coroutine):
+        nest_asyncio.apply()
+        return asyncio.run(res)
+    return res
+
+def is_instance_method_by_signature(
+    func: typing.Callable
+) -> bool:
+    
+    """Check if the function is an instance method by checking its signature.
+    
+    If the function has a 'self' parameter and positioned as the first parameter,
+    it is considered an instance method.
+    """
+
+    sig = inspect.signature(func)
+    params = sig.parameters
+    if len(params) > 0:
+        first_param = tuple(params.values())[0]
+        if first_param.name == 'self':
+            return True
+    return False
+
+def has_kwarg_by_sig(
+    func: typing.Callable, kwarg_name: str
+) -> bool:
+    
+    """Check if the function has a specific keyword argument by checking its signature.
+    
+    :param func: The function to check
+    :param kwarg_name: The name of the keyword argument to check for
+    """
+    sig = inspect.signature(func)
+    params = sig.parameters
+    return any(
+        param.name == kwarg_name and param.kind in (
+            inspect.Parameter.KEYWORD_ONLY, inspect.Parameter.VAR_KEYWORD
+        )
+        for param in params.values()
+    )
+
+def args_to_kwargs_by_sig(
+    func: typing.Callable, *args,
+    offset: int = 0,
+    try_default: bool = True,
+) -> typing.Dict[str, typing.Any]:
+
+    """Convert positional arguments to keyword arguments based on the function's signature.
+    
+    :param func: The function to check
+    :param args: The positional arguments to convert
+    :param offset: The number of positional arguments to skip (on sig arguments)
+    :param try_default: If True, use default values for missing positional arguments
+    """
+    sig = inspect.signature(func)
+    params = sig.parameters
+    kwargs = {}
+    
+    for i, (name, param) in enumerate(params.items()):
+        if i < offset:
+            continue
+        if i < len(args):
+            kwargs[name] = args[i-offset]
+        else:
+            if try_default:
+                if param.default is not param.empty:
+                    kwargs[name] = param.default
+    
+    return kwargs
 
 def get_optional(value: T | None, default: T) -> T:
     
@@ -147,3 +230,33 @@ def get_optional(value: T | None, default: T) -> T:
     :param default: The default value to return if value is None
     """
     return value if value is not None else default
+
+
+def retry(
+    max: int = 1,
+    default_delay: int | float = 0.1,
+):
+
+    """A decorator retring function when it raises an exception.
+
+    :param max: The maximum number of retries
+    :param default_delay: The delay between retries in seconds
+    """
+    from ..exceptions import Retryable
+    def decorator(func: typing.Callable):
+        def wrapper(*args, **kwargs):
+            for attempt in range(max):
+                try:
+                    return func(*args, **kwargs)
+                except Exception as e:
+                    if isinstance(e, Retryable):
+                        delay = e.delay
+                    else:
+                        delay = default_delay
+                    
+                    if attempt < max - 1:
+                        time.sleep(delay * 1000)
+                    else:
+                        raise e
+        return wrapper
+    return decorator

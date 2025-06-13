@@ -3,5 +3,11 @@
 Manager is a set of handlers.
 '''
 
-from .main import BaseManager
-from .common import CommonManager, common_handler_adder
+__all__ = [
+    'BaseManager',
+    'CommonManager',
+    'PresetHandlerConfig'
+]
+
+from .base import BaseManager
+from .common import CommonManager, PresetHandlerConfig

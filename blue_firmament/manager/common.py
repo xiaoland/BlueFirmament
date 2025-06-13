@@ -1,174 +1,332 @@
 '''CommonManager Module
-
-References
-----------
-- `issue#5 <https://github.com/xiaoland/BlueFirmament/issues/5>`_
 '''
 
+__all__ = [
+    "CommonManager", 
+    "PresetHandlerConfig",
+]
+
+from dataclasses import dataclass
 import typing
-from typing import Literal as L, Optional as Opt
-
-from blue_firmament.scheme.field import FieldValueProxy
-from blue_firmament.utils import get_optional
-
-from ..log import get_logger
-from .main import BaseManager, SchemeType
-from ..session.common import CommonSession
-from ..utils.type import add_type_to_namespace, safe_issubclass
-from ..transport import TransportOperationType
+from typing import Literal as Lit, Optional as Opt
+from ..utils.exec_ import build_func_sig
+from blue_firmament.task.registry import TaskRegistry
+from blue_firmament.task.context.common import CommonTaskContext
+from ..dal import KeyableType, DataAccessObject
+from ..scheme.field import CompositeField, FieldValueProxy
+from ..log.main import get_logger
+# from .base import BaseFieldManager, 
+from .base import BaseManager, SchemeTV
+from ..utils.type import safe_issubclass
+from ..task.main import Method
 from ..scheme import BaseScheme
+from blue_firmament.task import TaskID
 
 if typing.TYPE_CHECKING:
-    from ..main import BlueFirmamentApp
-    from ..scheme.field import BlueFirmamentField
-    from ..dal.base import DataAccessObject
+    from ..core.app import BlueFirmamentApp
+    from ..scheme.field import Field
 
 
 logger = get_logger(__name__)
 
 
-T = typing.TypeVar('T')
-PrimaryKeyType = typing.TypeVar('PrimaryKeyType', str, int)
-'''管理器管理的数据模型的主键类型
-'''
-class CommonManager(
-    typing.Generic[SchemeType, PrimaryKeyType],
-    BaseManager[SchemeType, CommonSession]
-):
+@dataclass
+class PresetHandlerConfig:
+    """Config what and how preset handlers added to a manager.
+
+    - These handlers will be automatically added to manager router.
+      (which means their task_id's path are prefixed with the
+      path_prefix you configured from class init params.)
+    - You can call these handlers but without a type hinting.
+
+    """
+
+    editable: Opt[typing.Type[BaseScheme]] = None
+    """Editable ver of managing scheme.
+
+    This scheme is used to control which fields are editable
+    for user. 
     
-    """通用管理器类
-
-    在管理器基类的基础上封装了一系列有用的方法，帮助更快地编写管理器
+    Like in create, put and patch, forbids user from changing
+    fields like id, created_at, but allows user modifying title,
+    description...
+    """
+    sup_path: Opt[str] = None
+    """Path append to the manager path prefix.
     
-    Features
-    --------
-    - `property dao`: 获取当前管理器所属会话的 DAO 实例
-    - `override get_scheme`: 覆盖了获取数据模型的方法，变为通过 `_get` 获取
+    If provided, handler's key param naming will be the same of this.
+    """
+    key_fields: Opt[dict[str, "Field"]] = None
+    """Map key name to its field instance.
 
-    数据操作类
-    ^^^^^^^^^^^
-    都支持 `dao` 参数，用于指定 session.dao 以外的 DAO 实例，在需要特殊权限时很有用
+    For scheme only has one key, usually is not required.
+    But for scheme has two or more (composite) keys, required.
+    """
+    get: bool = False
+    """Add handler getting managing scheme.
 
-    - `method _get`: 获取数据模型实例，主键
-    - `method _insert`: 插入数据模型实例
+    - Name: ``get_<manager_name>``
+    - TaskID: ``GET /{<manager_name>_id}``
+    """
+    get_a_field: typing.Iterable["Field"] = ()
+    """Add field getter handler for these fields.
 
-    Terms
-    -----
-    - 当前实例: 通过 :meth:`BaseManager.get_scheme_safe` 获取的数据模型实例
+    - Name: `get_<manager_name>_<field.name>`
+    - TaskID: ``GET /{<manager_name>_id}/<field.name>``
+    """
+    create: bool = False
+    """Add create handler.
 
-    TODO
-    ----
-    - 允许用户设置主键值的 fallback （比如为会话的用户 ID）
-    
+    - Requiring editable
+    """
+    put: bool = False
     """
     
+    - Requiring editable
+    """
+    put_a_field: typing.Iterable["Field"] = ()
+    insert_item: typing.Iterable["Field"] = ()
+    patch: bool = False
+    """
+    
+    - Requiring editable
+    """
+    delete: bool = False
+    delete_item: typing.Iterable["Field"] = ()
+
+
+TV = typing.TypeVar('TV')
+KeyTV = typing.TypeVar('KeyTV', bound=KeyableType)
+class CommonManager(
+    typing.Generic[SchemeTV, KeyTV],
+    BaseManager[SchemeTV],
+    CommonTaskContext,
+):
+    """
+    Configuration
+    -------------
+    - scheme_cls: Scheme class this manager is managing
+    - path_prefix: Path prefix of this manager's router.
+    - manager_name: Friendly name of this manager.
+        - use snake_case
+    - preset_handler_config:
+    """
+
+    __path_prefix__: str
+    
+    def __init_subclass__(cls,
+        scheme_cls: Opt[typing.Type[SchemeTV]] = None,
+        path_prefix: str = '',
+        manager_name: str = '',
+        preset_handler_config: Opt[PresetHandlerConfig] = None
+    ):
+        cls.__path_prefix__ = path_prefix
+
+        super().__init_subclass__(
+            scheme_cls=scheme_cls,
+            router=TaskRegistry(
+                name=f"{manager_name}_router", 
+                path_prefix=path_prefix
+            ),
+            manager_name=manager_name
+        )
+
+        if preset_handler_config:
+            if not scheme_cls:
+                raise ValueError("scheme cls is required if you want to set up \
+                    preset handler")
+            
+            exec_namespaces = globals().copy()
+            handlers: dict[str, typing.Callable] = {}
+
+            key_field = scheme_cls.get_key_field()
+            if isinstance(key_field, CompositeField) \
+                and not preset_handler_config.key_fields:
+                    raise ValueError("key fields required for composite key")
+
+            
+            key_aliases: typing.Iterable[str]
+            if preset_handler_config.sup_path and preset_handler_config.key_fields:
+                key_aliases = TaskID.resolve_dynamic_indices(
+                    path_prefix + preset_handler_config.sup_path
+                )
+                sup_path = preset_handler_config.sup_path
+                exec_namespaces.update({
+                    f'{i}_conv': j.converter
+                    for i, j in preset_handler_config.key_fields.items()
+                })
+            else:
+                key_aliases = (f"{manager_name}_id",)
+                sup_path = f"/{{{manager_name}_id}}"
+                exec_namespaces[f"{key_aliases[0]}_conv"] = key_field.converter
+
+            if preset_handler_config.get:
+                handler_name = f'get_{manager_name}'
+                func_sig = build_func_sig(
+                    handler_name,
+                    *(
+                        (i, f"Anno[typing.Any, {i}_conv]")
+                        for i in key_aliases
+                    ),
+                    async_=True,
+                )
+                if isinstance(key_field, CompositeField):
+                    func_body = f"    return await self.get(_id={key_aliases[0]}_conv({ \
+                        ",".join(
+                            f"{preset_handler_config.key_fields[i].in_scheme_name}={i}" # type: ignore
+                            for i in key_aliases
+                        ) \
+                    }))"
+                else:
+                    func_body = f"    return await self.get(_id={key_aliases[0]})"
+                
+                exec(func_sig + func_body, exec_namespaces, handlers)
+                setattr(cls, handler_name, handlers[handler_name])
+
+                cls.__task_registry__.add_handler(
+                    method=Method.GET, path=sup_path,
+                    inner_handler=handlers[handler_name],
+                    handler_manager_cls=cls
+                )
+
     @property
-    def dao(self) -> "DataAccessObject":
-        """获取当前管理器所属会话的 DAO 实例"""
-        return self.session.dao
-    
-    def dump_dao(self, dao: Opt["DataAccessObject"] = None) -> "DataAccessObject":
-
+    def _dao(self) -> DataAccessObject[SchemeTV]:
+        """DAO of managing scheme.
         """
-        解析可选型的 ``dao`` 参数
-
-        如果提供了 ``dao`` 则返回它，否则返回当前会话的 DAO 实例
-        """
-        return get_optional(dao, self.dao)
-
-    FieldType = typing.TypeVar('FieldType', bound="BlueFirmamentField")
+        return self._daos(self._scheme_cls)
     
-    async def get_scheme(self,
-        _id: Opt[PrimaryKeyType] = None,
-        dao: Opt["DataAccessObject"] = None
-    ) -> SchemeType:
+    async def _get_scheme(self, _id: Opt[KeyTV] = None) -> SchemeTV:
         
+        """Get managing scheme.
+
+        :param _id: Key value
+
+            If not None, return a scheme which key matches _id value;
+            otherwise return the managing scheme.
+
+        :raise ValueError: no managing scheme and _id is None
+
+        Examples
+        --------
+        .. code-block:: python
+            class MyManager(CommonManager[My, KeyType]):
+                ...
+                async def my_handler(self, _id: Opt[IdType] = None):
+                    my = await self._get_scheme(_id)
+        """
         try:
-            return await super().get_scheme()
+            scheme = self._scheme
+
+            if _id is not None:
+                if scheme.key_value == _id:
+                    return scheme
+                raise ValueError
+            return scheme
         except ValueError as e:
             if _id is not None:
-                return await self._get(_id=_id, dao=dao)
+                return await self.get(_id=_id)
             raise e
     
-    async def _get(self, 
-        _id: PrimaryKeyType, 
-        dao: Opt["DataAccessObject"] = None
-    ) -> SchemeType:
+    async def get(self, _id: KeyTV) -> SchemeTV:
         
-        """获取数据模型实例
+        """Get scheme
 
-        获取成功则设置为当前实例
-
-        :param _id: 数据模型实例的主键值
-        :param dao: 数据访问对象；不提供则使用当前会话的 DAO
+        If success, set as managing scheme.
         """
-        res = await self.dump_dao(dao).select_one(self.scheme_cls, _id)
-        self.set_scheme(res)
-        return res
+        self._scheme = await self._dao.select_one(
+            _id, task_context=self
+        )
+        return self._scheme
     
-    async def _insert(self, 
-        scheme: Opt[SchemeType],
-        dao: Opt["DataAccessObject"] = None
-    ) -> SchemeType:
-        
+    async def insert(self, 
+        scheme: Opt[SchemeTV] = None,
+    ) -> SchemeTV:
         """插入数据模型实例到 DAO
 
-        插入成功则设置为当前实例
+        - 插入成功则设置为当前实例
+        - 如果键不是自然键，则关闭键排除
         
         :param scheme: 数据模型实例；不提供则为当前实例
+
         """
-        if not scheme:
-            scheme = await self.get_scheme()
-        
-        res = await self.dump_dao(dao).insert(to_insert=scheme)
-        self.set_scheme(res)
-        return res
+        self._scheme = await self._dao.insert(
+            to_insert=scheme or await self._get_scheme(),
+            exclude_key=(False 
+                if self._scheme_cls.get_key_field().is_natural_key() 
+                else True
+            )
+        )
+        return self._scheme
+    
+    async def _update_scheme(self,
+        scheme: Opt[SchemeTV] = None,
+    ) -> SchemeTV:
+        """Update dirty fields to dal.
 
-    async def _get_a_field(self, 
-        field: "BlueFirmamentField[T]", _id: Opt[PrimaryKeyType] = None,
-        dao: Opt["DataAccessObject"] = None
-    ) -> T:
-        
-        """获取一个字段的值
-
-        :param _id: 主键值；没有则从当前实例获取
-
-        :returns: 字段的值（未代理）
+        If success, set update result to manager scheme.
         """
+        self._scheme = await self._dao.update(
+            to_update=scheme or await self._get_scheme(), 
+            only_dirty=True,
+        )
+        return self._scheme
 
-        if not _id:
-            scheme = self.get_scheme_safe()
-        else:
-            scheme = None
-        
+    async def get_a_field(self, 
+        field: "Field[TV]", 
+        _id: Opt[KeyTV] = None,
+    ) -> TV:
+        """Get a field's value of managing scheme.
+
+        :returns: Field Value (no proxy)
+        """
+        scheme = self._try_get_scheme()
         if not scheme:
-            return await self.dump_dao(dao).select_one(
-                field, self.scheme_cls.get_primary_key().equals(_id)
+            return await self._dao.select_one(
+                self._scheme_cls.get_key_field().equals(_id),
+                field=field, 
+                task_context=self
             )
         else:
-            return FieldValueProxy.dump(scheme.get_value(field))
-    
-    async def _insert_item(self, 
-        field: "BlueFirmamentField[typing.List[T]]", values: typing.Iterable[T],
-        _id: Opt[PrimaryKeyType] = None,
-        mode: L['append', 'prepend', 'insert'] = 'append',
+            return FieldValueProxy.dump(scheme._get_value(field))
+        
+    async def put_a_field(self, 
+        field: "Field[TV]", 
+        value: TV,  
+        _id: Opt[KeyTV] = None,
+    ) -> TV:
+        
+        """Put a field value of managing scheme.
+
+        Put value will be performed on scheme so that
+        related validators can be run, and then
+        patch to dal.
+        """        
+        scheme = await self._get_scheme(_id=_id)
+        scheme[field] = value
+        return (await self._update_scheme(scheme))[field]
+
+    IoDableT = typing.TypeVar('IoDableT', bound=typing.List | typing.Set)
+    async def insert_item(self, 
+        field: "Field[IoDableT]",
+        values: typing.Iterable[TV],
+        _id: Opt[KeyTV] = None,
+        mode: Lit['append', 'prepend', 'insert'] = 'append',
         at: Opt[int] = None,
-        dao: Opt["DataAccessObject"] = None
-    ) -> typing.List[T]:
+    ) -> IoDableT:
         
         """插入条目到列表型字段值
 
         :param _id: 主键值；没有则从当前实例获取
-        :param field: 要插入到的字段；值必须是列表类型
+        :param field: 要插入到的字段；类型必须是列表或集合
         :param values: 要插入的值（可多个）；
-        :param mode: 插入模式 
+        :param mode: 插入模式 （Set 不生效）
 
             - append: `[raw][values]`
             - prepend: `[values][raw]`
             - insert: `[raw before at][values][raw after at]`
         :param at: 插入位置；仅当 mode 为 `insert`
         """
-        field_value = await self._get_a_field(_id=_id, field=field, dao=dao)
+        field_value = await self.get_a_field(_id=_id, field=field) 
 
         if isinstance(field_value, list):
             if mode == 'append':
@@ -181,48 +339,24 @@ class CommonManager(
                 field_value[at:at] = values
             else:
                 raise ValueError(f'Invalid mode {mode} for insert item')
-
-            return await self._put_a_field(
-                field=field, value=field_value, _id=_id, dao=dao
-            )
+        elif isinstance(field_value, set):
+            field_value.update(values)
         else:
             raise ValueError(f'DAO not returning valid value of field {field}, {field_value}')
-    
-    async def _put_a_field(self, 
-        field: "BlueFirmamentField[T]", 
-        value: T,  
-        _id: Opt[PrimaryKeyType] = None,
-        dao: Opt["DataAccessObject"] = None
-    ) -> T:
         
-        """更新字段
-
-        :param _id: 主键值；没有则从当前实例获取
-        """        
-        if not _id:
-            return (await self.dump_dao(dao).update(
-                {field.name: value}, 
-                (await self.get_scheme()).primary_key_eqf,
-                path=self.scheme_cls.dal_path()
-            ))[field.name]
-            
-        else:
-            return (await self.dump_dao(dao).update(
-                {field.name: value},
-                self.scheme_cls.get_primary_key().equals(_id),
-                path=self.scheme_cls.dal_path()
-            ))[field.name]
+        return await self.put_a_field(
+            field=field, value=field_value, 
+            _id=_id,
+        )
     
-    async def _delete_item(self, 
-        field: "BlueFirmamentField[typing.List[T]]", 
+    async def delete_item(self, 
+        field: "Field[IoDableT]", 
         values: typing.Union[
-            typing.Iterable[T],
-            typing.Set[T]
+            typing.Iterable[TV],
+            typing.Set[TV]
         ],
-        _id: Opt[PrimaryKeyType] = None,
-        dao: Opt["DataAccessObject"] = None,
-    ) -> typing.List[T]:
-        
+        _id: Opt[KeyTV] = None,
+    ) -> IoDableT:
         """从列表型字段值中删除条目
 
         :param _id: 主键值；没有则从当前实例获取
@@ -236,47 +370,96 @@ class CommonManager(
         ^^^^^^^^
         因为要删除的数量不可能大于当前列表的长度
         """
-        field_value = await self._get_a_field(_id=_id, field=field, dao=dao)
+        field_value = await self.get_a_field(_id=_id, field=field)
 
-        if isinstance(values, typing.Sequence):
+        if isinstance(values, (list,)):
             field_value = [v for v in field_value if v not in values]
-        elif isinstance(values, (typing.Iterable)):
+        elif isinstance(values, (set,)):
             for value in values:
                 field_value.remove(value)
         else:
             raise ValueError(f'{field} value invalid, value is {field_value}')
 
-        return await self._put_a_field(
-            _id=_id, field=field, value=field_value, dao=dao
+        return await self.put_a_field(
+            _id=_id, field=field, value=field_value
         )
+    
+    async def delete(self, _id: Opt[KeyTV] = None) -> None:
+        """Delete the scheme from DAO
 
+        If success, set managing scheme to None.
+
+        :param _id: key value
+
+            If not provided, use managing scheme's.
+        """
+        scheme = await self._get_scheme(_id=_id)
+        await self._dao.delete(scheme)
+        self._reset_scheme()
+
+
+# CommonManagerTV = typing.TypeVar('CommonManagerTV', bound=CommonManager)
+# class CommonFieldManager(
+#     typing.Generic[TV, KeyTV, CommonManagerTV],
+#     BaseFieldManager[TV, CommonManagerTV]
+# ):
+    
+#     __scheme_manager_cls__: typing.Type[CommonManagerTV]
+
+#     async def get_field(self,
+#         _id: Opt[KeyTV] = None
+#     ) -> TV:
+        
+#         """获取字段值
+#         """
+#         if self._field_value is None:
+#             scheme = await self.scheme_manager._get_scheme(_id=_id)
+#             self._field_value = scheme[self.field]
+        
+#         return typing.cast(TV, self._field_value)
+    
+#     async def update_field(self,
+#         _id: Opt[KeyTV] = None,
+#         value: TV | Undefined = _undefined
+#     ) -> TV:
+        
+#         """更新字段值
+#         """
+#         if value is _undefined:
+#             value_ = self._field_value
+#         else:
+#             value_ = value
+        
+#         scheme = await self.scheme_manager._get_scheme(_id=_id)
+#         scheme[self.field] = value_
+#         return await self._mdao.update(scheme)
 
 class GetAFieldOptions(typing.TypedDict):
-    fields: typing.Iterable["BlueFirmamentField"]
+    fields: typing.Iterable["Field"]
 
 class CreateOptions(typing.TypedDict):
-    disabled_fields: typing.Iterable["BlueFirmamentField"]
+    disabled_fields: typing.Iterable["Field"]
 
 class InsertItemOptions(typing.TypedDict):
-    fields: typing.Iterable["BlueFirmamentField"]
+    fields: typing.Iterable["Field"]
 
 class DeleteItemOptions(typing.TypedDict):
-    fields: typing.Iterable["BlueFirmamentField"]
+    fields: typing.Iterable["Field"]
 
 class PatchOptions(typing.TypedDict):
-    available_fields: typing.Iterable["BlueFirmamentField"]
+    available_fields: typing.Iterable["Field"]
 
 class PutAFieldOptions(typing.TypedDict):
-    fields: typing.Iterable["BlueFirmamentField"]
+    fields: typing.Iterable["Field"]
 
 class PutOptions(typing.TypedDict):
-    disabled_fields: typing.Iterable["BlueFirmamentField"]
+    disabled_fields: typing.Iterable["Field"]
 
 
 ManagerType = typing.TypeVar('ManagerType', bound=CommonManager)
 def common_handler_adder(
-    manager_name: str,
-    get: bool = False,
+    path_prefix_with_key: Opt[str] = None,
+    get: bool = False,  # TODO 添加鉴权器（防御式）
     get_a_field: bool = False,
     get_a_field_options: Opt[GetAFieldOptions] = None,
     create: bool = False,
@@ -368,32 +551,49 @@ def common_handler_adder(
 
     def wrapper(manager_cls: typing.Type[ManagerType]):
 
+        manager_name = manager_cls.__manager_name__
+        primary_key_name = manager_name + "_id"
+        if path_prefix_with_key is None:
+            path_prefix_with_key_ = f"{manager_name}/{{{primary_key_name}}}"
+        else:
+            path_prefix_with_key_ = path_prefix_with_key
+
         if app:
             register = manager_cls.get_route_register(app)
         else:
             register = None
 
         if safe_issubclass(manager_cls.__scheme_cls__, BaseScheme):
-            primary_key_field = manager_cls.__scheme_cls__.get_primary_key()
+            primary_key_field = manager_cls.__scheme_cls__.get_key_field()
         else:
             primary_key_field = None
 
         result_namespaces = {}
 
         if get:
-            # TODO not tested yet
             if not primary_key_field:
                 raise ValueError('primary key is required for get')
             
             exec_namespaces = globals().copy()
-            exec_namespaces["pk_validator"] = primary_key_field.validator
             
             get_handler_name = f'get_{manager_name}'
-            primary_key_name = f"{manager_name}_id"
             func_sig = f"async def {get_handler_name}(self, \n"
-            func_sig += f"{primary_key_name}: typing.Annotated[typing.Any, pk_validator]"
+            if isinstance(primary_key_field, CompositeField):
+                exec_namespaces[f'{primary_key_name}'] = primary_key_field.vtype
+                for i in primary_key_field.sub_fields:
+                    exec_namespaces[f"{i.name}_validator"] = i.converter
+                    func_sig += f"{i.name}: typing.Annotated[typing.Any, {i.name}_validator],"
+                func_body = f"    return await self.get(_id={primary_key_name}({
+                    f",".join(
+                        f"{i.name}={i.name}"
+                        for i in primary_key_field.sub_fields
+                    )
+                }))"
+            else:
+                exec_namespaces["pk_validator"] = primary_key_field.converter
+                func_sig += f"{primary_key_name}: typing.Annotated[typing.Any, pk_validator]"
+                func_body = f"    return await self.get(_id={primary_key_name})"
             func_sig += "):\n"
-            func_body = f"    return await self._get(_id={primary_key_name})\n"
             func_str = func_sig + func_body
             
             exec(func_str, exec_namespaces, result_namespaces)
@@ -402,11 +602,12 @@ def common_handler_adder(
                 result_namespaces[get_handler_name]
             )
 
-            if register:
-                register(
-                    TransportOperationType.GET,
-                    '/{' + primary_key_name + '}',
-                    getattr(manager_cls, get_handler_name),
+            if app:
+                app.task_registry.add_handler(
+                    method=Method.GET,
+                    path=path_prefix_with_key_,
+                    handler=getattr(manager_cls, get_handler_name),
+                    handler_manager_cls=manager_cls
                 )
 
         if put_a_field:
@@ -416,7 +617,7 @@ def common_handler_adder(
                 raise ValueError('primary key is required for put_a_field')
             
             exec_namespaces = globals().copy()
-            exec_namespaces["pk_validator"] = primary_key_field.validator
+            exec_namespaces["pk_validator"] = primary_key_field.converter
             
             fields = put_a_field_options.get('fields')
             for field in fields:
@@ -426,7 +627,7 @@ def common_handler_adder(
                 func_sig = f"async def {put_a_field_handler_name}(self, body, \n"
                 func_sig += f"{primary_key_name}: typing.Annotated[typing.Any, pk_validator]"
                 func_sig += "):\n"
-                func_body = f"    return await self._put_a_field(_id={primary_key_name},\n"
+                func_body = f"    return await self.put_a_field(_id={primary_key_name},\n"
                 func_body += f"        field=self.scheme_cls.{field.in_scheme_name},\n"
                 func_body += f"        value=body\n"
                 func_body += f"    ) \n"
@@ -440,7 +641,7 @@ def common_handler_adder(
 
                 if register:
                     register(
-                        TransportOperationType.PUT,
+                        Method.PUT,
                         '/{' + primary_key_name + '}/' + field.name,
                         getattr(manager_cls, put_a_field_handler_name),
                     )
@@ -452,7 +653,7 @@ def common_handler_adder(
                 raise ValueError('primary key is required for get_a_field')
             
             exec_namespaces = globals().copy()
-            exec_namespaces["pk_validator"] = primary_key_field.validator
+            exec_namespaces["pk_validator"] = primary_key_field.converter
             
             fields = get_a_field_options.get('fields')
             for field in fields:
@@ -462,7 +663,7 @@ def common_handler_adder(
                 func_sig = f"async def {get_a_field_handler_name}(self, \n"
                 func_sig += f"    {primary_key_name}: typing.Annotated[typing.Any, pk_validator]"
                 func_sig += "):\n"
-                func_body = f"    return await self._get_a_field(_id={primary_key_name}, \n"
+                func_body = f"    return await self.get_a_field(_id={primary_key_name}, \n"
                 func_body += f"        field=self.scheme_cls.{field.in_scheme_name}\n"
                 func_body += "    )\n"
                 func_str = func_sig + func_body
@@ -475,7 +676,7 @@ def common_handler_adder(
 
                 if register:
                     register(
-                        TransportOperationType.GET,
+                        Method.GET,
                         '/{' + primary_key_name + '}/' + field.name,
                         getattr(manager_cls, get_a_field_handler_name),
                     )
@@ -487,7 +688,7 @@ def common_handler_adder(
                 raise ValueError('primary key is required for insert_item')
             
             exec_namespaces = globals().copy()
-            exec_namespaces["pk_validator"] = primary_key_field.validator
+            exec_namespaces["pk_validator"] = primary_key_field.converter
             
             fields = insert_item_options.get('fields')
             for field in fields:
@@ -497,7 +698,7 @@ def common_handler_adder(
                 func_sig += f"{primary_key_name}: typing.Annotated[typing.Any, pk_validator],\n"
                 func_sig += "at: typing.Optional[int] = None, mode: str = 'append',\n"
                 func_sig += "):\n"
-                func_body = f"    return await self._insert_item(_id={primary_key_name}, \n"
+                func_body = f"    return await self.insert_item(_id={primary_key_name}, \n"
                 func_body += f"        field=self.scheme_cls.{field.in_scheme_name},\n"
                 func_body += "        mode=mode, at=at,\n"
                 func_body += "        values=body\n"
@@ -512,7 +713,7 @@ def common_handler_adder(
 
                 if register:
                     register(
-                        TransportOperationType.POST,
+                        Method.POST,
                         '/{' + primary_key_name + '}/' + field.name,
                         getattr(manager_cls, insert_item_handler_name),
                     )
@@ -524,7 +725,7 @@ def common_handler_adder(
                 raise ValueError('primary key is required for delete_item')
             
             exec_namespaces = globals().copy()
-            exec_namespaces["pk_validator"] = primary_key_field.validator
+            exec_namespaces["pk_validator"] = primary_key_field.converter
             
             fields = delete_item_options.get('fields')
             for field in fields:
@@ -533,7 +734,7 @@ def common_handler_adder(
                 func_sig = f"async def {delete_item_handler_name}(self, body: typing.Sequence, \n"
                 func_sig += f"{primary_key_name}: typing.Annotated[typing.Any, pk_validator],\n"
                 func_sig += "):\n"
-                func_body = f"    return await self._delete_item(_id={primary_key_name}, \n"
+                func_body = f"    return await self.delete_item(_id={primary_key_name}, \n"
                 func_body += f"        field=self.scheme_cls.{field.in_scheme_name},\n"
                 func_body += "        values=body\n"
                 func_body += "    )\n"
@@ -547,7 +748,7 @@ def common_handler_adder(
 
                 if register:
                     register(
-                        TransportOperationType.DELETE,
+                        Method.DELETE,
                         '/{' + primary_key_name + '}/' + field.name,
                         getattr(manager_cls, delete_item_handler_name),
                     )

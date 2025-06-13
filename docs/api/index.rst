@@ -2,16 +2,15 @@ API Reference
 =============
 
 .. toctree::
-   :maxdepth: 2
+   :maxdepth: 1
    :caption: Contents:
 
    scheme/index
    scheme/validator
    manager
+   exception
 
 .. automodule:: blue_firmament
    :members:
-   :undoc-members:
    :show-inheritance:
-
 

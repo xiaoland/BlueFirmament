@@ -1,1 +1,2 @@
-"""Tests for Blue Firmament."""
+"""Tests of Blue Firmament.
+"""
