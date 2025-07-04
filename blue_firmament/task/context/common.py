@@ -26,6 +26,7 @@ class CommonTaskContext(ExtendedTaskContext[CommonSession],
     def _init_prop(self):
         self._daos = self._session.daos
         self._operator = self._session.operator
+        self._emit = self._session.emit
 
 
 class SoCommonTC(SoBaseTC):
