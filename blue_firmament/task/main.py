@@ -12,13 +12,13 @@ __all__ = [
 import abc
 import dataclasses
 import enum
+import json
 import types
 import uuid
 import typing
 from typing import Optional as Opt
 
-from ..utils import dump_enum
-from ..utils.dict import EnhancedDict
+from ..utils import dump_enum, load_enum
 from .._types import PathParamsT, Undefined, _undefined
 from ..scheme.converter import AnyConverter, get_converter_from_anno
 
@@ -52,7 +52,7 @@ class TaskID:
 
     def __init__(
         self,
-        method: Opt[Method],
+        method: Opt[Method | str],
         path: str,
         separator: str = '/',
         param_types: Opt[dict[str, typing.Type]] = None,
@@ -72,8 +72,9 @@ class TaskID:
         :param param_converters: Converter for path parameters.
             If not provided, inferred from param_types.
         """
-        self.__method = method
-        self.__path = path.strip('/')
+        self.__method: Method = load_enum(Method, method)
+        self.__path: str = path.replace(separator, '/').strip('/')
+        """Normalized path"""
 
         self.__segments: typing.List[str] = path.strip(separator).split(separator)
         '''Path segmented by separator'''
@@ -119,7 +120,7 @@ class TaskID:
         return hash((self.method, *(i for i in self.segments)))
 
     def __str__(self):
-        return f"{self.method} {self.path}"
+        return f"{dump_enum(self.method) or ""}@{self.path}"
 
     def __len__(self) -> int:
         return len(self.segments)
@@ -131,6 +132,17 @@ class TaskID:
             return TaskID(self.__method, '/'.join(self.__segments[key]), param_converters=self.__param_converters)
         else:
             return TaskID(self.__method, self.__segments[key], param_converters=self.__param_converters)
+
+    def dump_to_str(self) -> str:
+        return self.__str__()
+
+    @classmethod
+    def load_from_str(cls, raw: str) -> typing.Self:
+        method, path = raw.split("@", maxsplit=1)
+        return cls(
+            method=load_enum(Method, method or None),
+            path=path,
+        )
 
     def __is_segment_match(
         self,
@@ -179,11 +191,9 @@ class TaskID:
 
     @property
     def path(self) -> str:
-        """路径字符串
-
-        不一定初始化时相等，但一定会是 ``'/' + raw_path.strip('/')``
+        """Normalized path.
         """
-        return f"/{self.__path}"
+        return self.__path
 
     @property
     def segments(self) -> typing.List[str]:
@@ -238,10 +248,6 @@ class TaskID:
             - If path is static，比较我方路径分段（仅静态）是否为对方的子集（严格模式比较路径字符串）
             - 如果有路径参数，比较我方路径分段（包括静态与动态）是否为对方的子集（严格模式检验对方是否为我方子集）
                 - 此处解析路径参数，如果未找到或校验不通过，则不记录
-
-        Tests
-        ^^^^^
-        - `test_routing.TestRouteKey.test_is_match`
         """
         if not isinstance(task_id, TaskID):
             return None
@@ -260,11 +266,11 @@ class TaskID:
         params = {}
         for i in range(len(task_id.segments)):
             seg_match = self.__is_segment_match(task_id.segments[i], i)
-            if seg_match[0] is False:
+            if seg_match is _undefined:
                 return None
             else:
-                if seg_match[1] is not None:
-                    params[self.segments[i]] = seg_match[1]
+                if seg_match is not None:
+                    params[self.segments[i]] = seg_match
 
         return params
 
@@ -276,7 +282,7 @@ class TaskMetadata:
 
     authorization: Opt[tuple[str, str]] = None
     """tuple(type, credentials)"""
-    trace_id: Opt[str] = None
+    trace_id: Opt[str] = dataclasses.field(default_factory=lambda: str(uuid.uuid4()))
     client_id: Opt[str] = None
 
     def dump_to_bytes(
@@ -322,6 +328,9 @@ class TaskParameters:
             raise TypeError("Use get() for LazyParameter")
         return value
 
+    def items(self):
+        return self.__parameters.items()
+
     async def get(self, item: str, default: TV = None) -> typing.Any | TV:
         value = self.__parameters.get(item, default)
         if isinstance(value, LazyParameter):
@@ -342,11 +351,12 @@ class Task:
 
     def __init__(
         self,
-        task_id: 'TaskID',
-        metadata: Opt[TaskMetadata] = None,
+        task_id: TaskID,
+        metadata: Opt[TaskMetadata | dict] = None,
         parameters: Opt[dict[str, LazyParameter | typing.Any] | TaskParameters] = None,
     ) -> None:
         self.__task_id = task_id
+
         self.__parameters: TaskParameters
         if isinstance(parameters, dict):
             self.__parameters = TaskParameters(**parameters)
@@ -354,29 +364,18 @@ class Task:
             self.__parameters = parameters
         else:
             self.__parameters = TaskParameters()
-        self.__metadata: TaskMetadata = metadata or TaskMetadata()
-        self.__trace_id: str = self._get_trace_id() or self._new_trace_id()
 
-    @staticmethod
-    def _new_trace_id() -> str:
-        return str(uuid.uuid4())
-    def _get_trace_id(self) -> Opt[str]:
-        """
-        Override this method to customize how task
-        get trace_id from parameters(or anyway you like).
-
-        :returns: If None, use
-            :meth:`blue_firmament.core.task.Task.new_trace_id` to get trace_id
-        :rtype: None or str
-        """
-        return self.metadata.trace_id
+        if isinstance(metadata, dict):
+            self.__metadata = TaskMetadata(**metadata)
+        else:
+            self.__metadata: TaskMetadata = metadata or TaskMetadata()
 
     @property
-    def id(self) -> 'TaskID':
+    def id(self) -> TaskID:
         return self.__task_id
     @property
     def trace_id(self) -> str:
-        return self.__trace_id
+        return self.__metadata.trace_id
     @property
     def metadata(self):
         return self.__metadata
@@ -397,7 +396,7 @@ class Task:
     @classmethod
     def load_from_bytes(cls, raw: bytes, encoding: str = "utf-8") -> typing.Self:
         data = json.loads(raw.decode(encoding))
-        task_id = TaskID.from_str(data["task_id"])
+        task_id = TaskID.load_from_str(data["task_id"])
         metadata = TaskMetadata(**data["metadata"])
         parameters = TaskParameters(**data["parameters"])
         return cls(task_id, metadata, parameters)

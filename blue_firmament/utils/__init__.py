@@ -8,6 +8,8 @@ import nest_asyncio
 import inspect
 
 
+# TODO don't put anything in `__init__.py``
+
 T = typing.TypeVar('T')
 
 def singleton(cls):
@@ -33,29 +35,59 @@ def singleton(cls):
 
 
 DumpEnumValueType = typing.TypeVar('DumpEnumValueType')
-def dump_enum(enum_member: enum.Enum | DumpEnumValueType) -> DumpEnumValueType:
-
-    '''序列化可能为枚举的对象为目标类型'''
-
+@typing.overload
+def dump_enum(enum_member: enum.Enum) -> DumpEnumValueType:
+    ...
+@typing.overload
+def dump_enum(enum_member: DumpEnumValueType) -> DumpEnumValueType:
+    ...
+@typing.overload
+def dump_enum(enum_member: None) -> None:
+    ...
+def dump_enum(enum_member: enum.Enum | DumpEnumValueType | None) -> DumpEnumValueType | None:
+    """Dump enum member to its value.
+    """
+    if enum_member is None:
+        return None
     if isinstance(enum_member, enum.Enum):
         return enum_member.value
     return enum_member
 
 EnumType = typing.TypeVar('EnumType', bound=enum.Enum)
+@typing.overload
 def load_enum(
-    enum_class: typing.Type[EnumType], 
+    enum_class: typing.Type[EnumType],
     name: str | int | EnumType,
 ) -> EnumType:
+    ...
+@typing.overload
+def load_enum(
+    enum_class: typing.Type[EnumType],
+    name: None,
+) -> None:
+    ...
+def load_enum(
+    enum_class: typing.Type[EnumType], 
+    value: str | int | EnumType | None,
+) -> EnumType | None:
+    """Resolve enum member from value.
 
-    '''获取枚举类中对应值的成员'''
-    if isinstance(name, enum.Enum):
-        return name
+    :param enum_class: The enum class.
+    :param value: The enum member value or a member of the enum class.
+
+    :raise ValueError: If no enum member for this value in the enum class.
+    :returns: Enum member. If you pass None as name, returns None.
+    """
+    if value is None:
+        return None
+    if isinstance(value, enum.Enum):
+        return value
     else:
         try:
-            return enum_class(name)
+            return enum_class(value)
         except ValueError as e:
             raise ValueError(
-                f"Value '{name}' is not a valid member of enum '{enum_class.__name__}'"
+                f"Value '{value}' is not a valid member of enum '{enum_class.__name__}'"
             ) from e
 
 def try_convert_str(value: str) -> typing.Union[str, int, float, bool, None]:
