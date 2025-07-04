@@ -194,6 +194,20 @@ class CommonManager(
         """DAO of managing scheme.
         """
         return self._daos(self._scheme_cls)
+
+    def _emit(
+        self,
+        name: str,
+        parameters: Opt[dict] = None,
+        metadata: Opt[dict] = None
+    ):
+        """:meth:`event.simple_emit` but prefix name with the manager name.
+        """
+        return super()._emit(
+            name=f"{self.__manager_name__}.{name}",
+            parameters=parameters,
+            metadata=metadata
+        )
     
     async def _get_scheme(self, _id: Opt[KeyTV] = None) -> SchemeTV:
         
