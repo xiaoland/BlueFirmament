@@ -59,7 +59,7 @@ class BlueFirmamentApp:
             asyncio.set_event_loop(event_loop)
 
             for transport in self.__transporters:
-                event_loop.create_task(transport.start_listening())
+                event_loop.create_task(transport.start())
             
             event_loop.run_forever()
         except KeyboardInterrupt:

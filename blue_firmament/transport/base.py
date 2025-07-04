@@ -21,12 +21,12 @@ class BaseTransporter(abc.ABC):
         return self._app._logger
 
     @abc.abstractmethod
-    async def start_listening(self):
+    async def start(self):
         """Start listening to tasks
         """
 
     @abc.abstractmethod
-    async def stop_listening(self):
+    async def stop(self):
         """Stop listening to tasks
         """
 

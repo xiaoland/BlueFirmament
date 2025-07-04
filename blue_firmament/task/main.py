@@ -383,3 +383,21 @@ class Task:
     @property
     def parameters(self):
         return self.__parameters
+
+    async def dump_to_bytes(self, encoding: str = "utf-8") -> bytes:
+        return json.dumps({
+            "task_id": self.__task_id.dump_to_str(),
+            "metadata": self.__metadata.dump_to_dict(),
+            "parameters": {
+                key: value if not isinstance(value, LazyParameter) else await value.get()
+                for key, value in self.__parameters.items()
+            }
+        }).encode(encoding)
+
+    @classmethod
+    def load_from_bytes(cls, raw: bytes, encoding: str = "utf-8") -> typing.Self:
+        data = json.loads(raw.decode(encoding))
+        task_id = TaskID.from_str(data["task_id"])
+        metadata = TaskMetadata(**data["metadata"])
+        parameters = TaskParameters(**data["parameters"])
+        return cls(task_id, metadata, parameters)

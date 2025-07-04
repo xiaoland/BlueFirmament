@@ -221,7 +221,7 @@ class HTTPTransporter(BaseTransporter):
             app=self, host=host, port=port, uds=uds
         ))
 
-    def start_listening(self):
+    def start(self):
         return self.__asgi_server.serve()
 
     async def __call__(self, 
