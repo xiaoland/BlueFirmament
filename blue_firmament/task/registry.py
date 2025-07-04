@@ -250,12 +250,14 @@ CallableTV = typing.TypeVar("CallableTV", bound=typing.Callable)
 def task(
     method: Opt[Method],
     path: Opt[str],
+    separator: Opt[str] = "/",
     task_id: Opt[TaskID] = None
 ):
     """Mark a function as a handler of a task.
 
     :param method:
     :param path:
+    :param separator:
     :param task_id: If provided, will override method and path.
 
     Will wrap decorated function to a TaskEntry.
@@ -268,7 +270,8 @@ def task(
     """
     def wrapper(handler: CallableTV) -> CallableTV:
         return typing.cast(CallableTV, TaskEntry(
-            TaskID(method=method, path=path) if task_id is None else task_id,
+            TaskID(method=method, path=path, separator=separator) \
+                if task_id is None else task_id,
             handler
         )) # tricked type checker
     return wrapper

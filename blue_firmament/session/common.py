@@ -34,14 +34,15 @@ class CommonSession(Session):
     @classmethod
     def from_task(cls, task) -> typing.Self:
 
-        authroization = task.get_prebody_item("authorization")
-        if authroization:
-            jwt_str = authroization[7:]  # strip 'Bearer ' prefix
-        else:
+        authorization = task.metadata.authorization
+        jwt_str = None
+        if not authorization:
             jwt_str = task.get_state_item("authorization")
+            # FIXME put task.session ?
+        else:
+            jwt_str = authorization[1]
 
         if not jwt_str:
-            logger.warning('Cannot find valid JWT in headers or cookies')
             LOGGER.warning('Cannot find valid JWT in headers or cookies')
             raise ValueError('JWT not found')
         

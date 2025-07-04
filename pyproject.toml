@@ -20,6 +20,8 @@ classifiers = [
 ]
 dependencies = ["pyjwt (>=2.10.1,<3.0.0)", "structlog (>=25.3.0,<26.0.0)", "postgrest (>=1.0.1,<2.0.0)", "uvicorn (>=0.34.2,<0.35.0)", "setuptools (>=80.3.1,<81.0.0)", "nest-asyncio (>=1.6.0,<2.0.0)", "gotrue (>=2.12.0,<3.0.0)", "pytest (>=8.3.5,<9.0.0)", "black (>=25.1.0,<26.0.0)"]
 
+[tool.group.poetry.dev-dependencies]
+poetry = "^2.1.1"
 
 [project.optional-dependencies]
 docs = [
@@ -27,6 +29,10 @@ docs = [
     "sphinx-rtd-theme>=1.0.0",
     "esbonio>=0.12.0",
     "doc8>=1.1.2",
+]
+common = [
+    "supabase-auth>=2.12.0,<3.0.0",
+    "redis>=6.2.0,<7.0.0",
 ]
 
 [tool.poetry]
@@ -45,14 +51,6 @@ ipykernel = "^6.29.5"
 pytest = "^8.3.5"
 pytest-asyncio = "^1.0.0"
 black = "^25.1.0"
-
-
-[tool.poetry.group.common.dependencies]
-supabase-auth = "^2.12.0"
-redis = "^6.2.0"
-
-[tool.group.poetry.dev-dependencies]
-poetry = "^2.1.1"
 
 [build-system]
 requires = ["poetry-core"]

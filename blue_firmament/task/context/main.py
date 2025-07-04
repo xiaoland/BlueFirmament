@@ -10,14 +10,14 @@ __all__ = [
 import contextvars
 import typing
 from typing import Optional as Opt
-from blue_firmament.session import SessionTV
-from blue_firmament.scheme.main import SchemeTV
-from blue_firmament.scheme import BaseScheme, private_field, FieldT
+from ...session import SessionTV
+from ...scheme.main import SchemeTV
+from ...scheme import BaseScheme, private_field, FieldT
 
 if typing.TYPE_CHECKING:
-    from blue_firmament.log import LoggerT
-    from blue_firmament.task import Task
-    from blue_firmament.task.result import TaskResult
+    from ...log import LoggerT
+    from .. import Task
+    from ..result import TaskResult
 
 
 class BaseTaskContextFields(typing.TypedDict):
@@ -53,6 +53,7 @@ class BaseTaskContext:
             self.__logger = kwargs["base_logger"].bind(
                 trace_id=self.__task.trace_id,
             )
+
     @property
     def _task(self) -> "Task": return self.__task
     @property
@@ -111,9 +112,11 @@ class ExtendedTaskContext(
         super().__init__(btc=btc)
         self.__session = self.__session_cls.from_task(btc._task)
         self._init_prop()
+
     def _init_prop(self): 
         """Assign your customized properties"""
         pass
+
     @property
     def _session(self): return self.__session
 
