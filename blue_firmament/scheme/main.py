@@ -10,6 +10,7 @@ __all__ = [
 
 import abc
 import copy
+import dataclasses
 import inspect
 from re import I
 import types
@@ -394,67 +395,67 @@ class BaseScheme(metaclass=SchemeMetaclass):
     """
 
     # class vars
-    __dal__: Opt[typing.Type["DataAccessLayer"]]
-    __dal_path__: Opt["DALPath"]
-    __key__: Opt[Field]  # TODO use field
+    __dal__: typing.ClassVar[Opt[typing.Type["DataAccessLayer"]]]
+    __dal_path__: typing.ClassVar[Opt["DALPath"]]
+    __key__: typing.ClassVar[Opt[Field]]  # TODO use field
     """Field that uniquely identifies an instance.
 
     Includes primary key, composite key.
     """
-    __disable_log__: bool
+    __disable_log__: typing.ClassVar[bool]
     """Disable scheme internal logs
     """
-    __proxy__: bool
+    __proxy__: typing.ClassVar[bool]
     """Proxy field value or not
 
     If disabled:
     - Mutable field value modification will not be tracked
     - Cannot get scheme or field info from field value
     """
-    __fields__: typing.Dict[str, Field]
+    __fields__: typing.ClassVar[typing.Dict[str, Field]]
     """Fields and their instances defined in the scheme
     """
-    __private_fields__: typing.Dict[str, PrivateField]
+    __private_fields__: typing.ClassVar[typing.Dict[str, PrivateField]]
     """Private fields and their instances defined in the scheme
     """
-    __scheme_validators__: typing.List[SchemeValidator]
-    __after_field_validators__: typing.List[FieldValidator]
+    __scheme_validators__: typing.ClassVar[typing.List[SchemeValidator]]
+    __after_field_validators__: typing.ClassVar[typing.List[FieldValidator]]
     """Field validators needed to be ran
     immediately after scheme instantiation
     """
-    __partial__: bool
+    __partial__: typing.ClassVar[bool]
     """If True, all fields are partial
     """
-    __inherit_validators__: bool
+    __inherit_validators__: typing.ClassVar[bool]
     """If False, scheme and field validators will not be inherited by
     sub scheme.
     """
-    __default_edflags__: Opt[set[str]]
-    __default_idflags__: Opt[set[str]]
+    __default_edflags__: typing.ClassVar[Opt[set[str]]]
+    __default_idflags__: typing.ClassVar[Opt[set[str]]]
 
     # instance vars
-    __field_values__: typing.Dict[str, typing.Any]
+    __field_values__: typing.ClassVar[typing.Dict[str, typing.Any]]
     """Storing each field's value
     
     - Key is the field's in_scheme_name.
     """
-    __dirty_fields__: typing.Set[str]
+    __dirty_fields__: typing.ClassVar[typing.Set[str]]
     """Which fields are modified since last dump
 
     - Exclude private fields.
     """
-    __unset_fields__: typing.Set[str]
+    __unset_fields__: typing.ClassVar[typing.Set[str]]
     """Fields that are not provided during instantiation
 
     - Exclude private fields
     - Instance variable
     """
-    __logger__: Opt["LoggerT"]
+    __logger__: typing.ClassVar[Opt["LoggerT"]]
     """Scheme level logger
 
     - Instance variable
     """
-    __instantiated__: bool
+    __instantiated__: typing.ClassVar[bool]
     """Whether the scheme is instantiated
 
     - Instance variable
