@@ -109,44 +109,6 @@ class SchemeMetaclass(abc.ABCMeta):
     
     values are the default value (callable for mutable values).
     """
-    # c vars
-    __dal__: Opt[typing.Type["DataAccessLayer"]]
-    __dal_path__: Opt["DALPath"]
-    __key__: Opt[Field]  # TODO use field
-    """Field that uniquely identifies an instance.
-
-    Includes primary key, composite key.
-    """
-    __disable_log__: bool
-    """Disable scheme internal logs
-    """
-    __proxy__: bool
-    """Proxy field value or not
-    
-    If disabled:
-    - Mutable field value modification will not be tracked
-    - Cannot get scheme or field info from field value
-    """
-    __fields__: typing.Dict[str, Field]
-    """Fields and their instances defined in the scheme
-    """
-    __private_fields__: typing.Dict[str, PrivateField]
-    """Private fields and their instances defined in the scheme
-    """
-    __scheme_validators__: typing.List[SchemeValidator]
-    __after_field_validators__: typing.List[FieldValidator]
-    """Field validators needed to be ran
-    immediately after scheme instantiation
-    """
-    __partial__: bool
-    """If True, all fields are partial
-    """
-    __inherit_validators__: bool
-    """If False, scheme and field validators will not be inherited by
-    sub scheme.
-    """
-    __default_edflags__: Opt[set[str]]
-    __default_idflags__: Opt[set[str]]
     __builtin_ivars__: typing.Dict[str, typing.Any] = {
         '__logger__': None,
         '__instantiated__': False,
@@ -157,29 +119,6 @@ class SchemeMetaclass(abc.ABCMeta):
     """Builtin instance variables of BlueFirmamentScheme
     
     values are the default value (callable for mutable values).
-    """
-    __field_values__: typing.Dict[str, typing.Any]
-    __dirty_fields__: typing.Set[str]
-    """Which fields are modified since last dump
-
-    - Exclude private fields.
-    - 
-    """
-    __unset_fields__: typing.Set[str]
-    """Fields that are not provided during instantiation
-    
-    - Exclude private fields.
-    - Instance level
-    """
-    __logger__: Opt["LoggerT"]
-    """Scheme level logger
-
-    - Instance variable
-    """
-    __instantiated__: bool
-    """Whether the scheme is instantiated
-
-    - Instance variable
     """
 
     def __new__(
@@ -438,37 +377,87 @@ TV = typing.TypeVar("TV")
 
 
 class BaseScheme(metaclass=SchemeMetaclass):
-
-    """碧霄（基本）数据模型类
+    """Base data model class of BlueFirmament
 
     Features
     ---------
-    实例化与校验
-    ^^^^^^^^^^^^^^
-    
-    序列化
+    Serialization
+    ^^^^^^^^^^^^^
+
+    Partial
     ^^^^^^^
-    - ``dump_to_dict``：序列化为字典
-    - ``**MyScheme``: 
-        - 通过 `__getitem__` 方法获得所需要的字段，场景 ``f(**MyScheme)``
-        - 通过 `keys()` + `__getitem__` 方法，场景 ``{**MyScheme, 'other_field': 1}``
+    Partial field will remain undefined if not provided during instantiation and
+    no default value set, otherwise raise `ValueError`.
 
-    与数据访问层交互
-    ^^^^^^^^^^^^^^^^^
-    - 将数据模型类传递给DAO的获取方法，可以获得数据模型实例
-    - 将数据模型类和字段实例传递给DAO的获取、插入、更新方法，可以相应地操作该字段
-    - 将数据模型类和主键字段实例传递给DAO地获取、插入、更新、删除方法，可以相应地操作该数据模型
-    - 将数据模型实例传递给DAO的插入、更新、删除方法，可以相应地操作该数据模型
-    - 也可以通过数据模型的类方法和实例方法操作数据模型
-        - ``from_insert`` ：从字典插入数据并实例化
-        - ``insert`` ：插入数据模型实例到数据持久层
-        - ``update`` ：更新数据持久层中的数据模型实例
-        - ``delete`` ：从数据持久层删除整个记录
+    Set `__partial__` to `True` to make all fields partial, you can override this
+    in each field definition.
+    """
 
-    字段与数据
-    ^^^^^^^^^^
-    - ``实例.字段名（类变量名）`` 访问字段值
-    - 使用 ``get_scheme_field(Scheme, field_name)`` 来获取数据模型类的字段实例
+    # class vars
+    __dal__: Opt[typing.Type["DataAccessLayer"]]
+    __dal_path__: Opt["DALPath"]
+    __key__: Opt[Field]  # TODO use field
+    """Field that uniquely identifies an instance.
+
+    Includes primary key, composite key.
+    """
+    __disable_log__: bool
+    """Disable scheme internal logs
+    """
+    __proxy__: bool
+    """Proxy field value or not
+
+    If disabled:
+    - Mutable field value modification will not be tracked
+    - Cannot get scheme or field info from field value
+    """
+    __fields__: typing.Dict[str, Field]
+    """Fields and their instances defined in the scheme
+    """
+    __private_fields__: typing.Dict[str, PrivateField]
+    """Private fields and their instances defined in the scheme
+    """
+    __scheme_validators__: typing.List[SchemeValidator]
+    __after_field_validators__: typing.List[FieldValidator]
+    """Field validators needed to be ran
+    immediately after scheme instantiation
+    """
+    __partial__: bool
+    """If True, all fields are partial
+    """
+    __inherit_validators__: bool
+    """If False, scheme and field validators will not be inherited by
+    sub scheme.
+    """
+    __default_edflags__: Opt[set[str]]
+    __default_idflags__: Opt[set[str]]
+
+    # instance vars
+    __field_values__: typing.Dict[str, typing.Any]
+    """Storing each field's value
+    
+    - Key is the field's in_scheme_name.
+    """
+    __dirty_fields__: typing.Set[str]
+    """Which fields are modified since last dump
+
+    - Exclude private fields.
+    """
+    __unset_fields__: typing.Set[str]
+    """Fields that are not provided during instantiation
+
+    - Exclude private fields
+    - Instance variable
+    """
+    __logger__: Opt["LoggerT"]
+    """Scheme level logger
+
+    - Instance variable
+    """
+    __instantiated__: bool
+    """Whether the scheme is instantiated
+
+    - Instance variable
     """
 
     def __post_init__(self) -> None:
@@ -494,28 +483,22 @@ class BaseScheme(metaclass=SchemeMetaclass):
 
         return cls(**data)
 
-    def _mark_partial(
-        self, field: str | Field
+    def _mark_unset(
+        self, field_: str | Field
     ) -> None:
-        
-        """标记字段为缺失字段
-
-        :param field: 字段名或字段实例
+        """Mark field as unset (not provided during instantiation)
         """
-        if isinstance(field, Field):
-            self.__unset_fields__.add(field.in_scheme_name)
+        if isinstance(field_, Field):
+            self.__unset_fields__.add(field_.in_scheme_name)
         else:
-            self.__unset_fields__.add(field)
+            self.__unset_fields__.add(field_)
 
-    def mark_dirty(self, field: str | Field) -> None:
-
-        """标记字段为脏字段
-
-        :param field: 字段名或字段实例
+    def _mark_dirty(self, field_: str | Field) -> None:
+        """Mark field as dirty (modified since last dump)
         """
-        if isinstance(field, str):
-            field = self.__fields__[field]
-        self.__dirty_fields__.add(field.name)
+        if isinstance(field_, str):
+            field_ = self.__fields__[field_]
+        self.__dirty_fields__.add(field_.name)
 
     @classmethod
     def dal_path(cls) -> "DALPath":
@@ -579,24 +562,25 @@ class BaseScheme(metaclass=SchemeMetaclass):
             for in_name, i in self.__fields__.items()
         )
 
-    def dump_to_dict(self, 
+    def dump_to_dict(
+        self,
         only_dirty: bool = False,
-        exclude_key: bool = False,
+        exclude_natural_key: bool = False,
         exclude_unset: Opt[bool] = None,
         exclude_flags: Opt[set[str]] = None,
         include_flags: Opt[set[str]] = None,
         jsonable: bool = True
     ) -> dict:
-        
+
         """Serialize to (jsonable) dict
 
         :param only_dirty: 
             If True, dirty fields will be reset.
         :param exclude_natural_key:
-            If True, exclude key field.
+            If True, exclude natural key field.
         :param exclude_unset:
             If True, exclude unset fields.
-            If None and is partial scheme, behave the same as True.
+            If None and is partial scheme, defaults to True.
         :param exclude_flags:
             If provided, exclude fields with all these flags.
             If not provided, ``default_exclude_dump_flags`` configured on
@@ -621,8 +605,10 @@ class BaseScheme(metaclass=SchemeMetaclass):
         else:
             field_names = set(self.__fields__.keys())
 
-        if exclude_key:
-            field_names = field_names - {self.get_key_field().in_scheme_name}
+        if exclude_natural_key:
+            key_field = self.get_key_field()
+            if key_field.is_natural_key():
+                field_names = field_names - {key_field.in_scheme_name}
 
         if exclude_unset is True or (exclude_unset is None and self.__partial__):
             field_names = field_names - self.__unset_fields__

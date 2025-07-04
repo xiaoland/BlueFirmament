@@ -24,7 +24,7 @@ from ..scheme import BaseScheme, SchemeTV
 
 
 class PostgrestDAL(TableLikeDataAccessLayer):
-    """DataAccessObject of Postgrest protocol.
+    """Access data through PostgREST API.
 
     Examples
     --------
@@ -59,12 +59,9 @@ class PostgrestDAL(TableLikeDataAccessLayer):
             default_path=StrictDALPath((dump_enum(default_table), dump_enum(default_schema)))
         )
 
-    def __init__(self,
-        session: AuthSession
-    ) -> None:
-        
-        super().__init__(session)
-
+    def __init__(self, session: AuthSession) -> None:
+        super().__init__()
+        self._session = session
         self._client = postgrest.AsyncPostgrestClient(
             base_url=self.__url,
             schema=dump_enum(self.__default_path[1]),
@@ -82,15 +79,11 @@ class PostgrestDAL(TableLikeDataAccessLayer):
         call_function(self._client.aclose)
 
     def set_schema(self, schema: str) -> None:
-
-        '''设置操作的表组（schema）
-        '''
+        """设置操作的表组（schema）"""
         self._client.schema(schema)
 
     def __get_base_query_from_path(self, path: DALPath | None = None):
-
-        '''从路径中获取查询对象
-        '''
+        """从路径中获取查询对象"""
         dp = self.dump_path(path)
         return self._client.schema(dp[1]).from_table(dp[0])
     
@@ -104,9 +97,7 @@ class PostgrestDAL(TableLikeDataAccessLayer):
         base_query: QueryTV, 
         filters: typing.Iterable[DALFilter]
     ) -> QueryTV:
-
-        '''将过滤器应用到查询对象
-        '''
+        """将过滤器应用到查询对象"""
         for f in filters:
             f_tuple = f.dump_to_tuple()
             f_func = getattr(base_query, f_tuple[0])
@@ -120,7 +111,6 @@ class PostgrestDAL(TableLikeDataAccessLayer):
         return base_query
 
     async def __execute_query(self, query: QueryTV):
-
         """执行编辑好的请求
 
         处理这些异常：
@@ -151,11 +141,12 @@ class PostgrestDAL(TableLikeDataAccessLayer):
     ) -> SchemeTV:
         pass
 
-    async def insert(self, 
-        to_insert: dict | SchemeTV, 
+    async def insert(
+        self,
+        to_insert: dict | SchemeTV,
         path = None,
-        exclude_key: bool = True,
-    ) -> dict | SchemeTV: 
+        exclude_natural_key: bool = True,
+    ) -> dict | SchemeTV:
         
         if isinstance(to_insert, BaseScheme) and path is None:
             path = to_insert.dal_path()
@@ -163,7 +154,7 @@ class PostgrestDAL(TableLikeDataAccessLayer):
         processed_to_insert: dict
         if isinstance(to_insert, BaseScheme):
             processed_to_insert = to_insert.dump_to_dict(
-                exclude_key=exclude_key
+                exclude_natural_key=exclude_natural_key
             )
         else:
             processed_to_insert = to_insert
@@ -191,25 +182,26 @@ class PostgrestDAL(TableLikeDataAccessLayer):
     FieldValueTV = typing.TypeVar('FieldValueTV')
 
     @typing.overload
-    async def select(self,
+    async def select(
+        self,
         to_select: typing.Type[SchemeTV],
         *filters: FilterLikeType,
         path: typing.Optional[DALPath] = None,
         task_context: Opt[ExtendedTaskContext] = None,
     ) -> typing.Tuple[SchemeTV, ...]:
         ...
-
     @typing.overload
-    async def select(self,
+    async def select(
+        self,
         to_select: "Field[FieldValueTV]",
         *filters: FilterLikeType,
         path: typing.Optional[DALPath] = None,
         task_context: Opt[ExtendedTaskContext] = None,
     ) -> typing.Tuple[FieldValueTV, ...]:
         ...
-
     @typing.overload
-    async def select(self,
+    async def select(
+        self,
         to_select: typing.Iterable[FieldLikeType] | None,
         *filters: FilterLikeType,
         path: typing.Optional[DALPath] = None,
@@ -217,7 +209,8 @@ class PostgrestDAL(TableLikeDataAccessLayer):
     ) -> typing.Tuple[dict, ...]:
         ...
 
-    async def select(self,
+    async def select(
+        self,
         to_select: typing.Union[
             typing.Type[SchemeTV], 
             "Field[FieldValueTV]",
@@ -228,10 +221,10 @@ class PostgrestDAL(TableLikeDataAccessLayer):
         path: typing.Optional[DALPath] = None,
         task_context: Opt[ExtendedTaskContext] = None,
     ) -> typing.Union[
-            typing.Tuple[SchemeTV, ...],
-            typing.Tuple[FieldValueTV, ...],
-            typing.Tuple[dict, ...]
-        ]:
+        typing.Tuple[SchemeTV, ...],
+        typing.Tuple[FieldValueTV, ...],
+        typing.Tuple[dict, ...]
+    ]:
         
         # process to_select to fields
         if to_select is None:
@@ -308,7 +301,8 @@ class PostgrestDAL(TableLikeDataAccessLayer):
         await self.__execute_query(query)
 
     @typing.overload
-    async def update(self,
+    async def update(
+        self,
         to_update: SchemeTV,
         *filters: DALFilter,
         path: Opt[DALPath] = None,
@@ -316,9 +310,9 @@ class PostgrestDAL(TableLikeDataAccessLayer):
         exclude_key: bool = True,
     ) -> SchemeTV:
         ...
-
     @typing.overload
-    async def update(self,
+    async def update(
+        self,
         to_update: dict,
         *filters: DALFilter,
         path: Opt[DALPath] = None,
@@ -326,9 +320,9 @@ class PostgrestDAL(TableLikeDataAccessLayer):
         exclude_key: bool = True,
     ) -> dict:
         ...
-
     @typing.overload
-    async def update(self,
+    async def update(
+        self,
         to_update: "FieldValueProxy[FieldValueTV]" | FieldValueTV,
         *filters: DALFilter,
         path: Opt[DALPath] = None,
@@ -336,7 +330,6 @@ class PostgrestDAL(TableLikeDataAccessLayer):
         exclude_key: bool = True,
     ) -> FieldValueTV:
         ...
-
     @typing.overload
     async def update(self,
         to_update: typing.Tuple[Field[FieldValueTV], FieldValueTV],
@@ -347,7 +340,8 @@ class PostgrestDAL(TableLikeDataAccessLayer):
     ) -> FieldValueTV:
         ...
 
-    async def update(self,
+    async def update(
+        self,
         to_update: typing.Union[
             dict, SchemeTV,
             "FieldValueProxy[FieldValueTV]",
@@ -357,13 +351,12 @@ class PostgrestDAL(TableLikeDataAccessLayer):
         *filters: DALFilter,
         path: Opt[DALPath] = None,
         only_dirty: bool = True,
-        exclude_key: bool = True,
+        exclude_natural_key: bool = True,
     ) -> typing.Union[
-            dict, 
-            SchemeTV, 
-            FieldValueTV,
-        ]:
-        
+        dict,
+        SchemeTV,
+        FieldValueTV,
+    ]:
         # preprocess path
         if path is None: 
             if isinstance(to_update, BaseScheme):
@@ -387,7 +380,7 @@ class PostgrestDAL(TableLikeDataAccessLayer):
         if isinstance(to_update, BaseScheme):
             processed_to_update = to_update.dump_to_dict(
                 only_dirty=only_dirty,
-                exclude_key=exclude_key
+                exclude_natural_key=exclude_natural_key
             )
         elif isinstance(to_update, FieldValueProxy):
             processed_to_update = { to_update.field.name: to_update.obj }

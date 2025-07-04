@@ -201,7 +201,7 @@ class Field(typing.Generic[FieldValueTV]):
         :param is_key: 
             This field is a key
         :param is_natural_key:
-            If this field is a key, it is managed by DAL (False for surrogate)
+            If this field is a key, it is managed by DataSource (False for surrogate)
         :param is_foreign_key:
             If you want to mark a primary or composite key, use KeyField instead
         :param init: 
@@ -545,13 +545,17 @@ class Field(typing.Generic[FieldValueTV]):
         # convert value
         if value is _undefined:
             if initialized:
-                return
-            if self.__is_partial or instance.__partial__:
-                instance._set_value(self, _undefined)
-                instance._mark_partial(self.in_scheme_name)
-                return
-            else:
-                value = self.default_value                        
+                return  # remain value unchanged
+
+            instance._mark_unset(self.in_scheme_name)
+            try:
+                value = self.default_value
+            except ValueError as e:
+                if self.__is_partial or instance.__partial__:
+                    instance._set_value(self, _undefined)
+                    return
+                else:
+                    raise e
         else:
             value = self.convert(value)
 
@@ -567,7 +571,7 @@ class Field(typing.Generic[FieldValueTV]):
 
         # if already initialized, mark as dirty
         if initialized:
-            instance.mark_dirty(self.in_scheme_name)
+            instance._mark_dirty(self.in_scheme_name)
 
     def _proxy_value(self, 
         value: FieldValueTV, instance: "BaseScheme"
@@ -577,7 +581,7 @@ class Field(typing.Generic[FieldValueTV]):
             # 避免循环代理
             return FieldValueProxy(
                 value, 
-                lambda: instance.mark_dirty(self.in_scheme_name),
+                lambda: instance._mark_dirty(self.in_scheme_name),
                 self,
                 instance
             )
