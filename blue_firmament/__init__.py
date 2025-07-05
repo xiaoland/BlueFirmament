@@ -4,11 +4,11 @@
 __version__ = "0.1.2"
 __name__ = "blue_firmament"
 __all__ = [
-    "task",
+    "listen_to",
     "Method",
     "BlueFirmamentApp"
 ]
 
 
 from .core import BlueFirmamentApp
-from .task import task, Method
+from .task import listen_to, Method

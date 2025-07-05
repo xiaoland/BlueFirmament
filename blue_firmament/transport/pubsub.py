@@ -18,12 +18,13 @@ class PubSubTransporter(BaseTransporter):
         self,
         app: "BlueFirmamentApp",
         pubsub_dal: PubSubLikeDataAccessLayer,
-        *channel_names: str
+        *channel_names: str,
+        name: str = "default"
     ):
         """
         :param pubsub_dal: A PubSubDAL not subscribed to any channel.
         """
-        super().__init__(app)
+        super().__init__(app=app, name=name)
 
         self.__stop = False
         self.__pubsub_dal = pubsub_dal
@@ -43,6 +44,7 @@ class PubSubTransporter(BaseTransporter):
     async def __call__(self, message: PubSubMessage):
         await self._app.handle_task(
             task=Task.load_from_bytes(message["data"]),
-            task_result=TaskResult()
+            task_result=TaskResult(),
+            transporter=self
         )
 

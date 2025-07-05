@@ -36,7 +36,7 @@ def log_manager_handler(func: typing.Callable[P, R]) -> typing.Callable[P, R]:
     ^^^^^^^^^^^^^^^^^^^
     Disabled parameters will not be logged.
 
-    Use ``typing.Annotated[type, AnnotatedDirective.DNOLOG]`` to
+    Use ``typing.Annotated[type, AnnotatedDirective.NOLOG]`` to
     mark the parameter as disabled.
     """
     func_name = func.__qualname__
@@ -47,7 +47,7 @@ def log_manager_handler(func: typing.Callable[P, R]) -> typing.Callable[P, R]:
     for param_name, param in param_sig.items():
         anno = param.annotation
         if is_annotated(anno):
-            if get_annotated_args(anno)[0] == AD.DNOLOG:
+            if get_annotated_args(anno)[0] == AD.NOLOG:
                 disabled_params.append(param_name)
 
     @functools.wraps(func)

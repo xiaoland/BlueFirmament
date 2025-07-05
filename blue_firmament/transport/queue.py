@@ -20,9 +20,10 @@ class QueueTransporter(BaseTransporter):
         self,
         app: BlueFirmamentApp,
         queue_dal: QueueLikeDataAccessLayer,
-        handling_queue_dal: QueueLikeDataAccessLayer
+        handling_queue_dal: QueueLikeDataAccessLayer,
+        name: str = "default"
     ):
-        super().__init__(app)
+        super().__init__(app=app, name=name)
         self.__dal = queue_dal
         self.__handling_dal = handling_queue_dal
         self.__stop = False
@@ -37,5 +38,6 @@ class QueueTransporter(BaseTransporter):
     async def __call__(self, raw: bytes):
         await self._app.handle_task(
             task=Task.load_from_bytes(raw),
-            task_result=TaskResult()
+            task_result=TaskResult(),
+            transporter=self
         )

@@ -114,21 +114,21 @@ class CommonManager(
 
     __path_prefix__: str
     
-    def __init_subclass__(cls,
+    def __init_subclass__(
+        cls,
         scheme_cls: Opt[typing.Type[SchemeTV]] = None,
         path_prefix: str = '',
         manager_name: str = '',
-        preset_handler_config: Opt[PresetHandlerConfig] = None
+        preset_handler_config: Opt[PresetHandlerConfig] = None,
+        **kwargs
     ):
         cls.__path_prefix__ = path_prefix
 
         super().__init_subclass__(
             scheme_cls=scheme_cls,
-            router=TaskRegistry(
-                name=f"{manager_name}_router", 
-                path_prefix=path_prefix
-            ),
-            manager_name=manager_name
+            path_prefix=path_prefix,
+            manager_name=manager_name,
+            **kwargs
         )
 
         if preset_handler_config:

@@ -4,7 +4,7 @@
 __all__ = [
     'TaskRegistry',
     'TaskEntry',
-    'task'
+    'listen_to'
 ]
 
 import asyncio
@@ -246,19 +246,17 @@ class TaskRegistry:
         raise KeyError(f"TaskID {task_id} don't has an entry in registry {self.name}")
 
 
-CallableTV = typing.TypeVar("CallableTV", bound=typing.Callable)
-def task(
-    method: Opt[Method],
-    path: Opt[str],
-    separator: Opt[str] = "/",
-    task_id: Opt[TaskID] = None
+def listen_to(
+    method: Opt[Method | str],
+    path: str,
+    separator: str = "/",
+    transporters: Opt[typing.Iterable[str | BaseTransporter]] = None,
 ):
-    """Mark a function as a handler of a task.
+    """Make the function a handler to a task.
 
-    :param method:
-    :param path:
-    :param separator:
-    :param task_id: If provided, will override method and path.
+    :param transporters:
+        Only tasks from these transporters will be handled by this handler.
+        None for default transporter (you must have a transporter named "default").
 
     Will wrap decorated function to a TaskEntry.
     With support of :meth:`blue_firmament.manager.ManagerMetaclass`,
@@ -269,9 +267,11 @@ def task(
     task registry.
     """
     def wrapper(handler: CallableTV) -> CallableTV:
-        return typing.cast(CallableTV, TaskEntry(
-            TaskID(method=method, path=path, separator=separator) \
-                if task_id is None else task_id,
-            handler
-        )) # tricked type checker
+        return typing.cast(CallableTV, (
+            tuple(transporters or ("default",)),
+            TaskEntry(
+                TaskID(method=method, path=path, separator=separator),
+                handler
+            )
+        )) # lie to type checker
     return wrapper

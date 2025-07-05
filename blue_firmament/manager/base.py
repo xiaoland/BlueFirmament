@@ -8,9 +8,11 @@ import abc
 import typing
 from typing import Optional as Opt
 
+from .._types import TaskRegistriesT
+from ..transport.base import BaseTransporter
 from ..task.registry import TaskRegistry, TaskEntry
+from ..task.context import BaseTaskContext
 from ..exceptions import BFExceptionTV
-from blue_firmament.task.context import BaseTaskContext
 from ..scheme.field import Field
 from ..scheme import SchemeTV
 from ..log import log_manager_handler
@@ -41,9 +43,9 @@ class ManagerMetaclass(abc.ABCMeta):
     def __new__(
         cls,
         name: str, 
-        bases: typing.Tuple[type[typing.Any], ...], 
-        attrs: typing.Dict[str, typing.Any],
-        router: Opt[TaskRegistry] = None,
+        bases: tuple[type[typing.Any], ...],
+        attrs: dict[str, typing.Any],
+        path_prefix: str = "",
         **kwargs
     ):
         
@@ -51,23 +53,30 @@ class ManagerMetaclass(abc.ABCMeta):
         if name in ("BaseManager",):
             return super().__new__(cls, name, bases, attrs, **kwargs)
 
-        task_entries: typing.List[TaskEntry] = []
+        attrs['__task_registries__']: dict[BaseTransporter | str, TaskRegistry] = {}
+        task_entries: list[tuple[tuple[BaseTransporter | str], TaskEntry]] = []
         
         for attr_name, attr_value in attrs.items():
             if attr_name.startswith("_"):
                 continue
 
             # resolve task_entries
-            if isinstance(attr_value, TaskEntry):
-                entry_handlers = attr_value.handlers
-                if len(entry_handlers) != 1:
-                    raise ValueError("TaskEntry must have exactly one handler")
+            if (
+                isinstance(attr_value, tuple) and
+                len(attr_value) == 2 and
+                isinstance(attr_value[0], tuple) and
+                isinstance(attr_value[1], TaskEntry)
+            ):
+                task_entry = attr_value[1]
+                entry_handlers = task_entry.handlers
                 # unwrap handler
-                attrs[attr_name] = attr_value.handlers[0]
+                if len(entry_handlers) != 1:
+                    raise ValueError("Must have exactly one handler")
+                attrs[attr_name] = entry_handlers[0].function
                 # add to entries
                 task_entries.append(attr_value)
                 # make later resolution works
-                attr_value = attr_value.handlers[0]
+                attr_value = attrs[attr_name]
 
             # log enhancement
             if callable(attr_value):
@@ -76,11 +85,17 @@ class ManagerMetaclass(abc.ABCMeta):
 
         new_cls = super().__new__(cls, name, bases, attrs, **kwargs)
 
+        if not issubclass(new_cls, BaseManager):
+            raise TypeError(f"{name} should not directly use the ManagerMetaclass")
+
         # set task handlers' manager class
-        for task_entry in task_entries:
-            task_entry.set_manager_cls(new_cls)
-            if router:
-                router.add_entry(task_entry)
+        for i in task_entries:
+            i[1].set_manager_cls(new_cls)
+            for transporter in i[0]:
+                attrs['__task_registries__'].setdefault(transporter, TaskRegistry(
+                    name=str(transporter),
+                    path_prefix=path_prefix
+                )).add_entry(i[1])
 
         return new_cls
 
@@ -98,11 +113,11 @@ class BaseManager(
     Config through bases parameters.
     """
     
-    __scheme_cls__: typing.Type[SchemeTV]
+    __scheme_cls__: type[SchemeTV]
     """Scheme class this manager is managing
     """
-    __task_registry__: TaskRegistry
-    """Manager task registry
+    __task_registries__: TaskRegistriesT
+    """Task entries of this manager
     """
     __manager_name__: str
     '''Friendly name of this manager.

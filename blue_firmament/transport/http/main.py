@@ -207,16 +207,18 @@ class HTTPTransporter(BaseTransporter):
     """Transporter serves HTTP/S protocol.
     """
 
-    def __init__(self,
+    def __init__(
+        self,
         app: "BlueFirmamentApp",
         host: str,
         port: int,
-        uds: Opt[str] = None
+        uds: Opt[str] = None,
+        name: str = "default"
     ):
         """
         :param uds: Unix domain socket. E.g /tmp/blue_firmament.sock
         """
-        super().__init__(app)
+        super().__init__(app=app, name=name)
         self.__asgi_server = uvicorn.Server(uvicorn.Config(
             app=self, host=host, port=port, uds=uds
         ))
@@ -266,7 +268,9 @@ class HTTPTransporter(BaseTransporter):
             task_result = TaskResult()
 
             try:
-                await self._app.handle_task(task=task, task_result=task_result)
+                await self._app.handle_task(
+                    task=task, task_result=task_result, transporter=self
+                )
             except BlueFirmamentException as e:
                 task_result.status = e.task_status
                 task_result.body = JsonBody(e.dump_details_to_dict())
