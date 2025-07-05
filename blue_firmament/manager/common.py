@@ -9,6 +9,8 @@ __all__ = [
 from dataclasses import dataclass
 import typing
 from typing import Literal as Lit, Optional as Opt
+
+import event
 from ..utils.exec_ import build_func_sig
 from blue_firmament.task.registry import TaskRegistry
 from blue_firmament.task.context.common import CommonTaskContext
@@ -111,25 +113,15 @@ class CommonManager(
         - use snake_case
     - preset_handler_config:
     """
-
-    __path_prefix__: str
     
     def __init_subclass__(
         cls,
-        scheme_cls: Opt[typing.Type[SchemeTV]] = None,
-        path_prefix: str = '',
-        manager_name: str = '',
         preset_handler_config: Opt[PresetHandlerConfig] = None,
         **kwargs
     ):
-        cls.__path_prefix__ = path_prefix
-
-        super().__init_subclass__(
-            scheme_cls=scheme_cls,
-            path_prefix=path_prefix,
-            manager_name=manager_name,
-            **kwargs
-        )
+        super().__init_subclass__(**kwargs)
+        scheme_cls = cls.__scheme_cls__
+        manager_name = cls.__manager_name__
 
         if preset_handler_config:
             if not scheme_cls:
@@ -148,7 +140,7 @@ class CommonManager(
             key_aliases: typing.Iterable[str]
             if preset_handler_config.sup_path and preset_handler_config.key_fields:
                 key_aliases = TaskID.resolve_dynamic_indices(
-                    path_prefix + preset_handler_config.sup_path
+                    cls.__path_prefix__ + preset_handler_config.sup_path
                 )
                 sup_path = preset_handler_config.sup_path
                 exec_namespaces.update({
@@ -199,12 +191,17 @@ class CommonManager(
         self,
         name: str,
         parameters: Opt[dict] = None,
-        metadata: Opt[dict] = None
+        metadata: Opt[dict] = None,
+        without_prefix: bool = False
     ):
-        """:meth:`event.simple_emit` but prefix name with the manager name.
+        """:meth:`event.simple_emit` but prefix name with manager path prefix.
+
+        :param name: Name of event. Starts with dot.
+        :param without_prefix:
+            If True, do not prefix name with manager path prefix.
         """
-        return super()._emit(
-            name=f"{self.__manager_name__}.{name}",
+        return event.simple_emit(
+            name=f"{self.__path_prefix__.replace('/', '.') if not without_prefix else ""}{name}",
             parameters=parameters,
             metadata=metadata
         )

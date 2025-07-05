@@ -53,6 +53,7 @@ class ManagerMetaclass(abc.ABCMeta):
         if name in ("BaseManager",):
             return super().__new__(cls, name, bases, attrs, **kwargs)
 
+        attrs['__path_prefix__'] = path_prefix
         attrs['__task_registries__']: dict[BaseTransporter | str, TaskRegistry] = {}
         task_entries: list[tuple[tuple[BaseTransporter | str], TaskEntry]] = []
         
@@ -125,6 +126,8 @@ class BaseManager(
     - no ``manager``
     - use ``_`` and lowercase
     '''
+    __path_prefix__: str
+
 
     def __init_subclass__(
         cls,
