@@ -26,35 +26,39 @@ class TaskHandler:
     TaskContext.
     """
 
-    type HandlerKwargsT = typing.Dict[
+    type FunctionKwargsT = typing.Dict[
         str,
         typing.Callable[
             ["BaseTaskContext", PathParamsT], typing.Coroutine,
         ]
     ]
     """Inner handler parameters"""
-    type InnerHandlerT = typing.Union[
+    type FunctionT = typing.Union[
         typing.Callable[..., typing.Any],
         typing.Callable[..., typing.Awaitable[typing.Any]]
     ]
 
-    def __init__(self,
-        inner_handler: InnerHandlerT,
+    def __init__(
+        self,
+        function: FunctionT,
         manager_cls: Opt[typing.Type["BaseManager"]] = None,
     ):
-
         """
-        :param inner_handler:
+        :param function:
         :param manager_cls:
             When the inner_handler is a manager method
             (excludes classmethod, staticmethod).
         """
-        self.__inner_handler = inner_handler
+        self.__function = function
         self.__method_manager_cls = manager_cls
 
         # parse handler kwargs
-        self.__handler_kwargs: TaskHandler.HandlerKwargsT =\
-            self._parse_handler_kwargs(self.__inner_handler)
+        self.__handler_kwargs: TaskHandler.FunctionKwargsT =\
+            self._parse_handler_kwargs(self.__function)
+
+    @property
+    def function(self) -> FunctionT:
+        return self.__function
 
     def set_manager_cls(self, manager_cls: typing.Type["BaseManager"]):
         """Set inner handler's manager class if it's a manager method.
@@ -80,7 +84,7 @@ class TaskHandler:
         return getter
 
     @classmethod
-    def _parse_handler_kwargs(cls, handler: InnerHandlerT) -> HandlerKwargsT:
+    def _parse_handler_kwargs(cls, handler: FunctionT) -> FunctionKwargsT:
         """
         Rationale
         ---------
@@ -112,7 +116,7 @@ class TaskHandler:
         参数获取器接收 :class:`blue_firmament.transport.context.RequestContext` 作为参数，从中解析出本参数需要的值。
         """
         handler_params_sig = inspect.signature(handler).parameters
-        kwargs: TaskHandler.HandlerKwargsT = {}
+        kwargs: TaskHandler.FunctionKwargsT = {}
 
         for name, param_sig in handler_params_sig.items():
             if name in ('self', 'cls'):
@@ -159,7 +163,7 @@ class TaskHandler:
             args.append(manager)
 
         # call handler
-        result = await call_as_async(self.__inner_handler, *args, **kwargs)
+        result = await call_as_async(self.__function, *args, **kwargs)
 
         # process result
         # TODO process result correctly

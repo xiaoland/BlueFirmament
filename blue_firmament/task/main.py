@@ -73,8 +73,11 @@ class TaskID:
             If not provided, inferred from param_types.
         """
         self.__method: Method = load_enum(Method, method)
-        self.__path: str = path.replace(separator, '/').strip('/')
-        """Normalized path"""
+        self.__path: str = '/' + path.replace(separator, '/').strip('/')
+        """Normalized path.
+        
+        - must start with a slash
+        """
 
         self.__segments: typing.List[str] = path.strip(separator).split(separator)
         '''Path segmented by separator'''
@@ -171,7 +174,7 @@ class TaskID:
 
     def fork(
         self,
-        path_prefix: Opt[str] = None
+        path_prefix: str = ""
     ) -> typing.Self:
         """
 
@@ -181,7 +184,7 @@ class TaskID:
         """
         return TaskID(
             method=self.__method,
-            path=f"{path_prefix}{self.__path}" if path_prefix else self.__path,
+            path=f"{path_prefix}{self.__path}",
             param_converters=self.__param_converters,
         )
 
@@ -232,11 +235,11 @@ class TaskID:
 
     def is_match(
         self,
-        task_id: 'TaskID',
+        to_match: 'TaskID',
     ) -> Opt[PathParamsT]:
         """Whether another task_id match this task_id.
 
-        :param task_id: TaskID to match.
+        :param to_match: TaskID to match.
 
         :returns: Path parameters when matched, otherwise None.
 
@@ -249,23 +252,23 @@ class TaskID:
             - 如果有路径参数，比较我方路径分段（包括静态与动态）是否为对方的子集（严格模式检验对方是否为我方子集）
                 - 此处解析路径参数，如果未找到或校验不通过，则不记录
         """
-        if not isinstance(task_id, TaskID):
+        if not isinstance(to_match, TaskID):
             return None
 
         if self.method:
-            if self.method != task_id.method:
+            if self.method != to_match.method:
                 return None
 
-        if len(self.segments) != len(task_id.segments):
+        if len(self.segments) != len(to_match.segments):
             return None
 
-        if not len(self.__dynamic_indices) == 0:
+        if len(self.__dynamic_indices) == 0:
             # no dynamic segments, so we can compare segments directly
-            return {} if self.segments == task_id.segments else None
+            return {} if self.segments == to_match.segments else None
 
         params = {}
-        for i in range(len(task_id.segments)):
-            seg_match = self.__is_segment_match(task_id.segments[i], i)
+        for i in range(len(to_match.segments)):
+            seg_match = self.__is_segment_match(to_match.segments[i], i)
             if seg_match is _undefined:
                 return None
             else:

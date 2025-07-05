@@ -12,6 +12,8 @@ import copy
 import typing
 from typing import Optional as Opt, Annotated as Anno, Literal as Lit
 
+from .._types import PathParamsT, CallableTV
+from ..transport.base import BaseTransporter
 from .result import Body, JsonBody
 from ..task.context import BaseTaskContext
 from ..core.middleware import BaseMiddleware
@@ -26,36 +28,49 @@ class TaskEntry(BaseMiddleware):
     """BlueFirmament TaskEntry
 
     A mapping from TaskID to a couple of TaskHandler(s).
+
     Work as a middleware, run this middleware will concurrently
     run all handlers in this entry.
 
     Can be stored as key in dict or element in set.
 
     :ivar path_params: Path parameters resolved from the looked up TaskID.
-        Will be set on copy of this entry, not the original one.
+        Will be set on the copy of this entry.
     """
 
-    def __init__(self,
+    def __init__(
+        self,
         task_id: TaskID,
-        *handlers: TaskHandler
+        *handlers: TaskHandler | typing.Callable
     ) -> None:
         self.__task_id = task_id
-        self.__handlers: typing.List[TaskHandler] = list(*handlers)
-        self.path_params: dict[str, str] = {}
-
-    @property
-    def handlers(self):
-        return self.__handlers
+        self.__handlers: typing.List[TaskHandler] = list(
+            handler if isinstance(handler, TaskHandler) else TaskHandler(function=handler)
+            for handler in handlers
+        )
+        self.path_params: dict[str, PathParamsT] = {}
 
     def __hash__(self):
         return hash(self.__task_id)
 
     def __eq__(self, other):
-        return other == self.__task_id
+        if isinstance(other, TaskID):
+            return other == self.__task_id
+        elif isinstance(other, TaskEntry):
+            return other.id == self.__task_id
+        return False
+
+    @property
+    def id(self):
+        return self.__task_id
+
+    @property
+    def handlers(self):
+        return self.__handlers
 
     def fork(
         self,
-        path_prefix: Opt[str] = None
+        path_prefix: str = ""
     ) -> typing.Self:
         """Fork this entry with a new TaskID
 
@@ -64,7 +79,7 @@ class TaskEntry(BaseMiddleware):
         :return: Forked TaskEntry
         """
         return TaskEntry(
-            task_id=self.__task_id.fork(
+            self.__task_id.fork(
                 path_prefix=path_prefix
             ),
             *self.__handlers
@@ -147,9 +162,13 @@ class TaskRegistry:
 
     def add_entry(self, entry: TaskEntry):
         if not entry.is_dynamic():
-            self.__static_entries.add(entry)
+            self.__static_entries.add(entry.fork(path_prefix=self.__path_prefix))
         else:
-            self.__dynamic_entries.append(entry)
+            self.__dynamic_entries.append(entry.fork(path_prefix=self.__path_prefix))
+
+    def add_entries(self, entries: typing.Iterable[TaskEntry]):
+        for entry in entries:
+            self.add_entry(entry)
         
     def add_handler(
         self,
@@ -157,7 +176,7 @@ class TaskRegistry:
         path: Opt[str] = None,
         task_id: Opt[TaskID] = None,
         handler: Opt[TaskHandler] = None,
-        inner_handler: Opt[typing.Callable] = None,
+        function: Opt[typing.Callable] = None,
         handler_manager_cls: Opt[typing.Type["BaseManager"]] = None,
     ):
         """Bind a task handler to Task(ID).
@@ -170,9 +189,9 @@ class TaskRegistry:
         :param handler: A task handler.
         """
         if handler is None:
-            if not (inner_handler is None or handler_manager_cls is None):
+            if not (function is None or handler_manager_cls is None):
                 handler = TaskHandler(
-                    inner_handler=inner_handler,
+                    function=function,
                     manager_cls=handler_manager_cls
                 )
             else:
@@ -217,14 +236,18 @@ class TaskRegistry:
         for entry in to_merge.dynamic_entries:
             self.__dynamic_entries.append(entry.fork(self.__path_prefix))
 
-    def lookup(self, task_id: TaskID) -> TaskEntry:
+    def lookup(
+        self,
+        task_id: TaskID,
+    ) -> TaskEntry:
         """Lookup a task entry by task_id.
 
         :param task_id: The task ID to lookup, must be static.
         :raise KeyError: If no task entry matched.
         :raise TypeError: If task_id is dynamic.
-        :returns: The (shallow) copy of the TaskEntry that matches the task_id
-            and with path_params set.
+        :returns:
+            The (shallow) copy of the matched TaskEntry
+            with path_params set.
         """
         if task_id.is_dynamic():
             raise TypeError("Cannot lookup a dynamic task_id")

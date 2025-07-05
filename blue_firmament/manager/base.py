@@ -128,14 +128,16 @@ class BaseManager(
 
     def __init_subclass__(
         cls,
-        scheme_cls: Opt[typing.Type[SchemeTV]] = None,
-        manager_name: str = ""
+        scheme_cls: Opt[type[SchemeTV]] = None,
+        manager_name: Opt[str] = None,
+        **kwargs
     ):
         if scheme_cls:
             cls.__scheme_cls__ = scheme_cls
-        cls.__manager_name__ = manager_name
+        if manager_name:
+            cls.__manager_name__ = manager_name
 
-        super().__init_subclass__()
+        super().__init_subclass__(**kwargs)
 
     def __init__(self, task_context: BaseTaskContext) -> None:
         BaseTaskContext.__init__(self, task_context)

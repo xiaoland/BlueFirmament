@@ -183,9 +183,9 @@ class CommonManager(
                 exec(func_sig + func_body, exec_namespaces, handlers)
                 setattr(cls, handler_name, handlers[handler_name])
 
-                cls.__task_registry__.add_handler(
+                cls.__task_registries__["default"].add_handler(
                     method=Method.GET, path=sup_path,
-                    inner_handler=handlers[handler_name],
+                    function=handlers[handler_name],
                     handler_manager_cls=cls
                 )
 
