@@ -1,6 +1,10 @@
 """Transporter listening to a Pub/Sub model channel.
 """
 
+__all__ = [
+    "PubSubTransporter"
+]
+
 import json
 import typing
 from typing import Annotated as Anno, Optional as Opt, Literal as Lit

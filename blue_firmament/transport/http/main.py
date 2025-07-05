@@ -226,6 +226,9 @@ class HTTPTransporter(BaseTransporter):
     def start(self):
         return self.__asgi_server.serve()
 
+    def stop(self):
+        return self.__asgi_server.shutdown()
+
     async def __call__(self, 
         scope: http_types.Scope, 
         receive: http_types.ASGIReceiveCallable, 

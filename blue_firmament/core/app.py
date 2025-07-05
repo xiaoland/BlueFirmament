@@ -52,18 +52,24 @@ class BlueFirmamentApp:
     def add_transporter(
         self,
         transporter: BaseTransporter,
-        registry: TaskRegistry
+        registry: Opt[TaskRegistry] = None
     ):
         """Add a transporter and its TaskRegistry.
         """
         self.__transporters.add(transporter)
-        self.__task_registries[transporter] = registry
+        self.__task_registries[transporter] = registry or TaskRegistry(
+            name=transporter.name
+        )
 
     def add_manager(self, manager: type["BaseManager"]):
         """Merge the manager's task registries.
         """
         for transporter, task_entry in manager.__task_registries__.items():
             self.__task_registries[transporter].merge(task_entry)
+
+    def add_managers(self, *managers: type["BaseManager"]):
+        for manager in managers:
+            self.add_manager(manager)
 
     def run(self):
         """Start the application.
