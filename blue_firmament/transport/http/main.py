@@ -1,15 +1,19 @@
+"""Main module of HTTP Transporter.
+"""
+
 import uvicorn
 import enum
 import typing
 from typing import Optional as Opt
 import json
 import urllib.parse
-from http.cookies import SimpleCookie
+import http.cookies
 from ...task import Task, TaskID, TaskMetadata
 from ...task.result import TaskResult, JsonBody, StreamingBody
 from . import _types as http_types
 from .base import MIMEType, HTTPHeader, TStatus2HCode
-from ...utils import try_convert_str, dump_enum
+from ...utils.main import try_convert_str
+from ...utils.enum_ import dump_enum
 from ..base import BaseTransporter
 from ...task.main import Method, LazyParameter
 from ...exceptions import BlueFirmamentException
@@ -44,19 +48,23 @@ class HTTPHeaders:
         if len(res) == 0:
             return None
         if len(res) == 1:
-            return res[0]
+            res = res[0]
+        
+        self.__parsed_headers[key] = res
         return res
     
     def get(self, key: str | enum.Enum, default: TV = None) -> list[str] | str | TV:
         res = self.__parsed_headers.get(dump_enum(key), None)
         if res is None:
-            res = self._lookup_in_raw_headers(key)
+            res = self._lookup_in_raw_headers(dump_enum(key))
             if res is None:
                 return default
         return res
 
     def get_as_str(self, key: str | enum.Enum, default: TV = None) -> str | TV:
         res = self.get(key, default)
+        if res is None:
+            return None
         if isinstance(res, str):
             return res
         else:
@@ -82,7 +90,7 @@ class HTTPHeaders:
         if content_type_str is None:
             return None
         split = content_type_str.split(';')
-        return MIMEType(split[0]), split[1].split('=')[1]
+        return MIMEType(split[0]), split[1].split('=')[1] if len(split) > 1 else "utf-8"
 
     def get_accept(self) -> tuple[MIMEType, ...]:
         """Get 'Accept' in header
@@ -207,22 +215,27 @@ class HTTPTransporter(BaseTransporter):
     """Transporter serves HTTP/S protocol.
     """
 
-    def __init__(self,
+    def __init__(
+        self,
         app: "BlueFirmamentApp",
         host: str,
         port: int,
-        uds: Opt[str] = None
+        uds: Opt[str] = None,
+        name: str = "default"
     ):
         """
         :param uds: Unix domain socket. E.g /tmp/blue_firmament.sock
         """
-        super().__init__(app)
+        super().__init__(app=app, name=name)
         self.__asgi_server = uvicorn.Server(uvicorn.Config(
             app=self, host=host, port=port, uds=uds
         ))
 
-    def start_listening(self):
+    def start(self):
         return self.__asgi_server.serve()
+
+    def stop(self):
+        return self.__asgi_server.shutdown()
 
     async def __call__(self, 
         scope: http_types.Scope, 
@@ -235,15 +248,6 @@ class HTTPTransporter(BaseTransporter):
         if scope['type'] == 'http':
             # parse headers
             headers = HTTPHeaders(scope['headers'])
-
-            # parse cookies
-            # TODO what to do with cookies?
-            cookies = {}
-            for cookie_str in headers.get_as_list('cookie', []):
-                cookie = SimpleCookie()
-                cookie.load(cookie_str)
-                for name, morsel in cookie.items():
-                    cookies[name] = morsel.value
 
             # compose task and task_result
             h_content_type = headers.get_content_type()
@@ -266,7 +270,9 @@ class HTTPTransporter(BaseTransporter):
             task_result = TaskResult()
 
             try:
-                await self._app.handle_task(task=task, task_result=task_result)
+                await self._app.handle_task(
+                    task=task, task_result=task_result, transporter=self
+                )
             except BlueFirmamentException as e:
                 task_result.status = e.task_status
                 task_result.body = JsonBody(e.dump_details_to_dict())
@@ -310,11 +316,20 @@ class HTTPTransporter(BaseTransporter):
 
     @staticmethod
     def parse_metadata(headers: HTTPHeaders) -> TaskMetadata:
+        # parse authorization header
         authorization=headers.get_as_str('authorization').split(" ")
+        # parse cookies
+        cookies = {}
+        for cookie_str in headers.get_as_list('cookie', []):
+            cookie = http.cookies.SimpleCookie()
+            cookie.load(cookie_str)
+            for name, morsel in cookie.items():
+                cookies[name] = morsel.value
         return TaskMetadata(
             authorization=(authorization[0], authorization[1]),
             trace_id=headers.get_as_str('x-trace-id'),
             client_id=headers.get_as_str('x-client-id'),
+            state=cookies
         )
 
     @staticmethod

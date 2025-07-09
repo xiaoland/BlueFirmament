@@ -13,8 +13,8 @@ from typing import Optional as Opt
 
 from .._types import NamedTupleTV, Undefined
 from .._types import _undefined
-from ..utils.type import JsonDumpable, get_origin, is_json_dumpable, is_namedtuple, safe_issubclass
-from ..utils import singleton
+from ..utils.typing_ import JsonDumpable, get_origin, is_json_dumpable, is_namedtuple, safe_issubclass
+from ..utils.main import singleton
 
 if typing.TYPE_CHECKING:
     from . import BaseScheme
@@ -93,13 +93,15 @@ class BaseConverter(typing.Generic[ConverterResultTV], abc.ABC):
         return str(value)
     
     def dump_to_jsonable(self, value: ConverterResultTV) -> JsonDumpable:
-
         """Dump value to jsonable value
+
+        If not jsonable, will dump to string.
         """
         if is_json_dumpable(value):
             return value
         else:
-            raise TypeError("cannot dump type %s" % type(value))
+            # raise TypeError("cannot dump type %s" % type(value))
+            return self.dump_to_str(value)
     
 
 def get_converter_from_anno(
@@ -151,6 +153,10 @@ def get_converter_from_anno(
     if ortp is dict:
         return DictConverter(
             value_type=typing.get_args(tp)[0]
+        )
+    if ortp is list:
+        return ListConverter(
+            element_type=typing.get_args(tp)[0]
         )
     if is_namedtuple(ortp):
         return NamedTupleConveter(
@@ -210,8 +216,7 @@ class SchemeConverter(BaseConverter[SchemeTV], typing.Generic[SchemeTV]):
         """
         :param value: 序列化值
         :param kwargs: 额外参数
-
-            - _request_context: 请求上下文
+            - _task_context: 任务上下文
         """
         if isinstance(value, dict):
             return self.scheme_cls(**value, **kwargs)
@@ -307,6 +312,8 @@ class OptionalConveter(BaseConverter[typing.Optional[ConverterResultTV]]):
             if tp is _undefined:
                 raise ValueError('`tp` or `tp_converter` must be provided')
             self.sub_converter = get_converter_from_anno(tp)
+        else:
+            self.sub_converter = tp_converter
 
     def __call__(self, value, **kwargs) -> ConverterResultTV | types.NoneType:
         
@@ -317,6 +324,13 @@ class OptionalConveter(BaseConverter[typing.Optional[ConverterResultTV]]):
         
     @property
     def type(self): return typing.Type[typing.Optional[self.sub_converter.type]]
+
+    def dump_to_jsonable(self, value: ConverterResultTV) -> JsonDumpable:
+        if value is None:
+            return None
+        else:
+            return self.sub_converter.dump_to_jsonable(value)
+
 
 class IntConverter(BaseConverter[int]):
     
@@ -507,11 +521,18 @@ class TupleConverter(
         mode: ConverterModeT = 'base'
     ):
         super().__init__(mode)
-        
-        self.sub_converters: typing.Tuple[BaseConverter, ...] = tuple(
-            get_converter_from_anno(type_) 
-            for type_ in typing.get_args(tuple_type)
-        )
+
+        self._sub_converters: tuple[BaseConverter, ...]
+        tuple_type_args = typing.get_args(tuple_type)
+        if len(tuple_type_args) > 1 and tuple_type_args[1] == Ellipsis:
+            self._only_a_type = True
+            self._sub_converters = (get_converter_from_anno(tuple_type_args[0]),)
+        else:
+            self._only_a_type = False
+            self._sub_converters = tuple(
+                get_converter_from_anno(type_)
+                for type_ in tuple_type_args
+            )
 
     def __call__(self, value, **kwargs) -> tuple[typing.Unpack[TupleValueTV]]:
         
@@ -519,25 +540,37 @@ class TupleConverter(
             if self.is_base:
                 value = tuple(value)
 
-        if len(value) != len(self.sub_converters):
-            raise ValueError(f'Value {value} is not a tuple of length {len(self.sub_converters)}')
+        if not self._only_a_type:
+            if len(value) != len(self._sub_converters):
+                raise ValueError(f'Value {value} is not a tuple of length {len(self._sub_converters)}')
         
-        return tuple(
-            validator(value[i]) 
-            for i, validator in enumerate(self.sub_converters)
-        )
+            return tuple(
+                validator(value[i])
+                for i, validator in enumerate(self._sub_converters)
+            )
+        else:
+            return tuple(
+                self._sub_converters[0](i)
+                for i in value
+            )
     
     @property
     def type(self): return typing.Tuple[*tuple(
         validator.type 
-        for validator in self.sub_converters
+        for validator in self._sub_converters
     )]
 
-    def dump_to_jsonable(self, value) -> tuple: 
-        return tuple(
-            self.sub_converters[i].dump_to_jsonable(value[i])
-            for i in range(len(value))
-        )
+    def dump_to_jsonable(self, value) -> tuple:
+        if not self._only_a_type:
+            return tuple(
+                self._sub_converters[i].dump_to_jsonable(value[i])
+                for i in range(len(value))
+            )
+        else:
+            return tuple(
+                self._sub_converters[0].dump_to_jsonable(i)
+                for i in value
+            )
     
 
 class NamedTupleConveter(BaseConverter[NamedTupleTV], typing.Generic[NamedTupleTV]):
@@ -693,7 +726,6 @@ class ListConverter(BaseConverter[typing.List[T]], typing.Generic[T]):
         
 
 class DatetimeConverter(BaseConverter[datetime.datetime]):
-
     """日期时间转换器
 
     是否为 datetime.datetime 对象
@@ -713,16 +745,13 @@ class DatetimeConverter(BaseConverter[datetime.datetime]):
         return value
     
     def dump(self, value) -> str:
+        return value.isoformat()
 
-        """序列化为 ISO 格式的字符串
-        """
+    def dump_to_jsonable(self, value):
         return value.isoformat()
     
     @property
     def type(self): return datetime.datetime
-
-    def dump_to_jsonable(self, value): 
-        return value.isoformat()
 
 
 class TimeConverter(BaseConverter[datetime.time]):

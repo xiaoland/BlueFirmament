@@ -14,7 +14,7 @@ __all__ = [
     'TaskHandler',
     'TaskRegistry',
     'TaskEntry',
-    'task',
+    'listen_to',
     'Method',
     'LazyParameter'
 ]
@@ -27,5 +27,5 @@ from .result import (
 )
 from .handler import TaskHandler
 from .registry import (
-    TaskRegistry, TaskEntry, task
+    TaskRegistry, TaskEntry, listen_to
 )

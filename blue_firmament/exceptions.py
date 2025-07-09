@@ -11,6 +11,7 @@ __all__ = [
     'RequestFailed',
     'ExternalError',
     'Retryable',
+    'MaxRetriesExceeded',
     'ParamsInvalid',
     'AtLeastOne',
     'NotImplemented',
@@ -27,7 +28,7 @@ import enum
 import abc
 import typing
 from typing import Optional as Opt, Annotated as Anno, Literal as Lit
-from .utils.type import JsonDumpable
+from .utils.typing_ import JsonDumpable
 from .task import TaskStatus
 from .log.main import get_logger
 LOGGER = get_logger(__name__)
@@ -54,12 +55,6 @@ class BlueFirmamentException(Exception, abc.ABC):
         errmsg: str | dict = 'Exception occured', 
         *args, **kwargs
     ):
-
-        """创建异常实例
-
-        :param errmsg: 错误信息
-        :type errmsg: str
-        """
         if isinstance(errmsg, str):
             errmsg = {"errmsg": errmsg}
         
@@ -191,36 +186,37 @@ class ExternalError(BlueFirmamentException):
 
 
 class Retryable(BlueFirmamentException):
-
-    """请重试
-
-    重试发生异常的操作，这次可能正常，因为已经进行了恢复处置
+    """The exception can be eliminated by retrying the operation.
     """
 
-    def __init__(self, 
-        after: int | float = 0.2,
-        *args, **kwargs
+    def __init__(
+        self,
+        delay: float = 0.2
     ):
-        
         """
-        :param after: 重试间隔时间 秒
-        :type after: int
+        :param delay: retry after this many seconds
         """
-
-        errmsg = "please retry after %s seconds" % after
-
-        super().__init__(errmsg, logger, *args, **kwargs)
-
-        self.__after = after
+        super().__init__("please retry after %s seconds" % delay)
+        self.__delay = delay
 
     @property
-    def delay(self) -> int | float:
-        """重试间隔时间"""
-        return self.__after
+    def delay(self) -> float:
+        return self.__delay
 
     @property
     def task_status(self):
         return TaskStatus.SERVICE_UNAVAILABLE
+
+
+class MaxRetriesExceeded(BlueFirmamentException):
+
+    def __init__(self):
+        super().__init__("max retries exceeded")
+
+    @property
+    def task_status(self) -> TaskStatus:
+        return TaskStatus.SERVICE_UNAVAILABLE
+
 
 class ParamsInvalid(ClientError, ValueError):
 
@@ -398,7 +394,6 @@ class InvalidStatusTransition(DuplicateOrConflict):
 
 
 class Unauthorized(InternalError):
-
     """未认证
     """
 
@@ -407,11 +402,9 @@ class Unauthorized(InternalError):
         identity: Opt[str] = None,
         *args, **kwargs
     ):
-        
         """
         :param identity: 导致未认证时使用的凭证（如果有）
         """
-
         super().__init__(
             'you are using identity (token): \n%s' % identity
         )

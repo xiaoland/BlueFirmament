@@ -4,7 +4,7 @@
 __all__ = [
     'TaskRegistry',
     'TaskEntry',
-    'task'
+    'listen_to'
 ]
 
 import asyncio
@@ -12,6 +12,8 @@ import copy
 import typing
 from typing import Optional as Opt, Annotated as Anno, Literal as Lit
 
+from .._types import PathParamsT, CallableTV
+from ..transport.base import BaseTransporter
 from .result import Body, JsonBody
 from ..task.context import BaseTaskContext
 from ..core.middleware import BaseMiddleware
@@ -26,36 +28,39 @@ class TaskEntry(BaseMiddleware):
     """BlueFirmament TaskEntry
 
     A mapping from TaskID to a couple of TaskHandler(s).
+
     Work as a middleware, run this middleware will concurrently
     run all handlers in this entry.
 
     Can be stored as key in dict or element in set.
 
     :ivar path_params: Path parameters resolved from the looked up TaskID.
-        Will be set on copy of this entry, not the original one.
+        Will be set on the copy of this entry.
     """
 
-    def __init__(self,
+    def __init__(
+        self,
         task_id: TaskID,
-        *handlers: TaskHandler
+        *handlers: TaskHandler | typing.Callable
     ) -> None:
         self.__task_id = task_id
-        self.__handlers: typing.List[TaskHandler] = list(*handlers)
-        self.path_params: dict[str, str] = {}
+        self.__handlers: typing.List[TaskHandler] = list(
+            handler if isinstance(handler, TaskHandler) else TaskHandler(function=handler)
+            for handler in handlers
+        )
+        self.path_params: dict[str, PathParamsT] = {}
+
+    @property
+    def id(self):
+        return self.__task_id
 
     @property
     def handlers(self):
         return self.__handlers
 
-    def __hash__(self):
-        return hash(self.__task_id)
-
-    def __eq__(self, other):
-        return other == self.__task_id
-
     def fork(
         self,
-        path_prefix: Opt[str] = None
+        path_prefix: str = ""
     ) -> typing.Self:
         """Fork this entry with a new TaskID
 
@@ -64,7 +69,7 @@ class TaskEntry(BaseMiddleware):
         :return: Forked TaskEntry
         """
         return TaskEntry(
-            task_id=self.__task_id.fork(
+            self.__task_id.fork(
                 path_prefix=path_prefix
             ),
             *self.__handlers
@@ -89,7 +94,7 @@ class TaskEntry(BaseMiddleware):
         for handler in self.__handlers:
             handler.set_manager_cls(manager_cls)
 
-    async def __call__(self, *, next, task_context: 'BaseTaskContext'):
+    async def __call__(self, *, next_, task_context: 'BaseTaskContext'):
         """Run all handlers in this entry concurrently.
 
         If multiple results, set task result body to a JsonBody which is a list
@@ -112,7 +117,7 @@ class TaskEntry(BaseMiddleware):
                 for result in results
             ])
 
-        await next()
+        await next_()
 
 
 class TaskRegistry:
@@ -133,7 +138,7 @@ class TaskRegistry:
             Can be ``/abc/{var}`` or ``abc/{var}``, but don't
             end with a slash.
         """
-        self.__static_entries: set[TaskEntry] = set()
+        self.__static_entries: dict[TaskID, TaskEntry] = dict()
         self.__dynamic_entries: list[TaskEntry] = list()
         self.__path_prefix = path_prefix
         self.__name = name
@@ -146,10 +151,15 @@ class TaskRegistry:
     def dynamic_entries(self): return self.__dynamic_entries
 
     def add_entry(self, entry: TaskEntry):
+        entry = entry.fork(path_prefix=self.__path_prefix)
         if not entry.is_dynamic():
-            self.__static_entries.add(entry)
+            self.__static_entries[entry.id] = entry
         else:
             self.__dynamic_entries.append(entry)
+
+    def add_entries(self, entries: typing.Iterable[TaskEntry]):
+        for entry in entries:
+            self.add_entry(entry)
         
     def add_handler(
         self,
@@ -157,7 +167,7 @@ class TaskRegistry:
         path: Opt[str] = None,
         task_id: Opt[TaskID] = None,
         handler: Opt[TaskHandler] = None,
-        inner_handler: Opt[typing.Callable] = None,
+        function: Opt[typing.Callable] = None,
         handler_manager_cls: Opt[typing.Type["BaseManager"]] = None,
     ):
         """Bind a task handler to Task(ID).
@@ -170,9 +180,9 @@ class TaskRegistry:
         :param handler: A task handler.
         """
         if handler is None:
-            if not (inner_handler is None or handler_manager_cls is None):
+            if not (function is None or handler_manager_cls is None):
                 handler = TaskHandler(
-                    inner_handler=inner_handler,
+                    function=function,
                     manager_cls=handler_manager_cls
                 )
             else:
@@ -202,7 +212,7 @@ class TaskRegistry:
             entry = TaskEntry(task_id, handler)
 
         if not task_id.is_dynamic():
-            self.__static_entries.add(entry)
+            self.__static_entries[entry.id] = entry
         else:
             self.__dynamic_entries.append(entry)
 
@@ -212,26 +222,32 @@ class TaskRegistry:
         Every entry to be merged will be prefixed with the path_prefix.
         (Of course on the forked entry)
         """
-        for entry in to_merge.static_entries:
-            self.__static_entries.add(entry.fork(self.__path_prefix))
+        for entry in to_merge.static_entries.values():
+            entry = entry.fork(self.__path_prefix)
+            self.__static_entries[entry.id] = entry
         for entry in to_merge.dynamic_entries:
-            self.__dynamic_entries.append(entry.fork(self.__path_prefix))
+            entry = entry.fork(self.__path_prefix)
+            self.__dynamic_entries.append(entry)
 
-    def lookup(self, task_id: TaskID) -> TaskEntry:
+    def lookup(
+        self,
+        task_id: TaskID,
+    ) -> TaskEntry:
         """Lookup a task entry by task_id.
 
         :param task_id: The task ID to lookup, must be static.
         :raise KeyError: If no task entry matched.
         :raise TypeError: If task_id is dynamic.
-        :returns: The (shallow) copy of the TaskEntry that matches the task_id
-            and with path_params set.
+        :returns:
+            The (shallow) copy of the matched TaskEntry
+            with path_params set.
         """
         if task_id.is_dynamic():
             raise TypeError("Cannot lookup a dynamic task_id")
 
-        intersection = self.__static_entries.intersection({task_id})
-        if intersection:
-            return intersection.pop()
+        entry = self.__static_entries.get(task_id, None)
+        if entry is not None:
+            return entry
         else:
             # lookup in dynamic entries
             for entry in self.__dynamic_entries:
@@ -246,17 +262,17 @@ class TaskRegistry:
         raise KeyError(f"TaskID {task_id} don't has an entry in registry {self.name}")
 
 
-CallableTV = typing.TypeVar("CallableTV", bound=typing.Callable)
-def task(
-    method: Opt[Method],
-    path: Opt[str],
-    task_id: Opt[TaskID] = None
+def listen_to(
+    method: Opt[Method | str],
+    path: str,
+    separator: str = "/",
+    transporters: Opt[typing.Iterable[str | BaseTransporter]] = None,
 ):
-    """Mark a function as a handler of a task.
+    """Make the function a handler to a task.
 
-    :param method:
-    :param path:
-    :param task_id: If provided, will override method and path.
+    :param transporters:
+        Only tasks from these transporters will be handled by this handler.
+        None for default transporter (you must have a transporter named "default").
 
     Will wrap decorated function to a TaskEntry.
     With support of :meth:`blue_firmament.manager.ManagerMetaclass`,
@@ -267,8 +283,11 @@ def task(
     task registry.
     """
     def wrapper(handler: CallableTV) -> CallableTV:
-        return typing.cast(CallableTV, TaskEntry(
-            TaskID(method=method, path=path) if task_id is None else task_id,
-            handler
-        )) # tricked type checker
+        return typing.cast(CallableTV, (
+            tuple(transporters or ("default",)),
+            TaskEntry(
+                TaskID(method=method, path=path, separator=separator),
+                handler
+            )
+        )) # lie to type checker
     return wrapper

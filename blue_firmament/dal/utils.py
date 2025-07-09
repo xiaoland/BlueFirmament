@@ -3,14 +3,14 @@
 
 import typing
 from .types import FilterLikeType, FieldLikeType
-from ..utils import dump_enum
+from ..utils.enum_ import dump_enum
 
 if typing.TYPE_CHECKING:
     from .filters import DALFilter
 
 
 def dump_filters_like(
-    *value: FilterLikeType,
+    *values: FilterLikeType,
     scheme_like: typing.Any | None = None
 ) -> typing.Iterable["DALFilter"]:
 
@@ -27,20 +27,20 @@ def dump_filters_like(
 
     from ..scheme import BaseScheme
     from ..scheme.field import Field
-    for item in value:
+    for item in values:
         if isinstance(item, (str, int)):
             try:
                 if scheme_like:
                     if isinstance(scheme_like, Field):
                         scheme_like = scheme_like.scheme_cls
-                    if isinstance(scheme_like, BaseScheme):
+                    if issubclass(scheme_like, BaseScheme) or isinstance(scheme_like, BaseScheme):
                         res.append(scheme_like.get_key_field().equals(item))
                         continue
 
                 raise ValueError
             except (AttributeError, ValueError):
                 raise ValueError(
-                    "Cannot dump filter-like value that is not a DALFilter withoutscheme"
+                    "Cannot dump filter-like value that is not a DALFilter without scheme"
                 )
         elif isinstance(item, BaseScheme):
             res.extend(item.equals())

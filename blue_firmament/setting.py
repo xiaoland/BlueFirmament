@@ -92,7 +92,8 @@ class Setting(BaseScheme,
         return cls()
 
 
-class EnvSetting(Setting,
+class EnvSetting(
+    Setting,
     partial=True
 ):
 

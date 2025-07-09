@@ -8,19 +8,20 @@ __all__ = [
 
 from dataclasses import dataclass
 import typing
-from typing import Literal as Lit, Optional as Opt
+from typing import Literal as Lit, Optional as Opt, Annotated as Anno
+from .. import event
 from ..utils.exec_ import build_func_sig
-from blue_firmament.task.registry import TaskRegistry
-from blue_firmament.task.context.common import CommonTaskContext
+from ..task.registry import TaskRegistry
+from ..task.context.common import CommonTaskContext
 from ..dal import KeyableType, DataAccessObject
 from ..scheme.field import CompositeField, FieldValueProxy
 from ..log.main import get_logger
 # from .base import BaseFieldManager, 
 from .base import BaseManager, SchemeTV
-from ..utils.type import safe_issubclass
+from ..utils.typing_ import safe_issubclass
 from ..task.main import Method
 from ..scheme import BaseScheme
-from blue_firmament.task import TaskID
+from ..task import TaskID
 
 if typing.TYPE_CHECKING:
     from ..core.app import BlueFirmamentApp
@@ -112,24 +113,18 @@ class CommonManager(
     - preset_handler_config:
     """
 
-    __path_prefix__: str
-    
-    def __init_subclass__(cls,
-        scheme_cls: Opt[typing.Type[SchemeTV]] = None,
-        path_prefix: str = '',
-        manager_name: str = '',
-        preset_handler_config: Opt[PresetHandlerConfig] = None
-    ):
-        cls.__path_prefix__ = path_prefix
+    def __init__(self, task_context: CommonTaskContext):
+        BaseManager.__init__(self, task_context)
+        CommonTaskContext.__init__(self, tc=task_context, skip_btc_init=True)
 
-        super().__init_subclass__(
-            scheme_cls=scheme_cls,
-            router=TaskRegistry(
-                name=f"{manager_name}_router", 
-                path_prefix=path_prefix
-            ),
-            manager_name=manager_name
-        )
+    def __init_subclass__(
+        cls,
+        preset_handler_config: Opt[PresetHandlerConfig] = None,
+        **kwargs
+    ):
+        super().__init_subclass__(**kwargs)
+        scheme_cls = cls.__scheme_cls__
+        manager_name = cls.__manager_name__
 
         if preset_handler_config:
             if not scheme_cls:
@@ -145,10 +140,10 @@ class CommonManager(
                     raise ValueError("key fields required for composite key")
 
             
-            key_aliases: typing.Iterable[str]
+            key_aliases: typing.Sequence[str]
             if preset_handler_config.sup_path and preset_handler_config.key_fields:
                 key_aliases = TaskID.resolve_dynamic_indices(
-                    path_prefix + preset_handler_config.sup_path
+                    cls.__path_prefix__ + preset_handler_config.sup_path
                 )
                 sup_path = preset_handler_config.sup_path
                 exec_namespaces.update({
@@ -183,9 +178,11 @@ class CommonManager(
                 exec(func_sig + func_body, exec_namespaces, handlers)
                 setattr(cls, handler_name, handlers[handler_name])
 
-                cls.__task_registry__.add_handler(
+                cls.__task_registries__.setdefault("default", TaskRegistry(
+                    name="default", path_prefix=cls.__path_prefix__
+                )).add_handler(
                     method=Method.GET, path=sup_path,
-                    inner_handler=handlers[handler_name],
+                    function=handlers[handler_name],
                     handler_manager_cls=cls
                 )
 
@@ -194,6 +191,25 @@ class CommonManager(
         """DAO of managing scheme.
         """
         return self._daos(self._scheme_cls)
+
+    def _emit(
+        self,
+        name: str,
+        parameters: Opt[dict] = None,
+        metadata: Opt[dict] = None,
+        without_prefix: bool = False
+    ):
+        """:meth:`event.simple_emit` but prefix name with manager path prefix.
+
+        :param name: Name of event. Starts with dot.
+        :param without_prefix:
+            If True, do not prefix name with manager path prefix.
+        """
+        return event.simple_emit(
+            name=f"{self.__path_prefix__.replace('/', '.') if not without_prefix else ""}{name}",
+            parameters=parameters,
+            metadata=metadata
+        )
     
     async def _get_scheme(self, _id: Opt[KeyTV] = None) -> SchemeTV:
         
@@ -244,17 +260,12 @@ class CommonManager(
         """插入数据模型实例到 DAO
 
         - 插入成功则设置为当前实例
-        - 如果键不是自然键，则关闭键排除
         
         :param scheme: 数据模型实例；不提供则为当前实例
 
         """
         self._scheme = await self._dao.insert(
             to_insert=scheme or await self._get_scheme(),
-            exclude_key=(False 
-                if self._scheme_cls.get_key_field().is_natural_key() 
-                else True
-            )
         )
         return self._scheme
     

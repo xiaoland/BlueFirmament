@@ -1,8 +1,9 @@
 
 
 import abc
+import datetime
 import typing
-from ..utils.datetime import get_datetimez
+from ..utils.datetime_ import get_datetimez
 from ..data.settings.base import get_setting as get_base_setting
 
 if typing.TYPE_CHECKING:
@@ -11,7 +12,6 @@ if typing.TYPE_CHECKING:
 
 SFValueTV = typing.TypeVar("SFValueTV")
 class SessionField(typing.Generic[SFValueTV], abc.ABC):
-
     '''会话字段类（抽象类）
 
     是状态的基本存储单位
@@ -39,120 +39,140 @@ class SessionField(typing.Generic[SFValueTV], abc.ABC):
         self.__value: SFValueTV = value
     
     @property
-    def updated_at(self): return self.__updated_at
+    def updated_at(self):
+        return self.__updated_at
 
     @property
-    def value(self): return self.__value
-
+    def value(self):
+        return self.__value
     @value.setter
     def value(self, value: SFValueTV): 
         self.__value = value
 
-    def destory(self) -> None:
-        raise NotImplementedError('destory() must be implemented in subclass')
-    
+    def destroy(self) -> None:
+        pass
+
+    def is_expired(self) -> bool:
+        """Tell whether this field is expired.
+
+        Always False by default, subclasses should override this method.
+        """
+        return False
+
     def refresh(self) -> None:
         pass
 
-    @classmethod    
+    @classmethod
     def from_task(cls, task: 'Task') -> typing.Self:
-        '''从请求中创建会话字段实例'''
-        raise NotImplementedError()
+        raise NotImplementedError("this field not support from_task method")
 
     
 class Session(abc.ABC):
+    """BlueFirmament Session base class
+    """
 
-    '''BlueFirmament Session baseclass
-    
-    用于存储与用户代理的会话信息，与传输层无关，是应用层的一部分
+    INACTIVE_THRESHOLD = 300
+    """unit: seconds"""
+    REMOVE_BATCH_SIZE = 10
+    """how many sessions to remove once session pool is full"""
+    SESSION_POOL_MAX = 1000
+    """max session cached in session pool"""
 
-    Examples
-    ^^^^^^^^
-    ```python
-    class MySession(Session):
-    
-        def __init__(self, _id: str, custom_field: SessionField[type]) -> None:
-            
-            super().__init__(_id)
-
-            # other custom fields
-            self.__custom_field = custom_field
-    '''
-
-    __sessions__: typing.Dict[str, typing.Self] = {} 
-    '''全局会话实例池'''
-    __fields__: typing.Tuple[str, ...] = ()
-    '''会话字段列表（子类覆盖，补课修改）'''
+    __session_pool__: dict[str, typing.Self] = {}
+    # TODO use remote storage to share session and save local memory (but performance cost?)
+    """session cache pool"""
+    __fields__: tuple[str, ...] = ()
+    """all field's name"""
 
     def __init__(self, _id: str, /, **fields: SessionField) -> None:
-
-        '''实例化会话
-
-        :param _id: 该会话的ID
-        '''
+        # metadata (not session fields, raw value)
         self.__id: str = _id
+        self.__last_used_at: datetime.datetime = get_datetimez()
 
-        self.__save_to_sessions()
+        self.__init_fields__(**fields)
 
-    def __save_to_sessions(self):
-
-        '''保存当前会话实例到会话池
-
-        会运行一个后台任务（线程）检查整个会话池中是否有过期会话并清理
-        '''
-        self.__sessions__[self.__id] = self
-
-        # TODO 需要考虑线程安全问题（多请求处理）
-
-    @classmethod
-    def check_sessions(cls) -> None:
-
-        '''检查会话池
-
-        - 如果会话实例过期，则删除该实例
-        '''
-        marked_for_deletion = []
-        for _id, session in cls.__sessions__.items():
-            if session.is_expired:
-                marked_for_deletion.append(_id)
-
-        for _id in marked_for_deletion:
-            del cls.__sessions__[_id]
+    @abc.abstractmethod
+    def __init_fields__(self, **fields: SessionField):
+        ...
 
     @property
+    def id(self):
+        """Session ID"""
+        return self.__id
+
+    @property
+    def last_used_at(self):
+        return self.__last_used_at
+
+    def update_last_used_at(self):
+        self.__last_used_at = get_datetimez()
+
     def is_expired(self) -> bool:
-        '''会话是否过期
-        
-        所有会话字段中最新的更新时间已经早于现在X秒以上
-        '''
-        # get newest updated_at
-        newest_updated_at = max([getattr(self, field).updated_at for field in self.__fields__])
-        # check if expired
-        return (get_datetimez() - newest_updated_at).total_seconds() > get_base_setting().session_expire_time
+        """Any field expired makes session expired.
+
+        Will refresh expired fields first, if still expired, return True.
+        """
+        for field_name in self.__fields__:
+            field = getattr(self, f"_{self.__class__.__name__}__{field_name}")
+            if isinstance(field, SessionField):
+                if field.is_expired():
+                    field.refresh()
+                    if field.is_expired():
+                        return True
+        return False
+
+    def is_inactive(self) -> bool:
+        """A span of time has passed since last use.
+        """
+        return get_datetimez() - self.__last_used_at > datetime.timedelta(seconds=self.INACTIVE_THRESHOLD)
 
     @classmethod
-    def get_session(cls, _id: str, upsert: bool = True, /, **kwargs: SessionField) -> typing.Self:
+    def cleanup_sessions(cls) -> None:
+        """Delete expired, inactive sessions from session pool.
 
-        '''获取会话实例
+        TODO run periodically.
+        """
+        to_delete = []
 
-        :param upsert: 不存在则创建新的会话实例（否则抛出KeyError）
-        :param **kwargs: 其他字段（用于upsert）
-        '''
-        try:
-            res = cls.__sessions__[_id]
-        except KeyError:
-            if upsert:
-                res = cls(_id, **kwargs)
-                cls.__sessions__[_id] = res
-            else:
-                raise KeyError(f'Session with id {_id} not found')
-            
-        return res
+        for _id, session in cls.__session_pool__.items():
+            if session.is_expired() or session.is_inactive():
+                to_delete.append(_id)
+
+        if (len(cls.__session_pool__) - len(to_delete)) >= cls.SESSION_POOL_MAX:
+            # randomly remove a batch of sessions
+            to_delete_len = len(to_delete)
+            for key in cls.__session_pool__.keys():
+                to_delete.append(key)
+                if (len(to_delete) - to_delete_len) >= cls.REMOVE_BATCH_SIZE:
+                    break
+
+        for _id in to_delete:
+            del cls.__session_pool__[_id]
+
+    @classmethod
+    def upsert(
+        cls,
+        _id: str,
+        fields_getter: typing.Callable[[], dict[str, SessionField]],
+    ) -> typing.Self:
+        """
+
+        :param _id: Session ID
+        :param fields_getter: function returns fields for creating a new session.
+
+        If session expire, recreate.
+        """
+        session = cls.__session_pool__.setdefault(_id, cls(_id, **fields_getter()))
+        if session.is_expired():
+            del cls.__session_pool__[_id]
+            session = cls(_id, **fields_getter())
+        session.update_last_used_at()
+        return session
     
     @classmethod
     @abc.abstractmethod
     def from_task(cls, task: 'Task') -> typing.Self:
-
-        '''从请求中获取会话实例
-        '''
+        """Create a session from a task
+        """
+        ...
 
