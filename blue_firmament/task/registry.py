@@ -50,16 +50,6 @@ class TaskEntry(BaseMiddleware):
         )
         self.path_params: dict[str, PathParamsT] = {}
 
-    def __hash__(self):
-        return hash(self.__task_id)
-
-    def __eq__(self, other):
-        if isinstance(other, TaskID):
-            return other == self.__task_id
-        elif isinstance(other, TaskEntry):
-            return other.id == self.__task_id
-        return False
-
     @property
     def id(self):
         return self.__task_id
@@ -148,7 +138,7 @@ class TaskRegistry:
             Can be ``/abc/{var}`` or ``abc/{var}``, but don't
             end with a slash.
         """
-        self.__static_entries: set[TaskEntry] = set()
+        self.__static_entries: dict[TaskID, TaskEntry] = dict()
         self.__dynamic_entries: list[TaskEntry] = list()
         self.__path_prefix = path_prefix
         self.__name = name
@@ -161,10 +151,11 @@ class TaskRegistry:
     def dynamic_entries(self): return self.__dynamic_entries
 
     def add_entry(self, entry: TaskEntry):
+        entry = entry.fork(path_prefix=self.__path_prefix)
         if not entry.is_dynamic():
-            self.__static_entries.add(entry.fork(path_prefix=self.__path_prefix))
+            self.__static_entries[entry.id] = entry
         else:
-            self.__dynamic_entries.append(entry.fork(path_prefix=self.__path_prefix))
+            self.__dynamic_entries.append(entry)
 
     def add_entries(self, entries: typing.Iterable[TaskEntry]):
         for entry in entries:
@@ -221,7 +212,7 @@ class TaskRegistry:
             entry = TaskEntry(task_id, handler)
 
         if not task_id.is_dynamic():
-            self.__static_entries.add(entry)
+            self.__static_entries[entry.id] = entry
         else:
             self.__dynamic_entries.append(entry)
 
@@ -231,10 +222,12 @@ class TaskRegistry:
         Every entry to be merged will be prefixed with the path_prefix.
         (Of course on the forked entry)
         """
-        for entry in to_merge.static_entries:
-            self.__static_entries.add(entry.fork(self.__path_prefix))
+        for entry in to_merge.static_entries.values():
+            entry = entry.fork(self.__path_prefix)
+            self.__static_entries[entry.id] = entry
         for entry in to_merge.dynamic_entries:
-            self.__dynamic_entries.append(entry.fork(self.__path_prefix))
+            entry = entry.fork(self.__path_prefix)
+            self.__dynamic_entries.append(entry)
 
     def lookup(
         self,
@@ -252,9 +245,9 @@ class TaskRegistry:
         if task_id.is_dynamic():
             raise TypeError("Cannot lookup a dynamic task_id")
 
-        intersection = self.__static_entries.intersection({task_id})
-        if intersection:
-            return intersection.pop()
+        entry = self.__static_entries.get(task_id, None)
+        if entry is not None:
+            return entry
         else:
             # lookup in dynamic entries
             for entry in self.__dynamic_entries:
