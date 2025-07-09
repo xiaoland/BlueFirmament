@@ -131,23 +131,20 @@ class PostgrestDAL(TableLikeDataAccessLayer, DataAccessLayerWithAuth):
         path: typing.Optional[DALPath] = None,
         exclude_key: bool = True,
     ) -> dict:
-        pass
-
+        ...
     @typing.overload
     async def insert(self,
         to_insert: SchemeTV,
         path: typing.Optional[DALPath] = None,
         exclude_key: bool = True,
     ) -> SchemeTV:
-        pass
-
+        ...
     async def insert(
         self,
         to_insert: dict | SchemeTV,
         path = None,
         exclude_natural_key: bool = True,
     ) -> dict | SchemeTV:
-        
         if isinstance(to_insert, BaseScheme) and path is None:
             path = to_insert.dal_path()
         
@@ -208,7 +205,6 @@ class PostgrestDAL(TableLikeDataAccessLayer, DataAccessLayerWithAuth):
         task_context: Opt[ExtendedTaskContext] = None,
     ) -> typing.Tuple[dict, ...]:
         ...
-
     async def select(
         self,
         to_select: typing.Union[

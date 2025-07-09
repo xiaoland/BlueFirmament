@@ -256,17 +256,12 @@ class CommonManager(
         """插入数据模型实例到 DAO
 
         - 插入成功则设置为当前实例
-        - 如果键不是自然键，则关闭键排除
         
         :param scheme: 数据模型实例；不提供则为当前实例
 
         """
         self._scheme = await self._dao.insert(
             to_insert=scheme or await self._get_scheme(),
-            exclude_key=(False 
-                if self._scheme_cls.get_key_field().is_natural_key() 
-                else True
-            )
         )
         return self._scheme
     

@@ -10,13 +10,10 @@ __all__ = [
 
 import abc
 import copy
-import dataclasses
 import inspect
-from re import I
 import types
 import typing
 from typing import Optional as Opt, Annotated as Anno, Literal as Lit
-from ..utils.type import safe_issubclass
 
 from ..utils.typing_ import safe_issubclass
 from .._types import Undefined, _undefined
@@ -160,15 +157,32 @@ class SchemeMetaclass(abc.ABCMeta):
             attrs["__default_edflags__"] = default_exclude_dump_flags
         if default_include_dump_flags:
             attrs["__default_idflags__"] = default_include_dump_flags
-        for builtin_f, default_v in cls.__builtin_cvars__.items():
-            if builtin_f not in attrs:
+        for cvar, default_v in cls.__builtin_cvars__.items():
+            if cvar not in attrs:
                 # Find in bases
-                for base in bases:
-                    if hasattr(base, builtin_f):
-                        attrs[builtin_f] = copy.copy(getattr(base, builtin_f))
-                        break
-                else:
-                    attrs[builtin_f] = default_v if not callable(default_v) else default_v()
+                found = False
+                for base in reversed(bases):
+                    if hasattr(base, cvar):
+                        # FIXME multiple scheme to inherit from
+                        if callable(default_v):
+                            # mutable value
+                            val = attrs.setdefault(cvar, default_v())
+                            if isinstance(val, dict):
+                                val.update(getattr(base, cvar))
+                            elif isinstance(val, list):
+                                val.extend(getattr(base, cvar))
+                            else:
+                                raise TypeError(
+                                    f"Unsupported type {type(val)} for class variable {cvar}"
+                                )
+                        else:
+                            # immutable value
+                            attrs[cvar] = getattr(base, cvar)
+                        
+                        found = True
+                        continue
+                if not found:
+                    attrs[cvar] = default_v if not callable(default_v) else default_v()
         
         # Resolve fields
         fields: typing.Dict[str, Field] = attrs['__fields__']
@@ -190,7 +204,6 @@ class SchemeMetaclass(abc.ABCMeta):
 
         # Resolve attrs
         for k, v in attrs.items():
-
             # Skip dunder methods
             if k.startswith('__') and k.endswith('__'):
                 continue
@@ -205,11 +218,16 @@ class SchemeMetaclass(abc.ABCMeta):
             if isinstance(v, property):
                 continue
 
+            # Skip field validator(s)
+            if isinstance(v, FieldValidator) or (
+                isinstance(v, list) and isinstance(v[0], FieldValidator)
+            ):
+                continue
+
             # Resolve scheme validators
             if isinstance(v, SchemeValidator):
                 scheme_validators.append(v)
                 continue
-
 
             # Resolve private fields 
             if isinstance(v, PrivateField):
@@ -612,6 +630,7 @@ class BaseScheme(metaclass=SchemeMetaclass):
             key_field = self.get_key_field()
             if key_field.is_natural_key():
                 field_names = field_names - {key_field.in_scheme_name}
+                if key_field.is_key_natural():
 
         if exclude_unset is True or (exclude_unset is None and self.__partial__):
             field_names = field_names - self.__unset_fields__
@@ -666,24 +685,18 @@ class BaseScheme(metaclass=SchemeMetaclass):
 
     @classmethod
     def keys(cls) -> typing.Iterable[str]:
-        
-        """获取所有字段的名称的集合
-        """
         return cls.__fields__.keys()
     
     def values(self) -> typing.Iterable[typing.Any]:
-
-        """获取所有字段的值的集合
-        """
         return self.__field_values__.values()
     
     FieldValueType = typing.TypeVar("FieldValueType")
 
     def _set_value(
-        self, field: Field[FieldValueType], 
+        self, 
+        field: Field[FieldValueType], 
         value: "FieldValueProxy[FieldValueType]" | FieldValueType | Undefined
     ) -> None:
-
         """设置字段值
 
         :param field: 字段名或字段实例
@@ -693,7 +706,6 @@ class BaseScheme(metaclass=SchemeMetaclass):
     def _get_value(
         self, field: Field[FieldValueType]
     ) -> "FieldValueProxy[FieldValueType]" | FieldValueType:
-
         """获取字段值
 
         :param field: 字段名或字段实例
