@@ -5,6 +5,10 @@
 
 A backend framework for Python applications that covers all you need, and aims at building east-to-read, maintainable application.
 
+## Status
+- Unstable and not recommended for production use.
+- Check out nightly feature on `develop` branch.
+
 ## Installation
 
 ```bash
