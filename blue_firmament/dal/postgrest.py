@@ -2,6 +2,7 @@
 """
 
 import postgrest
+import enum
 from typing import Optional as Opt
 
 from ..task.context import ExtendedTaskContext, SoBaseTC
@@ -9,21 +10,22 @@ from ..auth import AuthSession
 from ..scheme.converter import SchemeConverter
 from .utils import dump_filters_like
 from ..exceptions import Unauthorized
-from ..utils.type import safe_issubclass
+from ..utils.typing_ import safe_issubclass
 from ..exceptions import NotFound
 from ..scheme.field import Field, FieldValueProxy, FieldValueTV
 from .filters import *
-from .base import TableLikeDataAccessLayer
+from .base import TableLikeDataAccessLayer, DataAccessLayerWithAuth
 from .. import __version__, __name__ as __package_name__
 from .types import (
     DALPath, FieldLikeType, FilterLikeType, StrictDALPath
 )
 from .filters import DALFilter
-from ..utils import call_function, dump_enum
+from ..utils.main import call_as_sync
+from ..utils.enum_ import dump_enum
 from ..scheme import BaseScheme, SchemeTV
 
 
-class PostgrestDAL(TableLikeDataAccessLayer):
+class PostgrestDAL(TableLikeDataAccessLayer, DataAccessLayerWithAuth):
     """Access data through PostgREST API.
 
     Examples
@@ -45,38 +47,37 @@ class PostgrestDAL(TableLikeDataAccessLayer):
         apikey: str,
         default_table: str | enum.Enum,
         default_schema: str | enum.Enum = "public",
+        **kwargs
     ) -> None:
         """
         :param apikey: Supabase API Key.
             Use anon key for authenticated or anonymous user,
             use serv key for service_role user.
         """
-        
         cls.__url = url
         cls.__apikey = apikey
 
         return super().__init_subclass__(
-            default_path=StrictDALPath((dump_enum(default_table), dump_enum(default_schema)))
+            default_path=StrictDALPath((dump_enum(default_table), dump_enum(default_schema))),
+            **kwargs
         )
 
-    def __init__(self, session: AuthSession) -> None:
-        super().__init__()
-        self._session = session
+    def __post_init__(self):
         self._client = postgrest.AsyncPostgrestClient(
             base_url=self.__url,
-            schema=dump_enum(self.__default_path[1]),
+            schema=dump_enum(self.default_path[1]),
             headers={
                 'X-Client-Info': f'{__package_name__}/{__version__}',
                 'apiKey': self.__apikey,
-                "authorization": f'Bearer {self._session.token}'
+                "authorization": f'Bearer {self._auth_session.access_token}'
             },
         )
 
-    def destory(self) -> None:
+    def destroy(self) -> None:
         """
         close postgrest client conn
         """
-        call_function(self._client.aclose)
+        call_as_sync(self._client.aclose)
 
     def set_schema(self, schema: str) -> None:
         """设置操作的表组（schema）"""
@@ -116,7 +117,6 @@ class PostgrestDAL(TableLikeDataAccessLayer):
         处理这些异常：
         - PGRST301 -> Unauthorized
         """
-        
         try:
             return await query.execute()
         except postgrest.APIError as e:

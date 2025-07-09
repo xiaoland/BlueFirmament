@@ -1,185 +1,145 @@
 """Auth module
 """
 
+__all__ = [
+    "User",
+    "AuthSession"
+]
+
 import abc
-import jwt
-import supabase_auth
+import datetime
 import typing
-from .exceptions import ParamsInvalid
+from typing import Annotated as Anno, Optional as Opt, Literal as Lit
+
+from .utils import auth_
 from .utils.datetime_ import get_datetimez
 from .utils.main import dump_iterable
 from .data.settings.auth import get_setting as get_auth_setting
-from .data.settings.session import get_setting as get_session_setting
 from .log import get_logger
-logger = get_logger(__name__)
-
-if typing.TYPE_CHECKING:
-    from blue_firmament.task import Task
+LOGGER = get_logger(__name__)
 
 
-UIDTV = typing.TypeVar("UIDTV")
-class User(
-    typing.Generic[UIDTV],
-    abc.ABC
-):
-    
-    SERV_ROLES: tuple[str] = ('service_role',)
+class User(abc.ABC):
 
-    @classmethod
-    @abc.abstractmethod
-    def from_task(cls, task: 'Task') -> typing.Self:
-        pass
-
-    @classmethod
-    @abc.abstractmethod
-    def from_id(cls, uid: UIDTV) -> typing.Self:
-        pass
-
-    @classmethod
-    @abc.abstractmethod
-    def from_anon(cls) -> typing.Self:
-        """Create an anonymous user"""
+    def __init__(
+        self,
+        _id,
+        roles: set[str]
+    ):
+        self.__id = _id
+        self.__roles: set[str] = roles
 
     @property
-    @abc.abstractmethod
-    def id(self) -> UIDTV:
-        pass
+    def id(self):
+        """ID of the user.
+        """
+        return self.__id
 
     @property
-    @abc.abstractmethod
-    def roles(self) -> typing.Set[str]:
-        pass
+    def roles(self):
+        """Roles of the user.
+        """
+        return self.__roles
 
-    def is_serv(self) -> bool:
-        """Is user a serv role"""
-        return any(
-            role in self.SERV_ROLES
-            for role in self.roles
-        )
+    def has_role(self, role: str) -> bool:
+        return role in self.__roles
 
 
-class SupabaseUser(User[str]):
+class AuthSession(abc.ABC):
+    """Session of auth module.
+    """
 
-    GOTRUE_CLIENT = supabase_auth.SyncGoTrueClient(
-        url=get_auth_setting().supabase_auth_url,
-        headers={
-            'apiKey': get_auth_setting().supabase_serv_key,
-            'authorization': f"Bearer {get_auth_setting().supabase_serv_key}"
-        },
-        auto_refresh_token=False,
-        persist_session=False
-    )
-
-    def __init__(self,
-        uid: str,
-        roles: typing.Set[str]
+    def __init__(
+        self,
+        _id: str,
+        access_token: str,
+        user: User,
+        refresh_token: Opt[str] = None,
+        expire_at: Opt[datetime.datetime] = None,
     ) -> None:
-        self.__uid = uid
-        self.__roles = roles
-
-    @classmethod
-    def from_task(cls, task: 'Task') -> typing.Self:
-        authorization = task.get_prebody_item("authorization")
-        if authorization:
-            jwt_str = authorization[7:]  # strip 'Bearer ' prefix
-            try:
-                jwt_payload: dict = jwt.decode(
-                    jwt_str,
-                    key=get_auth_setting().jwt_secret_key,
-                    algorithms=(get_auth_setting().jwt_algorithm,)
-                )
-            except jwt.exceptions.PyJWTError as e:
-                logger.warning('JWT decode failed', e)
-                raise ValueError('JWT decode failed')
-            else:
-                roles = set()
-                if jwt_payload.get('role'):
-                    roles.add(jwt_payload.get('role'))
-                return cls(
-                    uid=jwt_payload.get('sub', ''),
-                    roles=roles
-                )
-        else:
-            logger.warning('Cannot find valid JWT in headers')
-            return cls.from_anon()
-    
-    @classmethod
-    def from_id(cls, uid: str) -> typing.Self:
-        res = cls.GOTRUE_CLIENT.admin.get_user_by_id(uid)
-        roles = set(res.user.role) if res.user.role else set()
-        return cls(
-            uid=uid, roles=roles
-        )
-    
-    @classmethod
-    def from_anon(cls) -> typing.Self:
-        anon_user = cls.GOTRUE_CLIENT.sign_in_anonymously()
-        if anon_user.user:
-            roles = set(anon_user.user.role) if anon_user.user.role else set()
-            return cls(
-                uid=anon_user.user.id, roles=roles
-            )
-        else:
-            raise ParamsInvalid("failed to create anon user")
-
-    @property
-    def id(self): return self.__uid
-
-    @property
-    def roles(self): return self.__roles
-
-
-UserTV = typing.TypeVar("UserTV", bound=User)
-class AuthSession(
-    abc.ABC,
-    typing.Generic[UserTV]
-):
-
-    def __init__(self,
-        session_id: str,
-        token: str,
-        user: UserTV,
-    ) -> None:
-        self.__id = session_id
-        self.__token = token
+        self.__id = _id
+        self.__access_token = access_token
+        self.__refresh_token = refresh_token
         self.__user = user
+        self.__expire_at = expire_at
 
     @property
-    def id(self): return self.__id
+    def id(self):
+        """Session ID"""
+        return self.__id
     @property
-    def user(self): return self.__user
+    def user(self):
+        """User of the session"""
+        return self.__user
     @property
-    def uid(self): return self.__user.id
-    @property
-    def token(self): return self.__token
+    def access_token(self):
+        return self.__access_token
+
+    def is_expired(self) -> bool:
+        if self.__expire_at is None:
+            return False
+        return get_datetimez() > self.__expire_at
+
+    def refresh(self) -> None:
+        """Refresh the session with refresh token.
+
+        :raise ParamsInvalid: if refresh token is not set.
+        """
     
     @classmethod
-    @abc.abstractmethod
-    def from_token(cls, token) -> typing.Self:
-        ...
+    def from_token(
+        cls,
+        access_token: str,
+        access_token_type: Lit["jwt"] | str = "jwt",
+        access_token_payload: Opt[dict] = None,
+        refresh_token: Opt[str] = None,
+    ) -> typing.Self:
+        """Init an AuthSession from an access token.
 
-class SupabaseAuthSession(AuthSession[SupabaseUser]):
+        :param access_token:
+        :param access_token_type: JWT, etc.
+            Defaults to "jwt".
+        :param access_token_payload: When you already have the decoded the token.
+        :param refresh_token:
+        :return: An AuthSession instance.
 
-    @classmethod
-    def from_token(cls, token: str) -> typing.Self:
-        try:
-            jwt_payload: dict = jwt.decode(
-                jwt=token,
-                key=get_session_setting().jwt_secret_key,
-                algorithms=(get_session_setting().jwt_algorithm,)
-            )
-        except jwt.exceptions.InvalidSignatureError:
-            logger.exception("JWT signature invalid")
-            raise ParamsInvalid('JWT signature invalid')
-        except jwt.exceptions.DecodeError as e:
-            logger.exception('JWT decode failed')
-            raise ParamsInvalid('JWT decode failed')
-        else:
-            return cls(
-                session_id=jwt_payload['session_id'],
-                token=token,
-                user=SupabaseUser(
-                    uid=jwt_payload['sub'],
-                    roles=set(jwt_payload['role'])
+        JsonWebToken
+        ^^^^^^^^^^^^
+        - Requires a JWT secret key and algorithm configured in
+          :meth:`blue_firmament.data.setting.auth.AuthSetting`.
+        - These setting are optional:
+            - Allowed Audience
+        - Payload claims maps to AuthSession fields, you can override
+          by setting `jwt_claims_map` in AuthSetting.
+            - `sid`: Session ID
+            - `sub`: User ID
+            - `roles`: User roles
+        """
+        if access_token_payload is None:
+            access_token_payload = auth_.decode_token(access_token, access_token_type)
+
+        return cls(
+            access_token=access_token,
+            refresh_token=refresh_token,
+            **cls._normalize_token_payload(access_token_payload)
+        )
+
+    @staticmethod
+    def _normalize_token_payload(payload: dict) -> dict:
+        """Normalize access token payload to AuthSession fields.
+        """
+        getters = get_auth_setting().session_fields_getter
+        return dict(
+            _id=getters["session_id"](payload),
+            expire_at=getters["expire_at"](payload),
+            user=User(
+                _id=getters["user_id"](payload),
+                roles=dump_iterable(
+                    set, getters["roles"](payload)
                 )
             )
+        )
+
+
+
+

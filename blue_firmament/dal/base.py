@@ -39,6 +39,12 @@ class DataAccessLayer(abc.ABC):
         if default_path is not None:
             cls.__default_path = default_path
 
+    def __init__(self, **kwargs):
+        self.__post_init__()
+
+    def __post_init__(self):
+        ...
+
     def dump_path(self, path: Opt[DALPath] = None) -> StrictDALPath:
         """Serialize DALPath to StrictDALPath.
 
@@ -53,9 +59,14 @@ class DataAccessLayer(abc.ABC):
         ))
 
     @property
-    def _default_path(self) -> StrictDALPath:
+    def default_path(self) -> StrictDALPath:
         return self.__default_path
 
+class DataAccessLayerWithAuth(DataAccessLayer):
+
+    def __init__(self, auth_session: "AuthSession", **kwargs):
+        self._auth_session = auth_session
+        super().__init__()
 
 class TableLikeDataAccessLayer(DataAccessLayer):
 
@@ -551,21 +562,26 @@ class DataAccessObject(
 
 class DataAccessObjects:
 
-    def __init__(self,
-        session: "AuthSession"
+    def __init__(
+        self,
+        auth_session: "AuthSession"
     ) -> None:
-        self.__session = session
-        self.__dals: dict[typing.Type[DataAccessLayer], DataAccessLayer] = {}
+        self.__auth_session = auth_session
+        self.__dals: dict[type[DataAccessLayer], DataAccessLayer] = {}
 
     def __call__(self, scheme_cls: typing.Type[SchemeTV]) -> DataAccessObject[SchemeTV]:
         if scheme_cls.__dal__ is None:
-            raise ValueError("scheme don't has a dal")
-        try:
-            dal = self.__dals[scheme_cls.__dal__]
-        except KeyError:
-            dal = scheme_cls.__dal__(session=self.__session)
-            self.__dals[scheme_cls.__dal__] = dal
+            raise ValueError(f"scheme {scheme_cls.__name__} not configured a DAL class")
+        
+        dal = self.__dals.setdefault(
+            scheme_cls.__dal__, 
+            scheme_cls.__dal__(auth_session=self.__auth_session)
+        )
         
         return DataAccessObject(
             dal=dal, scheme_cls=scheme_cls
         )
+
+    def is_expired(self) -> bool:
+        """Session expired is seen as DAOs expired,"""
+        return self.__auth_session.is_expired()

@@ -91,11 +91,17 @@ class Session(abc.ABC):
 
         :param _id: 该会话的ID
         '''
+        # metadata (not session fields, raw value)
         self.__id: str = _id
+        self.__last_used_at: datetime.datetime = get_datetimez()
 
         self.__save_to_sessions()
+        self.__init_fields__(**fields)
 
     def __save_to_sessions(self):
+    @abc.abstractmethod
+    def __init_fields__(self, **fields: SessionField):
+        ...
 
         '''保存当前会话实例到会话池
 
@@ -149,11 +155,28 @@ class Session(abc.ABC):
                 raise KeyError(f'Session with id {_id} not found')
             
         return res
+    def upsert(
+        cls,
+        _id: str,
+        fields_getter: typing.Callable[[], dict[str, SessionField]],
+    ) -> typing.Self:
+        """
+
+        :param _id: Session ID
+        :param fields_getter: function returns fields for creating a new session.
+
+        If session expire, recreate.
+        """
+        session = cls.__session_pool__.setdefault(_id, cls(_id, **fields_getter()))
+        if session.is_expired():
+            del cls.__session_pool__[_id]
+            session = cls(_id, **fields_getter())
+        return session
     
     @classmethod
     @abc.abstractmethod
     def from_task(cls, task: 'Task') -> typing.Self:
-
-        '''从请求中获取会话实例
-        '''
+        """Create a session from a task
+        """
+        ...
 

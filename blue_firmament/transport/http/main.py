@@ -1,10 +1,13 @@
+"""Main module of HTTP Transporter.
+"""
+
 import uvicorn
 import enum
 import typing
 from typing import Optional as Opt
 import json
 import urllib.parse
-from http.cookies import SimpleCookie
+import http.cookies
 from ...task import Task, TaskID, TaskMetadata
 from ...task.result import TaskResult, JsonBody, StreamingBody
 from . import _types as http_types
@@ -242,15 +245,6 @@ class HTTPTransporter(BaseTransporter):
             # parse headers
             headers = HTTPHeaders(scope['headers'])
 
-            # parse cookies
-            # TODO what to do with cookies?
-            cookies = {}
-            for cookie_str in headers.get_as_list('cookie', []):
-                cookie = SimpleCookie()
-                cookie.load(cookie_str)
-                for name, morsel in cookie.items():
-                    cookies[name] = morsel.value
-
             # compose task and task_result
             h_content_type = headers.get_content_type()
             task = Task(
@@ -318,11 +312,20 @@ class HTTPTransporter(BaseTransporter):
 
     @staticmethod
     def parse_metadata(headers: HTTPHeaders) -> TaskMetadata:
+        # parse authorization header
         authorization=headers.get_as_str('authorization').split(" ")
+        # parse cookies
+        cookies = {}
+        for cookie_str in headers.get_as_list('cookie', []):
+            cookie = http.cookies.SimpleCookie()
+            cookie.load(cookie_str)
+            for name, morsel in cookie.items():
+                cookies[name] = morsel.value
         return TaskMetadata(
             authorization=(authorization[0], authorization[1]),
             trace_id=headers.get_as_str('x-trace-id'),
             client_id=headers.get_as_str('x-client-id'),
+            state=cookies
         )
 
     @staticmethod

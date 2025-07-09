@@ -287,6 +287,8 @@ class TaskMetadata:
     """tuple(type, credentials)"""
     trace_id: Opt[str] = dataclasses.field(default_factory=lambda: str(uuid.uuid4()))
     client_id: Opt[str] = None
+    state: dict = dataclasses.field(default_factory=dict)
+    """cookies"""
 
     def dump_to_bytes(
         self,
@@ -380,10 +382,10 @@ class Task:
     def trace_id(self) -> str:
         return self.__metadata.trace_id
     @property
-    def metadata(self):
+    def metadata(self) -> TaskMetadata:
         return self.__metadata
     @property
-    def parameters(self):
+    def parameters(self) -> TaskParameters:
         return self.__parameters
 
     async def dump_to_bytes(self, encoding: str = "utf-8") -> bytes:
