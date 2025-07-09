@@ -164,13 +164,10 @@ class PostgrestDAL(TableLikeDataAccessLayer, DataAccessLayerWithAuth):
         
         if isinstance(to_insert, BaseScheme):
             sc = SchemeConverter(scheme_cls=to_insert.__class__)
-            if isinstance(to_insert, SoBaseTC):
-                return sc(
-                    res.data[0],
-                    _task_context=to_insert._task_context
-                )
-            else:
-                return sc(res.data[0])
+            return sc(
+                res.data[0],
+                **to_insert.dump_to_dict(only_private=True)
+            )
         elif isinstance(to_insert, dict):
             return res.data[0]
         
@@ -264,8 +261,7 @@ class PostgrestDAL(TableLikeDataAccessLayer, DataAccessLayerWithAuth):
             )
         elif safe_issubclass(to_select, BaseScheme): 
             sc = SchemeConverter(scheme_cls=to_select)
-            # FIXME type error
-            return tuple(  
+            return tuple(
                 sc(
                     instance_dict, 
                     _task_context=task_context
@@ -335,7 +331,6 @@ class PostgrestDAL(TableLikeDataAccessLayer, DataAccessLayerWithAuth):
         exclude_key: bool = True,
     ) -> FieldValueTV:
         ...
-
     async def update(
         self,
         to_update: typing.Union[
@@ -400,15 +395,10 @@ class PostgrestDAL(TableLikeDataAccessLayer, DataAccessLayerWithAuth):
         # parse res to the same as to_update
         if isinstance(to_update, BaseScheme):
             sc = SchemeConverter(scheme_cls=to_update.__class__)
-            if isinstance(to_update, SoBaseTC):
-                return sc(
-                    value=res.data[0],
-                    task_context=to_update._task_context
-                )
-            else:
-                return sc(
-                    value=res.data[0],
-                )
+            return sc(
+                value=res.data[0],
+                **to_update.dump_to_dict(only_private=True)
+            )
         elif isinstance(to_update, FieldValueProxy):
             return res.data[0][to_update.field.name]
         elif isinstance(to_update, tuple):

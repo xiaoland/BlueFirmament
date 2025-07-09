@@ -240,7 +240,7 @@ class SchemeMetaclass(abc.ABCMeta):
             if isinstance(v, Field):
                 # already a field instance
                 fields[k] = v
-                v._set_name(k, True) # try to set name
+                v._set_name(k, True) # TODO rename as try
                 v._set_in_scheme_name(k, True)
             else:
                 # not a field instance
@@ -340,11 +340,11 @@ class SchemeMetaclass(abc.ABCMeta):
         init_body += '    SchemeMetaclass.init_ivars(self)\n'
         init_body += '\n'.join(init_assignments)
         init_body += '\n    SchemeMetaclass.run_scheme_validators(self)\n'
-        init_body += '    self.__post_init__()\n'
         init_body += '    self.__instantiated__ = True\n'
         init_body += '    SchemeMetaclass.run_after_field_validators(self)\n'
         init_body += '    if not self.__disable_log__:\n'
         init_body += '        self._logger.info("Scheme instantiated", scheme_data=self.dump_to_dict())\n'
+        init_body += '    self.__post_init__()\n'
 
         init_method = init_sig + init_body
         
@@ -590,9 +590,9 @@ class BaseScheme(metaclass=SchemeMetaclass):
         exclude_unset: Opt[bool] = None,
         exclude_flags: Opt[set[str]] = None,
         include_flags: Opt[set[str]] = None,
+        only_private: bool = False,
         jsonable: bool = True
     ) -> dict:
-
         """Serialize to (jsonable) dict
 
         :param only_dirty: 
@@ -611,6 +611,8 @@ class BaseScheme(metaclass=SchemeMetaclass):
             If provided, only dumps fields with all these flags.
             If not provided, ``default_include_dump_flags`` configured on
             scheme will be used.
+        :param only_private:
+            If True, only private fields will de dumped.
         :param jsonable:
             If True, ensure the return is jsonable.
 
@@ -619,48 +621,52 @@ class BaseScheme(metaclass=SchemeMetaclass):
         - 调用每个字段的校验器来序列化字段值
         """
         data = dict()
-        field_names: typing.Set[str] = set()
+        field_names: typing.Set[str]
 
-        if only_dirty:
-            field_names = self.__dirty_fields__
+        if only_private:
+            field_names = set(self.__private_fields__.keys())
+            for k in field_names:
+                data[k] = getattr(self, k)
         else:
-            field_names = set(self.__fields__.keys())
-
-        if exclude_natural_key:
-            key_field = self.get_key_field()
-            if key_field.is_natural_key():
-                field_names = field_names - {key_field.in_scheme_name}
-                if key_field.is_key_natural():
-
-        if exclude_unset is True or (exclude_unset is None and self.__partial__):
-            field_names = field_names - self.__unset_fields__
-
-        if exclude_flags is None and self.__default_edflags__:
-            exclude_flags = self.__default_edflags__
-
-        if include_flags is None and self.__default_idflags__:
-            include_flags = self.__default_idflags__
-
-        for k in field_names:
-            field: Field = self.__fields__[k]
-
-            if exclude_flags:
-                if field.dump_flags.issuperset(exclude_flags):
-                    continue
-
-            if include_flags and not exclude_flags:
-                if not field.dump_flags.issuperset(include_flags):
-                    continue
-                
-            field_v = FieldValueProxy.dump(getattr(self, k))
-            if jsonable:
-                if isinstance(field, CompositeField):
-                    data.update(field.dump_val_to_jsonable(field_v))
-                else:
-                    data[k] = field.dump_val_to_jsonable(field_v)
+            if only_dirty:
+                field_names = self.__dirty_fields__
             else:
-                data[k] = field_v
-        
+                field_names = set(self.__fields__.keys())
+
+            if exclude_natural_key:
+                key_field = self.get_key_field()
+                if key_field.is_key_natural():
+                    field_names = field_names - {key_field.in_scheme_name}
+
+            if exclude_unset is True or (exclude_unset is None and self.__partial__):
+                field_names = field_names - self.__unset_fields__
+
+            if exclude_flags is None and self.__default_edflags__:
+                exclude_flags = self.__default_edflags__
+
+            if include_flags is None and self.__default_idflags__:
+                include_flags = self.__default_idflags__
+
+            for k in field_names:
+                field: Field = self.__fields__[k]
+
+                if exclude_flags:
+                    if field.dump_flags.issuperset(exclude_flags):
+                        continue
+
+                if include_flags and not exclude_flags:
+                    if not field.dump_flags.issuperset(include_flags):
+                        continue
+
+                field_v = FieldValueProxy.dump(getattr(self, k))
+                if jsonable:
+                    if isinstance(field, CompositeField):
+                        data.update(field.dump_val_to_jsonable(field_v))
+                    else:
+                        data[k] = field.dump_val_to_jsonable(field_v)
+                else:
+                    data[k] = field_v
+
         return data
     
     def __getitem__(self, key: str | Field) -> typing.Any:
