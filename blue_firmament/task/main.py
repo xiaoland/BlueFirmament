@@ -105,9 +105,17 @@ class TaskID:
             self.__param_converters = param_converters
 
     @staticmethod
-    def resolve_dynamic_indices(raw_path: str) -> tuple[str, ...]:
+    def resolve_dynamic_indices(
+        raw_path: str,
+        remove_param_indicator: bool = True
+    ) -> tuple[str, ...]:
+        """
+        :param remove_param_indicator:
+            Remove curly brackets which used to mark a parameter in
+            raw path.
+        """
         return tuple(
-            i
+            i[1:-1] if remove_param_indicator else i
             for i in raw_path.strip('/').split('/')
             if i.startswith('{') and i.endswith('}')
         )

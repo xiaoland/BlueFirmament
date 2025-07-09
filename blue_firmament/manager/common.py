@@ -140,7 +140,7 @@ class CommonManager(
                     raise ValueError("key fields required for composite key")
 
             
-            key_aliases: typing.Iterable[str]
+            key_aliases: typing.Sequence[str]
             if preset_handler_config.sup_path and preset_handler_config.key_fields:
                 key_aliases = TaskID.resolve_dynamic_indices(
                     cls.__path_prefix__ + preset_handler_config.sup_path
@@ -178,7 +178,9 @@ class CommonManager(
                 exec(func_sig + func_body, exec_namespaces, handlers)
                 setattr(cls, handler_name, handlers[handler_name])
 
-                cls.__task_registries__["default"].add_handler(
+                cls.__task_registries__.setdefault("default", TaskRegistry(
+                    name="default", path_prefix=cls.__path_prefix__
+                )).add_handler(
                     method=Method.GET, path=sup_path,
                     function=handlers[handler_name],
                     handler_manager_cls=cls
