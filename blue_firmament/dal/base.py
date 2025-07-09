@@ -17,7 +17,7 @@ import typing
 from typing import Annotated as Anno, Optional as Opt, Literal as Lit
 from .types import DALPath, FilterLikeType, StrictDALPath, FieldLikeType
 from .filters import LimitModifier
-from ..utils import dump_enum
+from ..utils.enum_ import dump_enum
 from .._types import Undefined, _undefined
 
 if typing.TYPE_CHECKING:

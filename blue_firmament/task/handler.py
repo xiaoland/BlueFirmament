@@ -11,8 +11,8 @@ from ..scheme import BaseConverter
 from ..scheme.converter import get_converter_from_anno
 from . import Task
 from .result import TaskResult, Body, EmptyBody, JsonBody
-from ..utils import call_as_async
-from ..utils.type import get_origin, safe_issubclass, is_json_dumpable
+from ..utils.main import call_as_async
+from ..utils.typing_ import get_origin, safe_issubclass, is_json_dumpable
 
 if typing.TYPE_CHECKING:
     from .main import BaseTaskContext

@@ -11,12 +11,8 @@ import functools
 import typing
 from typing import Optional as Opt, Annotated as Anno, Literal as Lit
 from .._types import AnnotatedDirective as AD
-from ..utils.type import is_annotated, get_annotated_args
-from ..utils import args_to_kwargs_by_sig
-
-if typing.TYPE_CHECKING:
-    from ..manager.base import BaseManager
-
+from ..utils.typing_ import is_annotated, get_annotated_args
+from ..utils.inspect_ import args_to_kwargs_by_sig
 
 P = typing.ParamSpec("P")
 R = typing.TypeVar("R")

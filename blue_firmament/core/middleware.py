@@ -6,7 +6,8 @@ __all__ = [
 
 import abc
 import typing
-from ..utils import call_as_async
+from ..utils.main import call_as_async
+
 if typing.TYPE_CHECKING:
     from blue_firmament.task.context import BaseTaskContext
 

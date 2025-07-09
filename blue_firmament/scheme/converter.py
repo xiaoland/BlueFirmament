@@ -13,8 +13,8 @@ from typing import Optional as Opt
 
 from .._types import NamedTupleTV, Undefined
 from .._types import _undefined
-from ..utils.type import JsonDumpable, get_origin, is_json_dumpable, is_namedtuple, safe_issubclass
-from ..utils import singleton
+from ..utils.typing_ import JsonDumpable, get_origin, is_json_dumpable, is_namedtuple, safe_issubclass
+from ..utils.main import singleton
 
 if typing.TYPE_CHECKING:
     from . import BaseScheme

@@ -15,7 +15,7 @@ import typing
 from typing import Optional as Opt, Annotated as Anno, Literal as Lit
 
 from .._types import Undefined, _undefined
-from ..utils import call_function
+from ..utils.main import call_as_sync
 
 if typing.TYPE_CHECKING:
     from .field import Field
@@ -127,7 +127,8 @@ class FieldValidator(BaseValidator[T], typing.Generic[T]):
         
         scheme_ins_copy = copy.copy(scheme_ins)
         scheme_ins_copy._set_logger(logger)
-        call_function(self.__func, scheme_ins_copy, value)
+        call_as_sync(self.__func, scheme_ins_copy, value)
+        return None
 
 
 def field_validator(
@@ -254,7 +255,7 @@ class SchemeValidator(BaseValidator):
 
         scheme_ins_copy = copy.copy(scheme_ins)
         scheme_ins_copy._set_logger(logger)
-        call_function(self.__func, scheme_ins_copy)
+        call_as_sync(self.__func, scheme_ins_copy)
 
 
 def scheme_validator(func: SchemeValidator.FuncT) -> SchemeValidator:

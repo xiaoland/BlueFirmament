@@ -5,12 +5,12 @@ import enum
 import datetime
 import json
 from ..scheme.field import FieldValueProxy
-from .type import JsonDumpable
+from .typing_ import JsonDumpable
 from ..scheme import BaseScheme
 from ..log import get_logger
 from ..task.result import JsonBody
 
-logger = get_logger(__name__)
+LOGGER = get_logger(__name__)
 
 
 class JsonEncoder(json.JSONEncoder):
@@ -33,9 +33,8 @@ class JsonEncoder(json.JSONEncoder):
 
 
 def override_json_encoder(cls: typing.Optional[json.JSONEncoder] = None):
-    logger.info("Json lib's encoder has been overriden")
+    LOGGER.info("Json lib's encoder has been overriden")
     json.JSONEncoder = cls or JsonEncoder
-override_json_encoder()
 
 def dumps_to_json(obj: JsonDumpable) -> str:
     

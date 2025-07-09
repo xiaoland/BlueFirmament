@@ -48,7 +48,7 @@ class ManagerMetaclass(abc.ABCMeta):
         path_prefix: str = "",
         **kwargs
     ):
-        
+
         # exclude BaseManager
         if name in ("BaseManager",):
             return super().__new__(cls, name, bases, attrs, **kwargs)

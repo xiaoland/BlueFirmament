@@ -17,6 +17,8 @@ import types
 import typing
 from typing import Optional as Opt, Annotated as Anno, Literal as Lit
 from ..utils.type import safe_issubclass
+
+from ..utils.typing_ import safe_issubclass
 from .._types import Undefined, _undefined
 from .validator import SchemeValidator, FieldValidator
 from .field import (

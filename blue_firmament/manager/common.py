@@ -20,6 +20,7 @@ from ..log.main import get_logger
 # from .base import BaseFieldManager, 
 from .base import BaseManager, SchemeTV
 from ..utils.type import safe_issubclass
+from ..utils.typing_ import safe_issubclass
 from ..task.main import Method
 from ..scheme import BaseScheme
 from blue_firmament.task import TaskID

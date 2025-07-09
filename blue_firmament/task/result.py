@@ -17,8 +17,8 @@ import enum
 
 from . import TaskMetadata
 from ..scheme import BaseScheme
-from ..utils import dump_enum, singleton, load_enum
-from ..utils.type import JsonDumpable
+from ..utils.main import singleton
+from ..utils.typing_ import JsonDumpable
 
 
 TV = typing.TypeVar('TV')
@@ -81,7 +81,7 @@ class JsonBody(Body[JsonDumpable]):
         return self.dump_to_json().encode(encoding)
 
     def dump_to_json(self) -> str:
-        from ..utils.json import dumps_to_json
+        from ..utils.json_ import dumps_to_json
         return dumps_to_json(self._data)
 
 

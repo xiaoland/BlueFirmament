@@ -27,7 +27,7 @@ import enum
 import abc
 import typing
 from typing import Optional as Opt, Annotated as Anno, Literal as Lit
-from .utils.type import JsonDumpable
+from .utils.typing_ import JsonDumpable
 from .task import TaskStatus
 from .log.main import get_logger
 LOGGER = get_logger(__name__)

@@ -3,7 +3,7 @@
 
 import typing
 from .types import FilterLikeType, FieldLikeType
-from ..utils import dump_enum
+from ..utils.enum_ import dump_enum
 
 if typing.TYPE_CHECKING:
     from .filters import DALFilter

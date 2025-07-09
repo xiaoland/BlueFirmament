@@ -18,7 +18,7 @@ import uuid
 import typing
 from typing import Optional as Opt
 
-from ..utils import dump_enum, load_enum
+from ..utils.enum_ import dump_enum, load_enum
 from .._types import PathParamsT, Undefined, _undefined
 from ..scheme.converter import AnyConverter, get_converter_from_anno
 

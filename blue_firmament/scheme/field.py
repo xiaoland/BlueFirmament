@@ -17,7 +17,7 @@ import functools
 import typing
 from typing import Optional as Opt
 from .._types import Undefined, _undefined
-from ..utils.type import safe_issubclass
+from ..utils.typing_ import safe_issubclass
 from ..dal.filters import (
     ContainsFilter, EqFilter, NotEqFilter,
     InFilter, OrderModifier, NotFilter

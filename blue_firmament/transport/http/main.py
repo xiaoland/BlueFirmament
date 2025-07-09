@@ -9,7 +9,8 @@ from ...task import Task, TaskID, TaskMetadata
 from ...task.result import TaskResult, JsonBody, StreamingBody
 from . import _types as http_types
 from .base import MIMEType, HTTPHeader, TStatus2HCode
-from ...utils import try_convert_str, dump_enum
+from ...utils.main import try_convert_str
+from ...utils.enum_ import dump_enum
 from ..base import BaseTransporter
 from ...task.main import Method, LazyParameter
 from ...exceptions import BlueFirmamentException
