@@ -69,7 +69,7 @@ class TaskHandler:
         self.__method_manager_cls = manager_cls
 
     @staticmethod
-    def get_param_getter(name: str, converter: BaseConverter):
+    def get_param_getter(name: str, converter: BaseConverter, safe: bool = True):
         """Get a getter resolves parameter from
         task parameters or path parameters.
         """
@@ -78,8 +78,11 @@ class TaskHandler:
             if val is _undefined:
                 val = await tc._task.parameters.get(name, _undefined)
                 if val is _undefined:
-                    raise ValueError(f'{name} not found in task parameters or path parameters')
-            return converter(val, _request_context=tc)
+                    if not safe:
+                        raise ValueError(f'{name} not found in task parameters or path parameters')
+                    else:
+                        return _undefined
+            return converter(val, _task_context=tc)
 
         return getter
 
@@ -150,10 +153,11 @@ class TaskHandler:
         - 自动处理返回值：处理器的返回值会被解析到响应对象中
         """
         # get kwargs
-        kwargs = {
-            name: await getter(task_context, path_params)
-            for name, getter in self.__handler_kwargs.items()
-        }
+        kwargs = {}
+        for name, getter in self.__handler_kwargs.items():
+            value = await getter(task_context, path_params)
+            if value is not _undefined:
+                kwargs[name] = value
 
         # get args
         args = []
