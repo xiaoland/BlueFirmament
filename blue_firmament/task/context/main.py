@@ -33,10 +33,11 @@ class BaseTaskContext:
 
     .. versionchanged:: 0.1.2
         rename to BaseTaskContext from RequestContext and
-        removed properties from session.
+        removed fields from session.
     """
 
-    def __init__(self,
+    def __init__(
+        self,
         btc: Opt["BaseTaskContext"] = None,
         **kwargs: typing.Unpack[BaseTaskContextFields]
     ):
@@ -74,25 +75,6 @@ class BaseTaskContext:
         """
         return cls.CONTEXTVAR.get()
 
-    @classmethod
-    def try_from_scheme_and_convar(cls, scheme_ins: Opt[SchemeTV] = None) -> "BaseTaskContext":
-
-        """
-        尝试从上下文变量或者包含请求上下文的数据模型中获取请求上下文
-
-        .. deprecated:: bad name and unclear usecase
-
-        :param scheme_ins: 
-            包含请求上下文的数据模型
-            
-            优先级最高
-        :raise LookupError: 都失败
-        """
-        if scheme_ins is not None:
-            if isinstance(scheme_ins, SoBaseTC):
-                return scheme_ins._task_context
-        return cls.from_contextvar()
-
 
 class ExtendedTaskContext(
     typing.Generic[SessionTV],
@@ -101,24 +83,39 @@ class ExtendedTaskContext(
     """Extend BaseTaskContext with session.
     """
 
-    def __init_subclass__(cls, 
+    def __init_subclass__(
+        cls,
         session_cls: Opt[typing.Type[SessionTV]] = None
     ) -> None:
         if session_cls:
             cls.__session_cls = session_cls
         super().__init_subclass__()
 
-    def __init__(self, btc: BaseTaskContext):
-        super().__init__(btc=btc)
-        self.__session = self.__session_cls.from_task(btc._task)
-        self._init_prop()
+    def __init__(
+        self,
+        tc: BaseTaskContext | typing.Self,
+        skip_btc_init: bool = False
+    ):
+        """
+        :param tc: BaseTaskContext or ExtendedTaskContext instance.
+        :param skip_btc_init: For manager's sake!
+        """
+        if not skip_btc_init:
+            super().__init__(btc=tc)
+        if tc.__class__ is BaseTaskContext:
+            self.__session = self.__session_cls.from_task(tc._task)
+        elif isinstance(tc, ExtendedTaskContext):
+            self.__session = tc._session
+        else:
+            raise TypeError("tc must be either BaseTaskContext or subclass of ExtendedTaskContext")
+        self.__init_fields__()
 
-    def _init_prop(self): 
-        """Assign your customized properties"""
-        pass
+    def __init_fields__(self):
+        """Assign your customized fields"""
 
     @property
-    def _session(self): return self.__session
+    def _session(self): 
+        return self.__session
 
 
 class SoBaseTC(BaseScheme):
@@ -128,7 +125,7 @@ class SoBaseTC(BaseScheme):
     task context and its properties with ease.
 
     Or by inheriting this class then override ``_task_context``'s
-    type to your customized TaskContext and add properties, you enables
+    type to your customized TaskContext and add fields, enables
     your scheme accessing your customized task context.
 
     .. versionchanged:: 0.1.2

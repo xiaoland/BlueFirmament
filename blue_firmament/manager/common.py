@@ -8,22 +8,20 @@ __all__ = [
 
 from dataclasses import dataclass
 import typing
-from typing import Literal as Lit, Optional as Opt
-
-import event
+from typing import Literal as Lit, Optional as Opt, Annotated as Anno
+from .. import event
 from ..utils.exec_ import build_func_sig
-from blue_firmament.task.registry import TaskRegistry
-from blue_firmament.task.context.common import CommonTaskContext
+from ..task.registry import TaskRegistry
+from ..task.context.common import CommonTaskContext
 from ..dal import KeyableType, DataAccessObject
 from ..scheme.field import CompositeField, FieldValueProxy
 from ..log.main import get_logger
 # from .base import BaseFieldManager, 
 from .base import BaseManager, SchemeTV
-from ..utils.type import safe_issubclass
 from ..utils.typing_ import safe_issubclass
 from ..task.main import Method
 from ..scheme import BaseScheme
-from blue_firmament.task import TaskID
+from ..task import TaskID
 
 if typing.TYPE_CHECKING:
     from ..core.app import BlueFirmamentApp
@@ -114,7 +112,11 @@ class CommonManager(
         - use snake_case
     - preset_handler_config:
     """
-    
+
+    def __init__(self, task_context: CommonTaskContext):
+        BaseManager.__init__(self, task_context)
+        CommonTaskContext.__init__(self, tc=task_context, skip_btc_init=True)
+
     def __init_subclass__(
         cls,
         preset_handler_config: Opt[PresetHandlerConfig] = None,
