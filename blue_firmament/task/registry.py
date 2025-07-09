@@ -94,7 +94,7 @@ class TaskEntry(BaseMiddleware):
         for handler in self.__handlers:
             handler.set_manager_cls(manager_cls)
 
-    async def __call__(self, *, next, task_context: 'BaseTaskContext'):
+    async def __call__(self, *, next_, task_context: 'BaseTaskContext'):
         """Run all handlers in this entry concurrently.
 
         If multiple results, set task result body to a JsonBody which is a list
@@ -117,7 +117,7 @@ class TaskEntry(BaseMiddleware):
                 for result in results
             ])
 
-        await next()
+        await next_()
 
 
 class TaskRegistry:

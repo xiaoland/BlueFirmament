@@ -18,6 +18,13 @@ class BaseTransporter(abc.ABC):
     def __hash__(self):
         return hash(self._name)
 
+    def __eq__(self, other):
+        if isinstance(other, str):
+            return self._name == other
+        if isinstance(other, BaseTransporter):
+            return self._name == other._name
+        return False
+
     def __str__(self):
         return self._name
 

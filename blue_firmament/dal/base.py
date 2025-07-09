@@ -3,6 +3,7 @@
 
 __all__ = [
     'DataAccessLayer',
+    'DataAccessLayerWithAuth',
     'TableLikeDataAccessLayer',
     'KVLikeDataAccessLayer',
     'QueueLikeDataAccessLayer',
@@ -22,7 +23,7 @@ from .._types import Undefined, _undefined
 
 if typing.TYPE_CHECKING:
     from ..auth import AuthSession
-    from ..scheme.field import Field, FieldValueProxy
+    from ..scheme.field import Field, FieldValueProxy, BaseScheme
     from blue_firmament.task.context import ExtendedTaskContext
 
 
@@ -76,7 +77,7 @@ class TableLikeDataAccessLayer(DataAccessLayer):
         self,
         to_insert: dict,
         path: Opt[DALPath] = None,
-        exclude_key: bool = True,
+        exclude_natural_key: bool = True,
     ) -> dict:
         ...
     @typing.overload
@@ -85,7 +86,7 @@ class TableLikeDataAccessLayer(DataAccessLayer):
         self,
         to_insert: SchemeTV,
         path: Opt[DALPath] = None,
-        exclude_key: bool = True,
+        exclude_natural_key: bool = True,
     ) -> SchemeTV:
         ...
     @abc.abstractmethod
@@ -104,7 +105,9 @@ class TableLikeDataAccessLayer(DataAccessLayer):
         :param exclude_natural_key:
             Exclude natural key fields of the model, defaults to True.
 
-        :returns: The inserted row, same type as `to_insert`.
+        :returns:
+            The inserted row, same type as `to_insert`.
+            If `to_insert` is a model, its private fields will be kept.
         """
 
     @abc.abstractmethod
@@ -204,7 +207,8 @@ class TableLikeDataAccessLayer(DataAccessLayer):
         :param exclude_natural_key: Exclude natural key fields of the model, defaults to True.
         :raises UpdateFailure: 更新失败
         :returns: The updated data.
-            If `to_update` is data model instance, returns row in data model instance.
+            If `to_update` is a data model, returns row in data model and keep original
+            private fields.
             If `to_update` is field value proxy，returns the new value (without proxy).
             If `to_update` is dict，returns row in dict.
         """
@@ -448,8 +452,10 @@ class DataAccessObject(
         *filters: FilterLikeType,
         task_context: Opt["ExtendedTaskContext"] = None,
     ):
-        return self.__dal.select(  
-            to_select=self.__scheme_cls,
+        if not isinstance(self.__dal, TableLikeDataAccessLayer):
+            raise TypeError(f"{self.__dal.__name__} not support TableLike operation")
+        return self.__dal.select(
+            self.__scheme_cls,
             *filters,
             task_context=task_context
         )
@@ -459,8 +465,10 @@ class DataAccessObject(
         *filters: FilterLikeType,
         task_context: Opt["ExtendedTaskContext"] = None,
     ):
+        if not isinstance(self.__dal, TableLikeDataAccessLayer):
+            raise TypeError(f"{self.__dal.__name__} not support TableLike operation")
         return self.__dal.select(  
-            to_select=to_select,
+            to_select,
             *filters,
             task_context=task_context
         ) 
@@ -470,8 +478,10 @@ class DataAccessObject(
         *filters: FilterLikeType,
         task_context: Opt["ExtendedTaskContext"] = None,
     ):
+        if not isinstance(self.__dal, TableLikeDataAccessLayer):
+            raise TypeError(f"{self.__dal.__name__} not support TableLike operation")
         return self.__dal.select(  
-            to_select=to_select,
+            to_select,
             *filters,
             task_context=task_context
         ) 
@@ -480,8 +490,10 @@ class DataAccessObject(
         *filters: FilterLikeType,
         task_context: Opt["ExtendedTaskContext"] = None,
     ):
+        if not isinstance(self.__dal, TableLikeDataAccessLayer):
+            raise TypeError(f"{self.__dal.__name__} not support TableLike operation")
         return self.__dal.select_one(
-            to_select=self.__scheme_cls,
+            self.__scheme_cls,
             *filters,
             task_context=task_context
         ) 
@@ -491,19 +503,23 @@ class DataAccessObject(
         *filters: FilterLikeType,
         task_context: Opt["ExtendedTaskContext"] = None,
     ):
+        if not isinstance(self.__dal, TableLikeDataAccessLayer):
+            raise TypeError(f"{self.__dal.__name__} not support TableLike operation")
         return self.__dal.select_one(
-            to_select=to_select,
+            to_select,
             *filters,
             task_context=task_context
         )
     
     def insert(self, 
         to_insert: SchemeTV,
-        exclude_key: bool = True,
+        exclude_natural_key: bool = True,
     ):
+        if not isinstance(self.__dal, TableLikeDataAccessLayer):
+            raise TypeError(f"{self.__dal.__name__} not support TableLike operation")
         return self.__dal.insert(
             to_insert=to_insert, 
-            exclude_key=exclude_key
+            exclude_natural_key=exclude_natural_key
         )
     
     @typing.overload
@@ -514,7 +530,6 @@ class DataAccessObject(
         exclude_key: bool = True,
     ) -> SchemeTV:
         ...
-
     @typing.overload
     async def update(self,
         to_update: FieldValueTV,
@@ -523,7 +538,6 @@ class DataAccessObject(
         exclude_key: bool = True,
     ) -> FieldValueTV:
         ...
-
     @typing.overload
     async def update(self,
         to_update: typing.Tuple["Field[FieldValueTV]", FieldValueTV],
@@ -532,7 +546,6 @@ class DataAccessObject(
         exclude_key: bool = True,
     ) -> FieldValueTV:
         ...
-    
     def update(self,
         to_update: typing.Union[
             SchemeTV,
@@ -543,8 +556,10 @@ class DataAccessObject(
         only_dirty: bool = True,
         exclude_key: bool = True,
     ):
+        if not isinstance(self.__dal, TableLikeDataAccessLayer):
+            raise TypeError(f"{self.__dal.__name__} not support TableLike operation")
         return self.__dal.update(
-            to_update=to_update,
+            to_update,
             *filters,
             only_dirty=only_dirty,
             exclude_key=exclude_key
@@ -554,8 +569,10 @@ class DataAccessObject(
         to_delete: Opt[SchemeTV] = None, 
         *filters: FilterLikeType
     ):
+        if not isinstance(self.__dal, TableLikeDataAccessLayer):
+            raise TypeError(f"{self.__dal.__name__} not support TableLike operation")
         return self.__dal.delete(
-            to_delete=to_delete or self.__scheme_cls,
+            to_delete or self.__scheme_cls,
             *filters
         )
 

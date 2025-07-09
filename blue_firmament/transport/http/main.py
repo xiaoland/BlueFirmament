@@ -48,19 +48,23 @@ class HTTPHeaders:
         if len(res) == 0:
             return None
         if len(res) == 1:
-            return res[0]
+            res = res[0]
+        
+        self.__parsed_headers[key] = res
         return res
     
     def get(self, key: str | enum.Enum, default: TV = None) -> list[str] | str | TV:
         res = self.__parsed_headers.get(dump_enum(key), None)
         if res is None:
-            res = self._lookup_in_raw_headers(key)
+            res = self._lookup_in_raw_headers(dump_enum(key))
             if res is None:
                 return default
         return res
 
     def get_as_str(self, key: str | enum.Enum, default: TV = None) -> str | TV:
         res = self.get(key, default)
+        if res is None:
+            return None
         if isinstance(res, str):
             return res
         else:
@@ -86,7 +90,7 @@ class HTTPHeaders:
         if content_type_str is None:
             return None
         split = content_type_str.split(';')
-        return MIMEType(split[0]), split[1].split('=')[1]
+        return MIMEType(split[0]), split[1].split('=')[1] if len(split) > 1 else "utf-8"
 
     def get_accept(self) -> tuple[MIMEType, ...]:
         """Get 'Accept' in header

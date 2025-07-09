@@ -34,7 +34,7 @@ class BlueFirmamentApp:
         :param registries:
             If None, will create an empty registry for each transporter.
         """
-        self.__transporters: set[BaseTransporter] = set(transporters) or set()
+        self.__transporters: set[BaseTransporter] = set(transporters or ())
         self.__task_registries: TaskRegistriesT = registries or {
             transporter: TaskRegistry(name=str(transporter))
             for transporter in self.__transporters
@@ -101,4 +101,5 @@ class BlueFirmamentApp:
             task_result=task_result,
             base_logger=self._logger
         ))
+        BaseTaskContext.set_contextvar(task_context)
         await BaseMiddleware.run_middlewares(middlewares, task_context)

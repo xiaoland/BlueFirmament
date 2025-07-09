@@ -35,6 +35,8 @@ def log_manager_handler(func: typing.Callable[P, R]) -> typing.Callable[P, R]:
     Use ``typing.Annotated[type, AnnotatedDirective.NOLOG]`` to
     mark the parameter as disabled.
     """
+    from ..manager.base import BaseManager
+
     func_name = func.__qualname__
     disabled_params = []
 

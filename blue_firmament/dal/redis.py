@@ -36,7 +36,7 @@ class RedisDAL(
             host=self.__host,
             port=self.__port,
             password=self.__password,
-            db=self._default_path[0]
+            db=self.default_path[0]
         )
         self._pubsub = self._client.pubsub(ignore_subscribe_messages=True)
 

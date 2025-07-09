@@ -21,16 +21,16 @@ class BaseMiddleware(abc.ABC):
     """
 
     @abc.abstractmethod
-    def __call__(self, *, next: NextT, task_context: 'BaseTaskContext') -> typing.Union[
+    def __call__(self, *, next_: NextT, task_context: 'BaseTaskContext') -> typing.Union[
         None, typing.Coroutine
     ]:
-        pass
+        ...
 
     @staticmethod
     def run_middlewares(middlewares: MiddlewaresT, task_context: "BaseTaskContext"):
         return call_as_async(
             middlewares[0], 
-            next=BaseMiddleware._get_next(middlewares, task_context=task_context), 
+            next_=BaseMiddleware._get_next(middlewares, task_context=task_context), 
             task_context=task_context
         )
 
