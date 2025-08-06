@@ -64,7 +64,17 @@ class DataAccessLayer(abc.ABC):
 
 class DataAccessLayerWithAuth(DataAccessLayer):
 
-    def __init__(self, auth_session: "AuthSession", **kwargs):
+    def __init_subclass__(
+        cls,
+        force_auth: bool = False,
+        **kwargs,
+    ):
+        cls.__force_auth__ = force_auth
+        super().__init_subclass__(**kwargs)
+
+    def __init__(self, auth_session: Opt["AuthSession"] = None, **kwargs):
+        if auth_session is None and self.__force_auth__:
+            raise ParamsInvalid("auth_session must be provided")
         self._auth_session = auth_session
         super().__init__()
 
@@ -445,7 +455,8 @@ class DataAccessObject(
     typing.Generic[SchemeTV]
 ):
     
-    def __init__(self, 
+    def __init__(
+        self,
         dal: DataAccessLayer,
         scheme_cls: typing.Type[SchemeTV],
     ) -> None:
@@ -604,7 +615,7 @@ class DataAccessObjects:
 
     def __init__(
         self,
-        auth_session: "AuthSession"
+        auth_session: Opt["AuthSession"] = None
     ) -> None:
         self.__auth_session = auth_session
         self.__dals: dict[type[DataAccessLayer], DataAccessLayer] = {}
@@ -615,7 +626,9 @@ class DataAccessObjects:
         
         dal = self.__dals.setdefault(
             scheme_cls.__dal__, 
-            scheme_cls.__dal__(auth_session=self.__auth_session)
+            scheme_cls.__dal__(auth_session=self.__auth_session) if
+            issubclass(scheme_cls.__dal__, DataAccessLayerWithAuth) else
+            scheme_cls.__dal__()
         )
         
         return DataAccessObject(
@@ -624,4 +637,6 @@ class DataAccessObjects:
 
     def is_expired(self) -> bool:
         """Session expired is seen as DAOs expired,"""
-        return self.__auth_session.is_expired()
+        if self.__auth_session:
+            return self.__auth_session.is_expired()
+        return False

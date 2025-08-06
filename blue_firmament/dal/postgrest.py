@@ -69,8 +69,9 @@ class PostgrestDAL(TableLikeDataAccessLayer, DataAccessLayerWithAuth):
             headers={
                 'X-Client-Info': f'{__package_name__}/{__version__}',
                 'apiKey': self.__apikey,
-                "authorization": f'Bearer {self._auth_session.access_token}'
-            },
+                **({"authorization": f'Bearer {self._auth_session.access_token}'}
+                    if self._auth_session else {})
+            }
         )
 
     def destroy(self) -> None:

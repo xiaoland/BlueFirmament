@@ -2,45 +2,56 @@
 """
 
 import typing
+import uuid
 from typing import Annotated as Anno, Optional as Opt, Literal as Lit
-from ..exceptions import ParamsInvalid
+
+from ..exceptions import Unauthorized
 from ..utils import auth_
-from .. import event
-from ..auth import AuthSession
+from ..auth import AuthSession, User
 from ..dal.base import DataAccessObjects
 from . import Session, SessionField
 from ..log.main import get_logger
 LOGGER = get_logger(__name__)
 
 
-class AuthSessionField(SessionField[AuthSession]):
+class AuthSessionField(SessionField[AuthSession | None]):
+
+    class FromToken(typing.TypedDict):
+        access_token: str
+        access_token_type: str
+        access_token_payload: dict
+        refresh_token: Opt[str]
 
     def __init__(
         self,
-        access_token: str,
-        access_token_type: str,
-        access_token_payload: dict,
-        refresh_token: Opt[str] = None
+        from_token: Opt[FromToken] = None,
     ):
-        super().__init__(AuthSession.from_token(
-            access_token=access_token,
-            access_token_type=access_token_type,
-            access_token_payload=access_token_payload,
-            refresh_token=refresh_token
-        ))
+        if from_token:
+            super().__init__(AuthSession.from_token(
+                access_token=from_token["access_token"],
+                access_token_type=from_token["access_token_type"],
+                access_token_payload=from_token["access_token_payload"],
+                refresh_token=from_token.get("refresh_token", None)
+            ))
+        else:
+            super().__init__(None)
 
     def is_expired(self) -> bool:
-        return self.value.is_expired()
+        if self.value:
+            return self.value.is_expired()
+        return False
 
     def refresh(self) -> None:
-        self.value.refresh()
+        if self.value:
+            self.value.refresh()
 
 class DAOsField(SessionField[DataAccessObjects]):
 
-    def __init__(self, auth_session: AuthSession | AuthSessionField):
+    def __init__(self, auth_session: AuthSession | AuthSessionField | None = None):
         if isinstance(auth_session, AuthSessionField):
-            auth_session = auth_session.value
-        super().__init__(DataAccessObjects(auth_session))
+            super().__init__(DataAccessObjects(auth_session.value))
+        else:
+            super().__init__(DataAccessObjects(auth_session))
 
     def is_expired(self) -> bool:
         return self.value.is_expired()
@@ -61,7 +72,7 @@ class CommonSession(Session):
     def __init_fields__(
         self,
         daos: SessionField[DataAccessObjects],
-        auth_session: SessionField[AuthSession],
+        auth_session: SessionField[AuthSession | None],
     ) -> None:
         self.__daos = daos
         self.__auth_session = auth_session
@@ -73,8 +84,10 @@ class CommonSession(Session):
         return self.__daos.value
 
     @property
-    def operator(self):
-        return self.__auth_session.value.user
+    def operator(self) -> User:
+        if self.__auth_session.value:
+            return self.__auth_session.value.user
+        raise Unauthorized("tries to access operator but unauthorized")
 
     @classmethod
     def from_task(cls, task) -> typing.Self:
@@ -82,23 +95,31 @@ class CommonSession(Session):
         if authorization:
             access_token = authorization[1]
         else:
-            raise ParamsInvalid('authorization not found in metadata')
+            LOGGER.warning('authorization not found in metadata')
+            access_token = None
         refresh_token = task.metadata.state.get("refresh_token", None)
 
-        access_token_payload = auth_.decode_token(access_token, cls.ACCESS_TOKEN_TYPE)
+        access_token_payload = {}
+        if access_token:
+            access_token_payload = auth_.decode_token(access_token, cls.ACCESS_TOKEN_TYPE)
 
         def get_fields():
             fields = {}
-            fields["auth_session"] = AuthSessionField(
-                access_token=access_token,
-                access_token_type=cls.ACCESS_TOKEN_TYPE,
-                access_token_payload=access_token_payload,
-                refresh_token=refresh_token
-            )
+            if access_token and access_token_payload:
+                fields["auth_session"] = AuthSessionField(
+                    from_token=AuthSessionField.FromToken(
+                        access_token=access_token,
+                        access_token_type=cls.ACCESS_TOKEN_TYPE,
+                        access_token_payload=access_token_payload,
+                        refresh_token=refresh_token
+                    )
+                )
+            else:
+                fields["auth_session"] = AuthSessionField()
             fields["daos"] = DAOsField(fields["auth_session"])
             return fields
 
         return cls.upsert(
-            access_token_payload[cls.ACCESS_TOKEN_PAYLOAD_ID_CLAIM],
+            access_token_payload.get(cls.ACCESS_TOKEN_PAYLOAD_ID_CLAIM, uuid.uuid4().hex),
             fields_getter=get_fields
         )
