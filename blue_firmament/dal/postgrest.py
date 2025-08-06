@@ -2,11 +2,9 @@
 """
 
 import postgrest
-import enum
-from typing import Optional as Opt
 
-from ..task.context import ExtendedTaskContext, SoBaseTC
-from ..auth import AuthSession
+from ..task.context import ExtendedTaskContext
+from .._types import _undefined
 from ..scheme.converter import SchemeConverter
 from .utils import dump_query_coms_like
 from ..exceptions import Unauthorized
@@ -236,23 +234,33 @@ class PostgrestDAL(TableLikeDataAccessLayer, DataAccessLayerWithAuth):
             fields = ("*",)
         else:
             raise ValueError(f"Invalid type for to_select, {type(to_select)}")
-        
-        # process filters
-        processed_filters: typing.Iterable[DALFilter] = dump_filters_like(
-            *filters, scheme_like=to_select
-        )
 
         # preprocess path
         if path is None:
-            if isinstance(to_select, type) and safe_issubclass(to_select, BaseScheme): 
+            if isinstance(to_select, type) and safe_issubclass(to_select, BaseScheme):
                 path = to_select.dal_path()
             elif isinstance(to_select, Field):
                 path = to_select.scheme_cls.dal_path()
 
+        # process query components
+        prcesd_query_coms: typing.Iterable[DALQueryComponent] = dump_query_coms_like(
+            *query_coms, scheme_like=to_select
+        )
+        ref_fields = set()
+        for i, query_com in enumerate(prcesd_query_coms):
+            if isinstance(query_com, DALFilter):
+                filter_dal_path = query_com.dal_path
+                if (
+                    filter_dal_path is not None and
+                    filter_dal_path[0] != path[0]
+                ):
+                    ref_fields.add(f"{filter_dal_path[0]}({query_com.field_name})")
+                    prcesd_query_coms[i] = query_com.fork(use_fqfn=True)
+
         # construct query
         base_query = self.__get_base_query_from_path(path)
-        base_query = base_query.select(*fields)
-        query = self.__apply_filters_to_base_query(base_query, processed_filters)
+        base_query = base_query.select(*fields, *ref_fields)
+        query = self.__apply_filters_to_base_query(base_query, prcesd_query_coms)
         res = await self.__execute_query(query)
 
         if len(res.data) == 0:
@@ -268,7 +276,7 @@ class PostgrestDAL(TableLikeDataAccessLayer, DataAccessLayerWithAuth):
             return tuple(
                 sc(
                     instance_dict, 
-                    _task_context=task_context
+                    _task_context=task_context or _undefined
                 )
                 for instance_dict in res.data
             )  # type: ignore

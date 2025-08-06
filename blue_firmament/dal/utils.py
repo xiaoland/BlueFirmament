@@ -51,5 +51,13 @@ def dump_query_coms_like(
 
 
 def dump_field_like(value: FieldLikeType) -> str:
+    """Convert FieldLikeType to field name string
+
+    :param value: to dump value
+    :param dal_path: optional, Path to execute current query.
+        If provided, will prepend the field name with `scheme_dal_path[0].` if
+        the `dal_path` is different from the scheme's dal_path.
+        (for resolving reference)
+    """
     from ..scheme.field import dump_field_name
     return dump_field_name(dump_enum(value))
