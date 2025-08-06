@@ -9,6 +9,8 @@ __all__ = [
 from dataclasses import dataclass
 import typing
 from typing import Literal as Lit, Optional as Opt, Annotated as Anno
+
+from ..scheme import EditableScheme
 from .. import event
 from ..utils.exec_ import build_func_sig
 from ..task.registry import TaskRegistry
@@ -134,7 +136,9 @@ class CommonManager(
             exec_namespaces = globals().copy()
             handlers: dict[str, typing.Callable] = {}
 
-            key_field = scheme_cls.get_key_field()
+            exec_namespaces["Editable"] = preset_handler_config.editable
+
+            key_field = scheme_cls._get_key_field()
             if isinstance(key_field, CompositeField) \
                 and not preset_handler_config.key_fields:
                     raise ValueError("key fields required for composite key")
@@ -182,6 +186,39 @@ class CommonManager(
                     name="default", path_prefix=cls.__path_prefix__
                 )).add_handler(
                     method=Method.GET, path=sup_path,
+                    function=handlers[handler_name],
+                    handler_manager_cls=cls
+                )
+
+            if preset_handler_config.put:
+                handler_name = f'put_{manager_name}'
+                func_sig = build_func_sig(
+                    handler_name,
+                    ("body", "Editable"),
+                    *(
+                        (i, f"Anno[typing.Any, {i}_conv]")
+                        for i in key_aliases
+                    ),
+                    async_=True,
+                    method=True
+                )
+                if isinstance(key_field, CompositeField):
+                    func_body = f"    return await self.put(editable=body, _id={key_aliases[0]}_conv({ \
+                        ",".join(
+                            f"{preset_handler_config.key_fields[i].in_scheme_name}={i}"  # type: ignore
+                            for i in key_aliases
+                        ) \
+                    }))"
+                else:
+                    func_body = f"    return await self.put(editable=body, _id={key_aliases[0]})"
+
+                exec(func_sig + func_body, exec_namespaces, handlers)
+                setattr(cls, handler_name, handlers[handler_name])
+
+                cls.__task_registries__.setdefault("default", TaskRegistry(
+                    name="default", path_prefix=cls.__path_prefix__
+                )).add_handler(
+                    method=Method.PUT, path=sup_path,
                     function=handlers[handler_name],
                     handler_manager_cls=cls
                 )
@@ -268,6 +305,17 @@ class CommonManager(
             to_insert=scheme or await self._get_scheme(),
         )
         return self._scheme
+
+    async def put(self, editable: EditableScheme, _id: Opt[KeyTV] = None) -> SchemeTV:
+        """Put some fields of managing scheme to DAO.
+
+        :param editable: Editable version of managing scheme.
+        :param _id: which scheme to put, if not provided, use current managing scheme.
+        :return:
+        """
+        self._scheme = await self._get_scheme(_id=_id)
+        self._scheme._update(scheme=editable)
+        return await self._update_scheme(self._scheme)
     
     async def _update_scheme(self,
         scheme: Opt[SchemeTV] = None,
