@@ -61,34 +61,35 @@ class HTTPHeaders:
                 return default
         return res
 
-    def get_as_str(self, key: str | enum.Enum, default: TV = None) -> str | TV:
+    def get_as_str(self, key: str | enum.Enum, default: str = "") -> str:
         res = self.get(key, default)
         if res is None:
-            return None
+            return ""
         if isinstance(res, str):
             return res
         else:
             raise TypeError("Header exist but value is not a string")
         
-    def get_as_list(self, key: str | enum.Enum, default: TV = None) -> list[str] | TV:
+    def get_as_list(self, key: str | enum.Enum, default: Opt[list] = None) -> list[str]:
         res = self.get(key, None)
         if isinstance(res, list):
             return res
         if res is None:
-            return default
+            return default or []
         else:
             return [res]
         
-    def get_content_type(self) -> Opt[tuple[MIMEType, str]]:
-        """Get 'Content-Type' in header
+    def get_content_type(self) -> tuple[Opt[MIMEType], str]:
+        """Get Header 'Content-Type'
 
         :returns: a tuple, 0 for MIME type, 1 for charset
 
-            If charset not set, defaults to `utf-8`
+            If charset not set, defaults to `utf-8`.
+            If MIMEType not set, defaults to None.
         """
-        content_type_str = self.get_as_str(HTTPHeader.CONTENT_TYPE, None)
-        if content_type_str is None:
-            return None
+        content_type_str = self.get_as_str(HTTPHeader.CONTENT_TYPE)
+        if not content_type_str:
+            return None, "utf-8"
         split = content_type_str.split(';')
         return MIMEType(split[0]), split[1].split('=')[1] if len(split) > 1 else "utf-8"
 
@@ -97,8 +98,8 @@ class HTTPHeaders:
 
         :returns: a list of MIME types that client accepts
         """
-        accept_str = self.get_as_str(HTTPHeader.ACCEPT, None)
-        if accept_str is None:
+        accept_str = self.get_as_str(HTTPHeader.ACCEPT)
+        if not accept_str:
             return (MIMEType.JSON,)
         return tuple(
             MIMEType(i.strip().split(';')[0])
@@ -110,8 +111,8 @@ class HTTPHeaders:
 
         :returns: a string of charset that client accepts
         """
-        accept_charset_str = self.get_as_str(HTTPHeader.ACCEPT_CHARSET, None)
-        if accept_charset_str is None:
+        accept_charset_str = self.get_as_str(HTTPHeader.ACCEPT_CHARSET)
+        if not accept_charset_str:
             return ('utf-8',)
         return tuple(
             i.strip().split(';')[0]
@@ -317,7 +318,7 @@ class HTTPTransporter(BaseTransporter):
     @staticmethod
     def parse_metadata(headers: HTTPHeaders) -> TaskMetadata:
         # parse authorization header
-        authorization=headers.get_as_str('authorization').split(" ")
+        authorization = headers.get_as_str('authorization').split(" ")
         # parse cookies
         cookies = {}
         for cookie_str in headers.get_as_list('cookie', []):
@@ -326,7 +327,8 @@ class HTTPTransporter(BaseTransporter):
             for name, morsel in cookie.items():
                 cookies[name] = morsel.value
         return TaskMetadata(
-            authorization=(authorization[0], authorization[1]),
+            authorization=(authorization[0], authorization[1]) \
+                if len(authorization) == 2 else None,
             trace_id=headers.get_as_str('x-trace-id'),
             client_id=headers.get_as_str('x-client-id'),
             state=cookies
