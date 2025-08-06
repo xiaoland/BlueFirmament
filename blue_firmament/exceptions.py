@@ -36,8 +36,7 @@ LOGGER = get_logger(__name__)
 """
 
 if typing.TYPE_CHECKING:
-    import requests
-    from .scheme import BaseScheme  
+    from .scheme import BaseScheme
 
 
 BFExceptionTV = typing.TypeVar("BFExceptionTV", bound="BlueFirmamentException")
@@ -60,7 +59,7 @@ class BlueFirmamentException(Exception, abc.ABC):
         
         self.errmsg: dict = errmsg
 
-        super().__init__(errmsg, *args, **kwargs)
+        super().__init__(errmsg, *args)
 
     def apply_to_task_result(self, response) -> None:
         """将异常序列化为响应体
@@ -139,7 +138,7 @@ class RequestFailed(InternalError):
     """
 
     def __init__(self, 
-        response: "requests.Response", 
+        response,
         *args, **kwargs
     ):
 
@@ -191,7 +190,7 @@ class Retryable(BlueFirmamentException):
 
     def __init__(
         self,
-        delay: float = 0.2
+        delay: Opt[float] = None
     ):
         """
         :param delay: retry after this many seconds
@@ -200,7 +199,7 @@ class Retryable(BlueFirmamentException):
         self.__delay = delay
 
     @property
-    def delay(self) -> float:
+    def delay(self) -> Opt[float]:
         return self.__delay
 
     @property
@@ -230,17 +229,15 @@ class ParamsInvalid(ClientError, ValueError):
     - 通过参数获得（计算、数据库访问）的值不合法
     """
 
-    def __init__(self,
+    def __init__(
+        self,
         msg: str = '',
         **params
     ):
-
-        """
-        :param msg: 附加描述
-        :param params: 参数名和参数值
-        """
-        super().__init__("invalid parameter(s), %s" % msg, params=params)
-
+        super().__init__({
+            "message": "Invalid parameter(s), %s" % msg,
+            "parameters": params
+        })
 
     @property
     def task_status(self):
@@ -334,7 +331,7 @@ class DuplicateOrConflict(InternalError):
         """从数据模型 实例创建冲突异常
         """
         return cls(
-            (scheme.dal_path(), scheme[scheme.get_key_field()]),
+            (scheme.dal_path(), scheme[scheme._get_key_field()]),
             operation=operation, msg=errmsg,
         )
 

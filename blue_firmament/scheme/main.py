@@ -13,7 +13,7 @@ import copy
 import inspect
 import types
 import typing
-from typing import Optional as Opt, Annotated as Anno, Literal as Lit
+from typing import Optional as Opt
 
 from ..utils.typing_ import safe_issubclass
 from .._types import Undefined, _undefined
@@ -495,13 +495,15 @@ class BaseScheme(metaclass=SchemeMetaclass):
                 setattr(obj, k, v.default_value)
 
     @classmethod
-    def from_parents(cls, /, *parents: "BaseScheme") -> typing.Self:
+    def __from_parents__(cls, /, *parents: "BaseScheme") -> typing.Self:
+        """Instantiate this scheme from its parent schemes.
 
-        """从父数据模型实例实例化本数据模型
+        Precondition:
+        - Inherited fields' name unchanged.
         """
         data = {}
         for parent in parents:
-            data.update(parent.__field_values__)
+            data.update(parent.dump_to_dict())
 
         return cls(**data)
 
@@ -540,21 +542,27 @@ class BaseScheme(metaclass=SchemeMetaclass):
         )
 
     @classmethod
-    def get_key_field(cls) -> Field:
+    def _get_key_field(cls) -> Field:
         """
         :raise KeyError: if no key on scheme
         """
         if not cls.__key__:
             raise KeyError(f'{cls.__name__} does not have a key')
         return cls.__key__
+
+    @classmethod
+    def _try_get_key_field(cls) -> Opt[Field]:
+        """Try to get key field, return None if not exists.
+        """
+        return cls.__key__ if cls.__key__ else None
     
     @property
     def key_value(self) -> typing.Any:
-        return self._get_value(self.get_key_field())
+        return self._get_value(self._get_key_field())
     
     @property
     def key_eqf(self) -> "EqFilter":
-        key_field = self.get_key_field()
+        key_field = self._get_key_field()
         return key_field.equals(self._get_value(key_field))
     
     # def dump(self, target_type: typing.Type[TV]) -> TV:
@@ -635,8 +643,8 @@ class BaseScheme(metaclass=SchemeMetaclass):
                 field_names = set(self.__fields__.keys())
 
             if exclude_natural_key:
-                key_field = self.get_key_field()
-                if key_field.is_key_natural():
+                key_field = self._try_get_key_field()
+                if key_field and key_field.is_key_natural():
                     field_names = field_names - {key_field.in_scheme_name}
 
             if exclude_unset is True or (exclude_unset is None and self.__partial__):
@@ -671,7 +679,6 @@ class BaseScheme(metaclass=SchemeMetaclass):
         return data
     
     def __getitem__(self, key: str | Field) -> typing.Any:
-        
         """通过字段名/字段获取字段值
 
         Note: 不可以是其他属性，只可以是字段
@@ -682,12 +689,11 @@ class BaseScheme(metaclass=SchemeMetaclass):
         raise KeyError(f'{key} is not a field of {self.__class__.__name__}')
     
     def __setitem__(self, key: str | Field, value: typing.Any) -> None:
-
         """通过字段/字段名设置字段值
 
         Note: 不可以是其他属性，只可以是字段
         """
-        field = self.__getitem__(key)
+        field = self.__fields__[dump_field_name(key)]
         field.__set__(self, value)
 
     @classmethod
@@ -711,14 +717,29 @@ class BaseScheme(metaclass=SchemeMetaclass):
         self.__field_values__[field.in_scheme_name] = value
 
     def _get_value(
-        self, field: Field[FieldValueType]
+        self,
+        field: Field[FieldValueType]
     ) -> "FieldValueProxy[FieldValueType]" | FieldValueType:
         """获取字段值
 
         :param field: 字段名或字段实例
         """
         return self.__field_values__[field.in_scheme_name]
-    
+
+    def _update(self, scheme: "BaseScheme") -> None:
+        """Update current scheme with another scheme's values.
+
+        Use ``dump_to_dict`` to get the values of the other scheme.
+
+        :param scheme: The scheme to update from
+        """
+        if not isinstance(scheme, BaseScheme):
+            raise TypeError(f"Expected BaseScheme, got {type(scheme)}")
+
+        dumped = scheme.dump_to_dict()
+        for field_name, value in dumped.items():
+            self.__fields__[field_name].__set__(self, value)
+
     @property
     def _logger(self):
         """Scheme level logger
@@ -765,6 +786,8 @@ class BaseRootScheme(BaseScheme):
 def merge(scheme1: BaseScheme, scheme2: BaseScheme) -> None:
     """Merge same fields (by name)'s value from scheme2 to scheme1.
 
+    Will firstly dump scheme2 (so partial will not be included)
+
     Examples
     --------
     >>> merge(SchemeA(a=1, b=3), SchemeB(a=2))
@@ -772,7 +795,7 @@ def merge(scheme1: BaseScheme, scheme2: BaseScheme) -> None:
     >>> merge(SchemeA(a=1), SchemeB(a=_undefined))
     SchemeB: a=1
     """
-    for field_ in scheme2.__fields__.values():
+    for field_ in scheme2.dump_to_dict():
         try:
             scheme1[field_] = scheme2[field_]
         except KeyError:

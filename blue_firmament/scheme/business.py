@@ -34,7 +34,7 @@ class BusinessScheme(
             if "_id" in dump_flags:
                 cls._id.dump_flags = dump_flags["_id"]
 
-    _id: FieldT[KeyTV] = field(is_key=True)
+    _id: FieldT[KeyTV] = field(is_key=True, is_natural_key=True)
 
     @property
     def _inserted(self):

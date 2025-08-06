@@ -34,7 +34,7 @@ def dump_query_coms_like(
                     if isinstance(scheme_like, Field):
                         scheme_like = scheme_like.scheme_cls
                     if issubclass(scheme_like, BaseScheme) or isinstance(scheme_like, BaseScheme):
-                        res.append(scheme_like.get_key_field().equals(item))
+                        res.append(scheme_like._get_key_field().equals(item))
                         continue
 
                 raise ValueError

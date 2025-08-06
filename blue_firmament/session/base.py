@@ -12,7 +12,7 @@ if typing.TYPE_CHECKING:
 
 SFValueTV = typing.TypeVar("SFValueTV")
 class SessionField(typing.Generic[SFValueTV], abc.ABC):
-    '''会话字段类（抽象类）
+    """会话字段类（抽象类）
 
     是状态的基本存储单位
 
@@ -32,7 +32,7 @@ class SessionField(typing.Generic[SFValueTV], abc.ABC):
             ...    
             super().__init__(value)
     ```
-    '''
+    """
 
     def __init__(self, value: SFValueTV):
         self.__updated_at = get_datetimez()

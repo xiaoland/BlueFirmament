@@ -12,6 +12,7 @@ import copy
 import typing
 from typing import Optional as Opt, Annotated as Anno, Literal as Lit
 
+from ..exceptions import NotFound
 from .._types import PathParamsT, CallableTV
 from ..transport.base import BaseTransporter
 from .result import Body, JsonBody
@@ -236,7 +237,7 @@ class TaskRegistry:
         """Lookup a task entry by task_id.
 
         :param task_id: The task ID to lookup, must be static.
-        :raise KeyError: If no task entry matched.
+        :raise NotFound: If no task entry matched.
         :raise TypeError: If task_id is dynamic.
         :returns:
             The (shallow) copy of the matched TaskEntry
@@ -259,7 +260,7 @@ class TaskRegistry:
                 else:
                     continue
 
-        raise KeyError(f"TaskID {task_id} don't has an entry in registry {self.name}")
+        raise NotFound(f"TaskID {task_id} don't has an entry in registry {self.name}")
 
 
 def listen_to(

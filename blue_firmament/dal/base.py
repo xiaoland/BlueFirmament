@@ -166,7 +166,7 @@ class TableLikeDataAccessLayer(DataAccessLayer):
         *query_coms: QueryComLikeType,
         path: Opt[DALPath] = None,
         only_dirty: bool = True,
-        exclude_key: bool = True,
+        exclude_natural_key: bool = True,
     ) -> FieldValueTV:
         ...
     @typing.overload
@@ -177,7 +177,7 @@ class TableLikeDataAccessLayer(DataAccessLayer):
         *query_coms: QueryComLikeType,
         path: Opt[DALPath] = None,
         only_dirty: bool = True,
-        exclude_key: bool = True,
+        exclude_natural_key: bool = True,
     ) -> FieldValueTV:
         ...
     @abc.abstractmethod
@@ -223,7 +223,7 @@ class TableLikeDataAccessLayer(DataAccessLayer):
             If `to_update` is dict，returns row in dict.
         """
 
-        # TODO returns all affected records
+    # TODO add update returns multiple affected records
 
     @typing.overload
     @abc.abstractmethod

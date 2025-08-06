@@ -6,18 +6,22 @@ __all__ = [
 
 import typing
 import time
+
+from .main import call_as_async
 from ..exceptions import Retryable, MaxRetriesExceeded
 
 
 def retry(
     max_: int = 1,
-    default_delay: int | float = 0.1,
+    default_delay: int | float = 0.2,
 ):
     """Retry decorated function when it raises a retryable exception.
 
     :param max_: The maximum number of retries
     :param default_delay: The delay between retries in seconds if
         Retryable exception does not specify a delay.
+
+    Async and sync functions are supported and all call as async.
 
     Examples
     ^^^^^^^^
@@ -33,12 +37,12 @@ def retry(
                 raise Retryable(delay=0.2)
     """
     def decorator(func: typing.Callable):
-        def wrapper(*args, **kwargs):
-            for attempt in range(max_):
+        async def wrapper(*args, **kwargs):
+            for attempt in range(max_+1):
                 try:
-                    return func(*args, **kwargs)
+                    return await call_as_async(func, *args, **kwargs)
                 except Retryable as e:
-                    time.sleep(e.delay)
+                    time.sleep(e.delay or default_delay)
 
             raise MaxRetriesExceeded()
 

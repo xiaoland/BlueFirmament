@@ -6,10 +6,13 @@ __all__ = [
     "SoCommonTC"
 ]
 
+import typing
 from ... import event
 from ...scheme import FieldT, private_field
 from ..context import SoBaseTC, ExtendedTaskContext
 from ...session.common import CommonSession
+if typing.TYPE_CHECKING:
+    from ...dal import DataAccessObjects
 
 
 class CommonTaskContext(
@@ -24,13 +27,15 @@ class CommonTaskContext(
     def __init_subclass__(cls, **kwargs) -> None:
         super().__init_subclass__()
 
-    def __init_fields__(self):
-        self._daos = self._session.daos
-        self._operator = self._session.operator
-
     @property
     def _emit(self):
         return event.simple_emit
+    @property
+    def _daos(self):
+        return self._session.daos
+    @property
+    def _operator(self):
+        return self._session.operator
 
 
 class SoCommonTC(SoBaseTC):

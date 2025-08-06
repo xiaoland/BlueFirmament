@@ -33,9 +33,7 @@ if typing.TYPE_CHECKING:
 
 FieldValueTV = typing.TypeVar('FieldValueTV')
 class FieldValueProxy(typing.Generic[FieldValueTV]):
-
-    '''
-    字段值代理对象
+    """字段值代理对象
 
     字段值必然是原生值，不能是用户自定义类
 
@@ -48,7 +46,7 @@ class FieldValueProxy(typing.Generic[FieldValueTV]):
     ^^^^^^^^^^
     - 在下方通过 for 循环注册了一堆特殊方法
     - `__bool__` 特殊处理
-    ''' 
+    """
 
     def __init__(self, 
         obj: FieldValueTV, 
@@ -183,7 +181,6 @@ class Field(typing.Generic[FieldValueTV]):
         dump_flags: Opt[set[str]] = None,
         init: bool = True,
     ):
-
         """
         :param default:
             Immutable value used when set value not provided(``_undefined``).
@@ -230,7 +227,9 @@ class Field(typing.Generic[FieldValueTV]):
         self.__is_partial = is_partial
         self.__dump_flags = dump_flags or set()
         self.__init = init
-        
+
+    # FIXME all default must be negative, or default value will override original value even if \
+    #  no new value is set
     def fork(
         self,
         default: Undefined | FieldValueTV = _undefined,
@@ -240,10 +239,10 @@ class Field(typing.Generic[FieldValueTV]):
         in_scheme_name: Opt[str] = None,
         scheme_cls: Opt[typing.Type["BaseScheme"]] = None,
         is_key: bool = False,
-        is_key_natural: bool = True,
+        is_key_natural: bool = False,
         is_foreign_key: bool = False,
         converter: Opt[BaseConverter[FieldValueTV]] = None,
-        fork_validators: bool = True,
+        fork_validators: bool = False,
         is_partial: Opt[bool] = None,
         dump_flags: Opt[set[str]] = None,
         init: Opt[bool] = None,
@@ -341,6 +340,10 @@ class Field(typing.Generic[FieldValueTV]):
     @property
     def dump_flags(self) -> set[str]:
         return self.__dump_flags
+
+    @dump_flags.setter
+    def dump_flags(self, value: set[str]) -> None:
+        self.__dump_flags = value
 
     def _set_scheme_cls(self, 
         scheme_cls: Opt[typing.Type["BaseScheme"]],
@@ -492,12 +495,11 @@ class Field(typing.Generic[FieldValueTV]):
             validator(value, scheme_ins=scheme_ins)
         
     def equals(self, value: typing.Any) -> EqFilter:
-        '''该字段等于该值的筛选器
-        '''
+        """该字段等于该值的筛选器
+        """
         return EqFilter(self, value)
     
     def contains(self, *value: typing.Any) -> ContainsFilter:
-
         """该字段包含所有元素的筛选器
         """
         return ContainsFilter(self, *value)
@@ -633,7 +635,7 @@ def field(
     name: Opt[str] = None,
     is_key: bool = False,
     is_natural_key: bool = False,
-    is_foreign_key: bool = False,
+    is_foreign_key: bool = False,  # TODO no needed, remove
     converter: Opt[BaseConverter] = None,
     validators: Opt[typing.Iterable['BaseValidator']] = None,
     is_partial: bool = False,

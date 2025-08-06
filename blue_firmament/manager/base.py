@@ -163,7 +163,7 @@ class BaseManager(
     @property
     def _scheme_key(self) -> Field:
         """Key field of managing scheme"""
-        return self._scheme_cls.get_key_field()
+        return self._scheme_cls._get_key_field()
 
     @property
     def _scheme(self) -> SchemeTV:
@@ -176,9 +176,7 @@ class BaseManager(
         return self.__scheme
     
     @_scheme.setter
-    def _scheme(self,
-        scheme: SchemeTV,
-    ) -> None:
+    def _scheme(self, scheme: SchemeTV):
         """Set managing scheme
         """
         self.__scheme = scheme

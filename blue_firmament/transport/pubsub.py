@@ -37,6 +37,7 @@ class PubSubTransporter(BaseTransporter):
     async def start(self):
         self.__stop = False
         await self.__pubsub_dal.subscribe(*self.__channel_names)
+        self._logger.info("Listening to Pub/Sub channels", channels=self.__channel_names)
         while not self.__stop:
             message = await self.__pubsub_dal.get_message()
             await self(message)
@@ -44,6 +45,7 @@ class PubSubTransporter(BaseTransporter):
     async def stop(self):
         self.__stop = True
         await self.__pubsub_dal.unsubscribe(*self.__channel_names)
+        self._logger.info("Stop listening to Pub/Sub channels", channels=self.__channel_names)
 
     async def __call__(self, message: PubSubMessage):
         await self._app.handle_task(

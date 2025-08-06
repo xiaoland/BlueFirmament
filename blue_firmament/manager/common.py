@@ -128,6 +128,7 @@ class CommonManager(
         scheme_cls = cls.__scheme_cls__
         manager_name = cls.__manager_name__
 
+        # REFACTOR
         if preset_handler_config:
             if not scheme_cls:
                 raise ValueError("scheme cls is required if you want to set up \
@@ -168,6 +169,7 @@ class CommonManager(
                         for i in key_aliases
                     ),
                     async_=True,
+                    method=True
                 )
                 if isinstance(key_field, CompositeField):
                     func_body = f"    return await self.get(_id={key_aliases[0]}_conv({ \
@@ -247,9 +249,8 @@ class CommonManager(
             parameters=parameters,
             metadata=metadata
         )
-    
+
     async def _get_scheme(self, _id: Opt[KeyTV] = None) -> SchemeTV:
-        
         """Get managing scheme.
 
         :param _id: Key value
@@ -269,7 +270,6 @@ class CommonManager(
         """
         try:
             scheme = self._scheme
-
             if _id is not None:
                 if scheme.key_value == _id:
                     return scheme
@@ -279,9 +279,8 @@ class CommonManager(
             if _id is not None:
                 return await self.get(_id=_id)
             raise e
-    
+
     async def get(self, _id: KeyTV) -> SchemeTV:
-        
         """Get scheme
 
         If success, set as managing scheme.
@@ -290,14 +289,12 @@ class CommonManager(
             _id, task_context=self
         )
         return self._scheme
-    
-    async def insert(self, 
-        scheme: Opt[SchemeTV] = None,
-    ) -> SchemeTV:
+
+    async def insert(self, scheme: Opt[SchemeTV] = None) -> SchemeTV:
         """插入数据模型实例到 DAO
 
         - 插入成功则设置为当前实例
-        
+
         :param scheme: 数据模型实例；不提供则为当前实例
 
         """
@@ -341,7 +338,7 @@ class CommonManager(
         scheme = self._try_get_scheme()
         if not scheme:
             return await self._dao.select_one(
-                self._scheme_cls.get_key_field().equals(_id),
+                self._scheme_cls._get_key_field().equals(_id),
                 field=field, 
                 task_context=self
             )
@@ -453,7 +450,7 @@ class CommonManager(
             If not provided, use managing scheme's.
         """
         scheme = await self._get_scheme(_id=_id)
-        await self._dao.delete(scheme)
+        await self._dao.delete(to_delete=scheme)
         self._reset_scheme()
 
 
@@ -623,7 +620,7 @@ def common_handler_adder(
             register = None
 
         if safe_issubclass(manager_cls.__scheme_cls__, BaseScheme):
-            primary_key_field = manager_cls.__scheme_cls__.get_key_field()
+            primary_key_field = manager_cls.__scheme_cls__._get_key_field()
         else:
             primary_key_field = None
 

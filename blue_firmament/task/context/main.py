@@ -103,15 +103,18 @@ class ExtendedTaskContext(
         if not skip_btc_init:
             super().__init__(btc=tc)
         if tc.__class__ is BaseTaskContext:
-            self.__session = self.__session_cls.from_task(tc._task)
+            self.__session: SessionTV = self.__session_cls.from_task(tc._task)
         elif isinstance(tc, ExtendedTaskContext):
-            self.__session = tc._session
+            self.__session: SessionTV = tc._session
         else:
             raise TypeError("tc must be either BaseTaskContext or subclass of ExtendedTaskContext")
         self.__init_fields__()
 
     def __init_fields__(self):
-        """Assign your customized fields"""
+        """Assign your customized fields.
+
+        Better to use property instead of set attribute.
+        """
 
     @property
     def _session(self): 

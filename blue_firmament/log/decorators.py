@@ -82,6 +82,7 @@ def log_manager_handler(func: typing.Callable[P, R]) -> typing.Callable[P, R]:
         result = func(*new_args, **kwargs)  # type: ignore
 
         # exit log
+        # FIXME not real exit for async function
         logger.info("Exit manager handler", result=result)
 
         return result

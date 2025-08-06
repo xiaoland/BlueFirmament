@@ -117,7 +117,7 @@ class StreamingBody(Body):
 class TaskStatus(enum.Enum):
     OK = 200
     CREATED = 201
-    NO_CONTENT = 204
+    DELETED = 204
     BAD_REQUEST = 400
     UNPROCESSABLE_ENTITY = 422
     UNAUTHORIZED = 401

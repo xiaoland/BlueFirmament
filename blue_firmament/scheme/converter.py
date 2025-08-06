@@ -11,6 +11,7 @@ import enum
 import types
 from typing import Optional as Opt
 
+from ..utils.enum_ import load_enum
 from .._types import NamedTupleTV, Undefined
 from .._types import _undefined
 from ..utils.typing_ import JsonDumpable, get_origin, is_json_dumpable, is_namedtuple, safe_issubclass
@@ -155,8 +156,13 @@ def get_converter_from_anno(
             value_type=typing.get_args(tp)[0]
         )
     if ortp is list:
+        tp_args = typing.get_args(tp)
+        if len(tp_args) == 0:
+            ele_tp = typing.Any
+        else:
+            ele_tp = tp_args[0]
         return ListConverter(
-            element_type=typing.get_args(tp)[0]
+            element_type=ele_tp
         )
     if is_namedtuple(ortp):
         return NamedTupleConveter(
@@ -212,18 +218,21 @@ class SchemeConverter(BaseConverter[SchemeTV], typing.Generic[SchemeTV]):
         self.scheme_cls = scheme_cls
 
     def __call__(self, value: dict | SchemeTV, **kwargs) -> SchemeTV:
-
         """
         :param value: 序列化值
         :param kwargs: 额外参数
             - _task_context: 任务上下文
         """
+        from . import BaseScheme
+
         if isinstance(value, dict):
             return self.scheme_cls(**value, **kwargs)
-        else:
-            for k, v in kwargs:
+        elif isinstance(value, BaseScheme):
+            for k, v in kwargs.items():
                 value[k] = v
             return value
+        else:
+            raise ValueError('value should be dict or BaseScheme')
 
     @property
     def type(self): return self.scheme_cls
@@ -246,7 +255,7 @@ class EnumConverter(BaseConverter[EnumMemberTV], typing.Generic[EnumMemberTV]):
         self.enum_cls = enum_cls
 
     def __call__(self, value, **kwargs) -> EnumMemberTV:
-        return self.enum_cls(value)
+        return load_enum(self.enum_cls, value)
     
     @property
     def type(self): return self.enum_cls

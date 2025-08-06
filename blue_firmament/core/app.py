@@ -8,7 +8,7 @@ from ..task.result import TaskResult
 from ..transport.base import (
     BaseTransporter
 )
-from ..task import TaskID, Task
+from ..task import Task
 from ..task.registry import TaskRegistry
 from .middleware import BaseMiddleware, MiddlewaresT
 from blue_firmament.dal.query_components.filters import *

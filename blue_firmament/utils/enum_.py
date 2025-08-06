@@ -28,6 +28,13 @@ def dump_enum(enum_member: enum.Enum | DumpEnumValueType | None) -> DumpEnumValu
         return enum_member.value
     return enum_member
 
+def dump_enums(enums: typing.Iterable[enum.Enum]) -> typing.Iterable[DumpEnumValueType]:
+    """Dump iterable of enum members to their values.
+
+    :param enums: Iterable of enum members.
+    :returns: Iterable of enum member values.
+    """
+    return (dump_enum(enum_member) for enum_member in enums)
 
 EnumType = typing.TypeVar('EnumType', bound=enum.Enum)
 @typing.overload

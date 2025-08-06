@@ -167,7 +167,7 @@ class JsonFileSetting(Setting):
         else:
             raise ValueError("Setting path is not set")
 
-class EnvJsonSetting(Setting):
+class EnvJsonSetting(Setting, partial=True):
     
     """
     多环境JSON配置

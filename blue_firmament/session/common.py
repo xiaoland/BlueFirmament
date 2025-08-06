@@ -78,7 +78,7 @@ class CommonSession(Session):
         self.__auth_session = auth_session
 
     @property
-    def daos(self):
+    def daos(self) -> DataAccessObjects:
         """DataAccessObjects
         """
         return self.__daos.value
