@@ -21,13 +21,18 @@ class BusinessScheme(
     BaseScheme, 
 ):
     
-    def __init_subclass__(cls, 
-        key_type: Opt[typing.Type[KeyTV]] = None,
+    def __init_subclass__(
+        cls,
+        key_type: Opt[type[KeyTV]] = None,
+        dump_flags: Opt[dict[str, set[str]]] = None,
         **kwargs
     ) -> None:
         super().__init_subclass__(**kwargs)
         if key_type:
             cls._id._set_converter_from_anno(key_type)
+        if dump_flags:
+            if "_id" in dump_flags:
+                cls._id.dump_flags = dump_flags["_id"]
 
     _id: FieldT[KeyTV] = field(is_key=True)
 
