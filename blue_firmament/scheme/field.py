@@ -18,10 +18,12 @@ import typing
 from typing import Optional as Opt
 from .._types import Undefined, _undefined
 from ..utils.typing_ import safe_issubclass
-from ..dal.filters import (
+from blue_firmament.dal.query_components.filters import (
     ContainsFilter, EqFilter, NotEqFilter,
-    InFilter, OrderModifier, NotFilter
+    InFilter, IsFilter
 )
+from ..dal.query_components.modifiers import OrderModifier
+from blue_firmament.dal.query_components.operators import NotOperator
 from .converter import BaseConverter, get_converter_from_anno
 
 if typing.TYPE_CHECKING:
@@ -510,8 +512,14 @@ class Field(typing.Generic[FieldValueTV]):
         """
         return InFilter(self, value)
     
-    def not_in_(self, value: typing.Iterable[typing.Any]) -> tuple[NotFilter, InFilter]:
-        return (NotFilter(), self.in_(value))
+    def not_in_(self, value: typing.Iterable[typing.Any]) -> tuple[NotOperator, InFilter]:
+        return (NotOperator(), self.in_(value))
+
+    def is_(self, value: bool | None) -> IsFilter:
+        return IsFilter(self, value)
+
+    def is_not(self, value: bool | None) -> tuple[NotOperator, IsFilter]:
+        return (NotOperator(), IsFilter(self, value))
     
     def order_by(self, *, desc: bool = False) -> OrderModifier:
 

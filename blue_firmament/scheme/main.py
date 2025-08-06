@@ -25,9 +25,10 @@ from .field import (
 from .field import FieldValueProxy
 if typing.TYPE_CHECKING:
     from ..dal.types import DALPath
-    from ..log import LoggerT
-    from ..dal.filters import DALFilter, EqFilter
+    from ..dal.query_components.filters import EqFilter
+    from ..dal.query_components import DALQueryComponent
     from ..dal.base import DataAccessLayer
+    from ..log import LoggerT
 
 
 @typing.dataclass_transform(
@@ -530,7 +531,7 @@ class BaseScheme(metaclass=SchemeMetaclass):
             raise ValueError("dal path not set")
         return cls.__dal_path__
     
-    def equals(self) -> typing.Tuple["DALFilter", ...]:
+    def equals(self) -> typing.Tuple["DALQueryComponent", ...]:
         """Get EqFilter of all fields.
         """
         return tuple(

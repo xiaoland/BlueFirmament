@@ -2,17 +2,17 @@
 
 
 import typing
-from .types import FilterLikeType, FieldLikeType
+from .types import QueryComLikeType, FieldLikeType
 from ..utils.enum_ import dump_enum
 
 if typing.TYPE_CHECKING:
-    from .filters import DALFilter
+    from .query_components import DALQueryComponent
 
 
-def dump_filters_like(
-    *values: FilterLikeType,
+def dump_query_coms_like(
+    *values: QueryComLikeType,
     scheme_like: typing.Any | None = None
-) -> typing.Iterable["DALFilter"]:
+) -> typing.Iterable["DALQueryComponent"]:
 
     """Convert list of FilterLikeType to DALFilter list
 

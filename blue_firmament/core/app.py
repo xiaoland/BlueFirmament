@@ -1,6 +1,4 @@
 import asyncio
-from typing import Optional as Opt
-
 
 from .._types import TaskRegistriesT
 from ..task.context import CommonTaskContext
@@ -13,7 +11,7 @@ from ..transport.base import (
 from ..task import TaskID, Task
 from ..task.registry import TaskRegistry
 from .middleware import BaseMiddleware, MiddlewaresT
-from ..dal.filters import *
+from blue_firmament.dal.query_components.filters import *
 
 if typing.TYPE_CHECKING:
     from structlog.stdlib import BoundLogger

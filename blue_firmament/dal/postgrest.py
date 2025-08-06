@@ -8,18 +8,18 @@ from typing import Optional as Opt
 from ..task.context import ExtendedTaskContext, SoBaseTC
 from ..auth import AuthSession
 from ..scheme.converter import SchemeConverter
-from .utils import dump_filters_like
+from .utils import dump_query_coms_like
 from ..exceptions import Unauthorized
 from ..utils.typing_ import safe_issubclass
 from ..exceptions import NotFound
 from ..scheme.field import Field, FieldValueProxy, FieldValueTV
-from .filters import *
+from blue_firmament.dal.query_components.filters import *
 from .base import TableLikeDataAccessLayer, DataAccessLayerWithAuth
 from .. import __version__, __name__ as __package_name__
 from .types import (
-    DALPath, FieldLikeType, FilterLikeType, StrictDALPath
+    DALPath, FieldLikeType, QueryComLikeType, StrictDALPath
 )
-from .filters import DALFilter
+from .query_components import DALQueryComponent
 from ..utils.main import call_as_sync
 from ..utils.enum_ import dump_enum
 from ..scheme import BaseScheme, SchemeTV
@@ -94,21 +94,25 @@ class PostgrestDAL(TableLikeDataAccessLayer, DataAccessLayerWithAuth):
         postgrest.AsyncFilterRequestBuilder,
         postgrest.AsyncSelectRequestBuilder
     )
-    def __apply_filters_to_base_query(self, 
-        base_query: QueryTV, 
-        filters: typing.Iterable[DALFilter]
+    def __apply_filters_to_base_query(
+        self,
+        base_query: QueryTV,
+        query_coms: tuple[DALQueryComponent]
     ) -> QueryTV:
-        """将过滤器应用到查询对象"""
-        for f in filters:
-            f_tuple = f.dump_to_tuple()
-            f_func = getattr(base_query, f_tuple[0])
-            if f_tuple[1] is not None:
-                if isinstance(f_tuple[1], typing.Iterable):
-                    base_query = f_func(*f_tuple[1])
-                elif isinstance(f_tuple[1], dict):
-                    base_query = f_func(**f_tuple[1])
+        """将过滤器应用到查询对象
+
+        :param base_query: 基础查询对象
+        :param query_coms: 过滤器列表
+        """
+        for query_com in query_coms:
+            dumped_query_com = query_com.dump_to_postgrest()
+            req_builer_method = getattr(base_query, dumped_query_com[0])
+            if isinstance(dumped_query_com[1], tuple):
+                base_query = req_builer_method(*dumped_query_com[1])
+            elif isinstance(dumped_query_com[1], dict):
+                base_query = req_builer_method(**dumped_query_com[1])
             else:
-                base_query = f_func()
+                base_query = req_builer_method()
         return base_query
 
     async def __execute_query(self, query: QueryTV):
@@ -179,7 +183,7 @@ class PostgrestDAL(TableLikeDataAccessLayer, DataAccessLayerWithAuth):
     async def select(
         self,
         to_select: typing.Type[SchemeTV],
-        *filters: FilterLikeType,
+        *filters: QueryComLikeType,
         path: typing.Optional[DALPath] = None,
         task_context: Opt[ExtendedTaskContext] = None,
     ) -> typing.Tuple[SchemeTV, ...]:
@@ -188,7 +192,7 @@ class PostgrestDAL(TableLikeDataAccessLayer, DataAccessLayerWithAuth):
     async def select(
         self,
         to_select: "Field[FieldValueTV]",
-        *filters: FilterLikeType,
+        *filters: QueryComLikeType,
         path: typing.Optional[DALPath] = None,
         task_context: Opt[ExtendedTaskContext] = None,
     ) -> typing.Tuple[FieldValueTV, ...]:
@@ -197,7 +201,7 @@ class PostgrestDAL(TableLikeDataAccessLayer, DataAccessLayerWithAuth):
     async def select(
         self,
         to_select: typing.Iterable[FieldLikeType] | None,
-        *filters: FilterLikeType,
+        *filters: QueryComLikeType,
         path: typing.Optional[DALPath] = None,
         task_context: Opt[ExtendedTaskContext] = None,
     ) -> typing.Tuple[dict, ...]:
@@ -210,7 +214,7 @@ class PostgrestDAL(TableLikeDataAccessLayer, DataAccessLayerWithAuth):
             typing.Iterable[FieldLikeType],
             None
         ],
-        *filters: FilterLikeType,
+        *query_coms: QueryComLikeType,
         path: typing.Optional[DALPath] = None,
         task_context: Opt[ExtendedTaskContext] = None,
     ) -> typing.Union[
@@ -218,7 +222,6 @@ class PostgrestDAL(TableLikeDataAccessLayer, DataAccessLayerWithAuth):
         typing.Tuple[FieldValueTV, ...],
         typing.Tuple[dict, ...]
     ]:
-        
         # process to_select to fields
         if to_select is None:
             fields = ("*",)
@@ -271,24 +274,25 @@ class PostgrestDAL(TableLikeDataAccessLayer, DataAccessLayerWithAuth):
         else:
             return tuple(*res.data)
     
-    async def delete(self, 
-        to_delete: SchemeTV | typing.Type[SchemeTV],
-        *filters: FilterLikeType,
-        path: Opt[DALPath] = None,
-    ) -> None:
+    async def delete(
+        self,
+         to_delete: SchemeTV | typing.Type[SchemeTV],
+         *query_coms: QueryComLikeType,
+         path: Opt[DALPath] = None,
+     ) -> None:
         
         if path is None:
             if isinstance(to_delete, BaseScheme) or issubclass(to_delete, BaseScheme):
                 path = to_delete.dal_path()
         
-        if not filters:
+        if not query_coms:
             if isinstance(to_delete, BaseScheme):
-                filters += (to_delete.key_eqf,)
+                query_coms += (to_delete.key_eqf,)
         
         base_query = self.__get_base_query_from_path(path)
         base_query = base_query.delete()
         query = self.__apply_filters_to_base_query(
-            base_query, dump_filters_like(*filters, scheme_like=to_delete)
+            base_query, dump_query_coms_like(*query_coms, scheme_like=to_delete)
         )
         await self.__execute_query(query)
 
@@ -296,39 +300,40 @@ class PostgrestDAL(TableLikeDataAccessLayer, DataAccessLayerWithAuth):
     async def update(
         self,
         to_update: SchemeTV,
-        *filters: DALFilter,
+        *filters: DALQueryComponent,
         path: Opt[DALPath] = None,
         only_dirty: bool = True,
-        exclude_key: bool = True,
+        exclude_natural_key: bool = True,
     ) -> SchemeTV:
         ...
     @typing.overload
     async def update(
         self,
         to_update: dict,
-        *filters: DALFilter,
+        *filters: DALQueryComponent,
         path: Opt[DALPath] = None,
         only_dirty: bool = True,
-        exclude_key: bool = True,
+        exclude_natural_key: bool = True,
     ) -> dict:
         ...
     @typing.overload
     async def update(
         self,
         to_update: "FieldValueProxy[FieldValueTV]" | FieldValueTV,
-        *filters: DALFilter,
+        *filters: DALQueryComponent,
         path: Opt[DALPath] = None,
         only_dirty: bool = True,
-        exclude_key: bool = True,
+        exclude_natural_key: bool = True,
     ) -> FieldValueTV:
         ...
     @typing.overload
-    async def update(self,
+    async def update(
+        self,
         to_update: typing.Tuple[Field[FieldValueTV], FieldValueTV],
-        *filters: DALFilter,
+        *filters: DALQueryComponent,
         path: Opt[DALPath] = None,
         only_dirty: bool = True,
-        exclude_key: bool = True,
+        exclude_natural_key: bool = True,
     ) -> FieldValueTV:
         ...
     async def update(
@@ -339,7 +344,7 @@ class PostgrestDAL(TableLikeDataAccessLayer, DataAccessLayerWithAuth):
             FieldValueTV,
             typing.Tuple[Field[FieldValueTV], FieldValueTV]
         ],
-        *filters: DALFilter,
+        *query_coms: DALQueryComponent,
         path: Opt[DALPath] = None,
         only_dirty: bool = True,
         exclude_natural_key: bool = True,
@@ -356,13 +361,13 @@ class PostgrestDAL(TableLikeDataAccessLayer, DataAccessLayerWithAuth):
                 path = to_update.scheme.dal_path()
 
         # preprocess filters
-        if not filters:
+        if not query_coms:
             if isinstance(to_update, BaseScheme):
-                filters += (
+                query_coms += (
                     to_update.key_eqf,
                 )
             elif isinstance(to_update, FieldValueProxy):
-                filters += (
+                query_coms += (
                     to_update.scheme.key_eqf,
                 )
         
@@ -386,11 +391,11 @@ class PostgrestDAL(TableLikeDataAccessLayer, DataAccessLayerWithAuth):
 
         base_query = self.__get_base_query_from_path(path)
         base_query = base_query.update(json=processed_to_update)
-        query = self.__apply_filters_to_base_query(base_query, filters)
+        query = self.__apply_filters_to_base_query(base_query, query_coms)
         res = await self.__execute_query(query)
 
         if len(res.data) == 0:
-            raise UpdateFailure(path, self)  # TODO add UpdateFailure
+            raise UpdateFailure(path, self)  # TODO add NoEffect (checkout filters, RLS)
         
         # parse res to the same as to_update
         if isinstance(to_update, BaseScheme):

@@ -15,15 +15,14 @@ __all__ = [
 
 import abc
 import typing
-from typing import Annotated as Anno, Optional as Opt, Literal as Lit
-from .types import DALPath, FilterLikeType, StrictDALPath, FieldLikeType
-from .filters import LimitModifier
+from typing import Optional as Opt
+from .types import DALPath, QueryComLikeType, StrictDALPath, FieldLikeType
+from .query_components.modifiers import LimitModifier
 from ..utils.enum_ import dump_enum
-from .._types import Undefined, _undefined
 
 if typing.TYPE_CHECKING:
     from ..auth import AuthSession
-    from ..scheme.field import Field, FieldValueProxy, BaseScheme
+    from ..scheme.field import Field, FieldValueProxy
     from blue_firmament.task.context import ExtendedTaskContext
 
 
@@ -111,15 +110,16 @@ class TableLikeDataAccessLayer(DataAccessLayer):
         """
 
     @abc.abstractmethod
-    async def delete(self,
+    async def delete(
+        self,
         to_delete: SchemeTV | typing.Type[SchemeTV],
-        *filters: FilterLikeType,
+        *query_coms: QueryComLikeType,
         path: Opt[DALPath] = None,
     ) -> None:
         """Delete a row.
         
         :param to_delete: a data model instance or a data model class.
-        :param filters: filter out rows to be deleted.
+        :param query_coms: filter out rows to be deleted.
             If `to_delete` is a data model instance,
             its primary key will be used as a filter when no filter provided.
         :param path: DALPath.
@@ -131,10 +131,10 @@ class TableLikeDataAccessLayer(DataAccessLayer):
     async def update(
         self,
         to_update: SchemeTV,
-        *filters: FilterLikeType,
+        *query_coms: QueryComLikeType,
         path: Opt[DALPath] = None,
         only_dirty: bool = True,
-        exclude_key: bool = True,
+        exclude_natural_key: bool = True,
     ) -> SchemeTV:
         ...
     @typing.overload
@@ -142,10 +142,10 @@ class TableLikeDataAccessLayer(DataAccessLayer):
     async def update(
         self,
         to_update: dict,
-        *filters: FilterLikeType,
+        *query_coms: QueryComLikeType,
         path: Opt[DALPath] = None,
         only_dirty: bool = True,
-        exclude_key: bool = True,
+        exclude_natural_key: bool = True,
     ) -> dict:
         ...
     @typing.overload
@@ -153,7 +153,7 @@ class TableLikeDataAccessLayer(DataAccessLayer):
     async def update(
         self,
         to_update: "FieldValueProxy[FieldValueTV]" | FieldValueTV,
-        *filters: FilterLikeType,
+        *query_coms: QueryComLikeType,
         path: Opt[DALPath] = None,
         only_dirty: bool = True,
         exclude_key: bool = True,
@@ -164,7 +164,7 @@ class TableLikeDataAccessLayer(DataAccessLayer):
     async def update(
         self,
         to_update: typing.Tuple["Field[FieldValueTV]", FieldValueTV],
-        *filters: FilterLikeType,
+        *query_coms: QueryComLikeType,
         path: Opt[DALPath] = None,
         only_dirty: bool = True,
         exclude_key: bool = True,
@@ -179,7 +179,7 @@ class TableLikeDataAccessLayer(DataAccessLayer):
             FieldValueTV,  # only for type hint
             typing.Tuple["Field[FieldValueTV]", FieldValueTV]
         ],
-        *filters: FilterLikeType,
+        *query_coms: QueryComLikeType,
         path: Opt[DALPath] = None,
         only_dirty: bool = True,
         exclude_natural_key: bool = True,
@@ -196,7 +196,7 @@ class TableLikeDataAccessLayer(DataAccessLayer):
             - data model instance `MyScheme(field_a=2)`
             - a field value proxy instance `MyScheme.field_a`
             - field and its value `(MyScheme.field_a, 2)`
-        :param filters:
+        :param query_coms:
             Filter out the rows to apply `to_update`.
             Al least one filter must be provided.
 
@@ -220,7 +220,7 @@ class TableLikeDataAccessLayer(DataAccessLayer):
     async def select(
         self,
         to_select: typing.Type[SchemeTV],
-        *filters: FilterLikeType,
+        *query_coms: QueryComLikeType,
         path: Opt[DALPath] = None,
         task_context: Opt["ExtendedTaskContext"] = None,
     ) -> typing.Tuple[SchemeTV, ...]:
@@ -230,7 +230,7 @@ class TableLikeDataAccessLayer(DataAccessLayer):
     async def select(
         self,
         to_select: "Field[FieldValueTV]",
-        *filters: FilterLikeType,
+        *query_coms: QueryComLikeType,
         path: Opt[DALPath] = None,
         task_context: Opt["ExtendedTaskContext"] = None,
     ) -> typing.Tuple[FieldValueTV, ...]:
@@ -240,7 +240,7 @@ class TableLikeDataAccessLayer(DataAccessLayer):
     async def select(
         self,
         to_select: typing.Iterable[FieldLikeType],
-        *filters: FilterLikeType,  # 实际上此时 str, int 不支持
+        *query_coms: QueryComLikeType,  # 实际上此时 str, int 不支持
         path: Opt[DALPath] = None,
         task_context: Opt["ExtendedTaskContext"] = None,
     ) -> typing.Tuple[dict, ...]:
@@ -253,7 +253,7 @@ class TableLikeDataAccessLayer(DataAccessLayer):
             "Field[FieldValueTV]",
             typing.Iterable[FieldLikeType],
         ],
-        *filters: FilterLikeType,
+        *query_coms: QueryComLikeType,
         path: Opt[DALPath] = None,
         task_context: Opt["ExtendedTaskContext"] = None,
     ) -> typing.Union[
@@ -267,7 +267,7 @@ class TableLikeDataAccessLayer(DataAccessLayer):
             Can be a data model class, field-like(s).
 
             If `to_select` is a data model class, all fields of the data model will be selected.
-        :param filters: Filter out rows to be selected.
+        :param query_coms: Filter out rows to be selected.
             If str, int, an EqFilter of the primary key or field will be created.
         :param path: DALPath.
             If `to_select` is field，use its data model's DAL path.
@@ -291,36 +291,40 @@ class TableLikeDataAccessLayer(DataAccessLayer):
         ...
 
     @typing.overload
-    async def select_one(self,
+    async def select_one(
+        self,
         to_select: typing.Type[SchemeTV],
-        *filters: FilterLikeType,
+        *query_coms: QueryComLikeType,
         path: Opt[DALPath] = None,
         task_context: Opt["ExtendedTaskContext"] = None,
     ) -> SchemeTV:
         ...
     @typing.overload
-    async def select_one(self,
+    async def select_one(
+        self,
         to_select: "Field[FieldValueTV]",
-        *filters: FilterLikeType,
+        *query_coms: QueryComLikeType,
         path: Opt[DALPath] = None,
         task_context: Opt["ExtendedTaskContext"] = None,
     ) -> FieldValueTV:
         ...
     @typing.overload
-    async def select_one(self,
+    async def select_one(
+        self,
         to_select: typing.Iterable[FieldLikeType],
-        *filters: FilterLikeType,
+        *query_coms: QueryComLikeType,
         path: Opt[DALPath] = None,
         task_context: Opt["ExtendedTaskContext"] = None,
     ) -> dict:
         ...
-    async def select_one(self,
+    async def select_one(
+        self,
         to_select: typing.Union[
-            typing.Type[SchemeTV], 
+            typing.Type[SchemeTV],
             "Field[FieldValueTV]",
             typing.Iterable[FieldLikeType],
         ],
-        *filters: FilterLikeType,
+        *query_coms: QueryComLikeType,
         path: Opt[DALPath] = None,
         task_context: Opt["ExtendedTaskContext"] = None,
     ) -> typing.Union[
@@ -330,7 +334,7 @@ class TableLikeDataAccessLayer(DataAccessLayer):
     ]:
         return (await self.select(
             to_select,
-            *filters, LimitModifier(1),
+            *query_coms, LimitModifier(1),
             path=path,
             task_context=task_context
         ))[0]
@@ -448,70 +452,76 @@ class DataAccessObject(
         self.__dal = dal
         self.__scheme_cls = scheme_cls
 
-    def select(self,
-        *filters: FilterLikeType,
+    def select(
+        self,
+        *query_coms: QueryComLikeType,
         task_context: Opt["ExtendedTaskContext"] = None,
     ):
         if not isinstance(self.__dal, TableLikeDataAccessLayer):
             raise TypeError(f"{self.__dal.__name__} not support TableLike operation")
         return self.__dal.select(
             self.__scheme_cls,
-            *filters,
+            *query_coms,
             task_context=task_context
         )
         
-    def select_fields(self,
+    def select_fields(
+        self,
         to_select: typing.Iterable[FieldLikeType],
-        *filters: FilterLikeType,
+        *query_coms: QueryComLikeType,
         task_context: Opt["ExtendedTaskContext"] = None,
     ):
         if not isinstance(self.__dal, TableLikeDataAccessLayer):
             raise TypeError(f"{self.__dal.__name__} not support TableLike operation")
         return self.__dal.select(  
             to_select,
-            *filters,
+            *query_coms,
             task_context=task_context
         ) 
         
-    def select_field(self,
+    def select_field(
+        self,
         to_select: "Field[FieldValueTV]",
-        *filters: FilterLikeType,
+        *query_coms: QueryComLikeType,
         task_context: Opt["ExtendedTaskContext"] = None,
     ):
         if not isinstance(self.__dal, TableLikeDataAccessLayer):
             raise TypeError(f"{self.__dal.__name__} not support TableLike operation")
         return self.__dal.select(  
             to_select,
-            *filters,
+            *query_coms,
             task_context=task_context
         ) 
 
-    def select_one(self, 
-        *filters: FilterLikeType,
+    def select_one(
+        self,
+        *query_coms: QueryComLikeType,
         task_context: Opt["ExtendedTaskContext"] = None,
     ):
         if not isinstance(self.__dal, TableLikeDataAccessLayer):
             raise TypeError(f"{self.__dal.__name__} not support TableLike operation")
         return self.__dal.select_one(
             self.__scheme_cls,
-            *filters,
+            *query_coms,
             task_context=task_context
         ) 
         
-    def select_a_field(self, 
+    def select_a_field(
+        self,
         to_select: "Field[FieldValueTV]",
-        *filters: FilterLikeType,
+        *query_coms: QueryComLikeType,
         task_context: Opt["ExtendedTaskContext"] = None,
     ):
         if not isinstance(self.__dal, TableLikeDataAccessLayer):
             raise TypeError(f"{self.__dal.__name__} not support TableLike operation")
         return self.__dal.select_one(
             to_select,
-            *filters,
+            *query_coms,
             task_context=task_context
         )
     
-    def insert(self, 
+    def insert(
+        self,
         to_insert: SchemeTV,
         exclude_natural_key: bool = True,
     ):
@@ -521,53 +531,66 @@ class DataAccessObject(
             to_insert=to_insert, 
             exclude_natural_key=exclude_natural_key
         )
-    
+
     @typing.overload
-    async def update(self,
+    async def update(
+        self,
         to_update: SchemeTV,
-        *filters: FilterLikeType,
+        *query_coms: QueryComLikeType,
         only_dirty: bool = True,
-        exclude_key: bool = True,
+        exclude_natural_key: bool = True,
     ) -> SchemeTV:
         ...
     @typing.overload
-    async def update(self,
+    async def update(
+        self,
         to_update: FieldValueTV,
-        *filters: FilterLikeType,
+        *query_coms: QueryComLikeType,
         only_dirty: bool = True,
-        exclude_key: bool = True,
+        exclude_natural_key: bool = True,
     ) -> FieldValueTV:
         ...
     @typing.overload
-    async def update(self,
+    async def update(
+        self,
         to_update: typing.Tuple["Field[FieldValueTV]", FieldValueTV],
-        *filters: FilterLikeType,
+        *query_coms: QueryComLikeType,
         only_dirty: bool = True,
-        exclude_key: bool = True,
+        exclude_natural_key: bool = True,
     ) -> FieldValueTV:
         ...
-    def update(self,
-        to_update: typing.Union[
-            SchemeTV,
-            FieldValueTV,
-            typing.Tuple["Field[FieldValueTV]", FieldValueTV]
-        ],
-        *filters: FilterLikeType,
+    @typing.overload
+    async def update(
+        self,
+        to_update: dict,
+        *query_coms: QueryComLikeType,
         only_dirty: bool = True,
-        exclude_key: bool = True,
+        exclude_natural_key: bool = True,
+    ) -> dict:
+        ...
+    def update(
+        self,
+        to_update: typing.Union[
+            dict, SchemeTV,
+            FieldValueTV,
+            typing.Tuple["Field[FieldValueTV]", FieldValueTV],
+        ],
+        *query_coms: QueryComLikeType,
+        only_dirty: bool = True,
+        exclude_natural_key: bool = True,
     ):
         if not isinstance(self.__dal, TableLikeDataAccessLayer):
             raise TypeError(f"{self.__dal.__name__} not support TableLike operation")
         return self.__dal.update(
             to_update,
-            *filters,
+            *query_coms,
             only_dirty=only_dirty,
-            exclude_key=exclude_key
+            exclude_natural_key=exclude_natural_key
         )
     
     def delete(self, 
-        to_delete: Opt[SchemeTV] = None, 
-        *filters: FilterLikeType
+        *filters: QueryComLikeType,
+        to_delete: Opt[SchemeTV] = None,
     ):
         if not isinstance(self.__dal, TableLikeDataAccessLayer):
             raise TypeError(f"{self.__dal.__name__} not support TableLike operation")
