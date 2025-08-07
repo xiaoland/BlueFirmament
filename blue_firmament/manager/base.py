@@ -129,6 +129,16 @@ class BaseManager(
     __path_prefix__: str
 
 
+    class ManagingScheme:
+        def __init__(self, scheme: Opt[SchemeTV] = None):
+            self.__scheme: Opt[SchemeTV] = scheme
+        def set(self, scheme: SchemeTV):
+            self.__scheme = scheme
+        def get(self) -> SchemeTV:
+            return self.__scheme
+        def __bool__(self):
+            return self.__scheme is not None
+
     def __init_subclass__(
         cls,
         scheme_cls: Opt[type[SchemeTV]] = None,
@@ -145,7 +155,7 @@ class BaseManager(
     def __init__(self, task_context: BaseTaskContext) -> None:
         BaseTaskContext.__init__(self, task_context)
 
-        self.__scheme: Opt[SchemeTV] = None
+        self.__scheme = self.ManagingScheme(None)
         self._logger = self._logger.bind(
             manager_name=self.__manager_name__
         )
@@ -168,23 +178,18 @@ class BaseManager(
     @property
     def _scheme(self) -> SchemeTV:
         """Managing scheme
-        
+
         :raise ValueError: scheme not set
         """
         if not self.__scheme:
             raise ValueError('scheme is not set')
-        return self.__scheme
-    
+        return self.__scheme.get()
+
     @_scheme.setter
     def _scheme(self, scheme: SchemeTV):
         """Set managing scheme
         """
-        self.__scheme = scheme
-
-    def _reset_scheme(self):
-        """Set managing scheme to None
-        """
-        self.__scheme = None
+        self.__scheme.set(scheme)
 
     def _try_get_scheme(self) -> Opt[SchemeTV]:
         """Get scheme without exception
