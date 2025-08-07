@@ -14,4 +14,4 @@ from .core import BlueFirmamentApp
 from .task import listen_to, Method
 
 from .utils import json_
-json_.override_json_encoder()
+json_.override_json_encoder(json_.JsonEncoder)

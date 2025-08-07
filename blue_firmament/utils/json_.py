@@ -32,9 +32,18 @@ class JsonEncoder(json.JSONEncoder):
         return super().default(o)
 
 
-def override_json_encoder(cls: typing.Optional[json.JSONEncoder] = None):
-    LOGGER.info("Json lib's encoder has been overriden")
-    json.JSONEncoder = cls or JsonEncoder
+def override_json_encoder(cls: type[json.JSONEncoder]):
+    LOGGER.info("Json lib's encoder has been overridden")
+    json.JSONEncoder = cls
+    json._default_encoder = cls(
+        skipkeys=False,
+        ensure_ascii=True,
+        check_circular=True,
+        allow_nan=True,
+        indent=None,
+        separators=None,
+        default=None,
+    )
 
 def dumps_to_json(obj: JsonDumpable) -> str:
     
