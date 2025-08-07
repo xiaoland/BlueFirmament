@@ -646,8 +646,8 @@ class SetConverter(BaseConverter[typing.Set[T]], typing.Generic[T]):
         if not isinstance(value, set):
             if self.is_base:
                 value = set(value)
-            
-            raise ValueError(f"Value {value} is not set")
+            else:
+                raise ValueError(f"Value {value} is not a set")
         
         # validate element type
         new_value: typing.Set[T] = set()
