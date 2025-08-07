@@ -55,7 +55,7 @@ class TaskID:
         method: Opt[Method | str],
         path: str,
         separator: str = '/',
-        param_types: Opt[dict[str, typing.Type]] = None,
+        param_types: Opt[typing.Mapping[str, typing.Type]] = None,
         param_converters: Opt[dict[str, "BaseConverter"]] = None
     ):
         """
@@ -89,14 +89,13 @@ class TaskID:
                 self.__segments[i] = segment[1:-1]
                 self.__dynamic_indices.append(i)
 
+        self.__param_types: typing.Mapping[str, typing.Type] = param_types or {}
         self.__param_converters: typing.Dict[str, BaseConverter]
-        if param_types is None:
-            param_types = {}
         if not param_converters:
             self.__param_converters = {}
             for dynamic_index in self.__dynamic_indices:
                 param_name = self.__segments[dynamic_index]
-                param_type = param_types.get(param_name, _undefined)
+                param_type = self.__param_types.get(param_name, _undefined)
                 if param_type is _undefined:
                     self.__param_converters[param_name] = AnyConverter()
                 else:
@@ -184,7 +183,7 @@ class TaskID:
         self,
         path_prefix: str = ""
     ) -> typing.Self:
-        """
+        """Fork a TaskID
 
         :param path_prefix:
             Added to the front of the original path.
@@ -193,7 +192,7 @@ class TaskID:
         return TaskID(
             method=self.__method,
             path=f"{path_prefix}{self.__path}",
-            param_converters=self.__param_converters,
+            param_types=self.__param_types
         )
 
     @property

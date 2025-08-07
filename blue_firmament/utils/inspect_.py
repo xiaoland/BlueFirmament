@@ -1,5 +1,12 @@
 """Utils enhancing inspect module"""
 
+__all__ = [
+    'is_instance_method_by_signature',
+    'has_kwarg_by_sig',
+    'args_to_kwargs_by_sig',
+    'get_param_types',
+]
+
 import inspect
 import typing
 
@@ -7,7 +14,6 @@ import typing
 def is_instance_method_by_signature(
     func: typing.Callable
 ) -> bool:
-
     """Check if the function is an instance method by checking its signature.
 
     If the function has a 'self' parameter and positioned as the first parameter,
@@ -26,7 +32,6 @@ def is_instance_method_by_signature(
 def has_kwarg_by_sig(
     func: typing.Callable, kwarg_name: str
 ) -> bool:
-
     """Check if the function has a specific keyword argument by checking its signature.
 
     :param func: The function to check
@@ -47,7 +52,6 @@ def args_to_kwargs_by_sig(
     offset: int = 0,
     try_default: bool = True,
 ) -> typing.Dict[str, typing.Any]:
-
     """Convert positional arguments to keyword arguments based on the function's signature.
 
     :param func: The function to check
@@ -70,3 +74,22 @@ def args_to_kwargs_by_sig(
                     kwargs[name] = param.default
 
     return kwargs
+
+def get_param_types(
+    func: typing.Callable
+) -> typing.Mapping[str, type]:
+    """Get the parameter types of a function based on its signature.
+
+    :param func: The function to inspect
+    :return: A dictionary mapping parameter names to their types
+    """
+    sig = inspect.signature(func)
+    return {
+        name: (
+            param.annotation
+            if param.annotation is not inspect.Parameter.empty
+            else typing.Any
+        )
+        for name, param in sig.parameters.items()
+    }
+

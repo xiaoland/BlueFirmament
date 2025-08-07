@@ -9,6 +9,7 @@ __all__ = [
 
 import asyncio
 import copy
+import inspect
 import typing
 from typing import Optional as Opt, Annotated as Anno, Literal as Lit
 
@@ -20,6 +21,7 @@ from ..task.context import BaseTaskContext
 from ..core.middleware import BaseMiddleware
 from .main import TaskID, Method
 from . import TaskHandler
+from ..utils.inspect_ import get_param_types
 
 if typing.TYPE_CHECKING:
     from ..manager import BaseManager
@@ -287,7 +289,11 @@ def listen_to(
         return typing.cast(CallableTV, (
             tuple(transporters or ("default",)),
             TaskEntry(
-                TaskID(method=method, path=path, separator=separator),
+                TaskID(
+                    method=method, path=path,
+                    separator=separator,
+                    param_types=get_param_types(handler),
+                ),
                 handler
             )
         )) # lie to type checker
