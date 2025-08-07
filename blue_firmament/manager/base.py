@@ -58,9 +58,6 @@ class ManagerMetaclass(abc.ABCMeta):
         task_entries: list[tuple[tuple[BaseTransporter | str], TaskEntry]] = []
         
         for attr_name, attr_value in attrs.items():
-            if attr_name.startswith("_"):
-                continue
-
             # resolve task_entries
             if (
                 isinstance(attr_value, tuple) and
@@ -78,6 +75,9 @@ class ManagerMetaclass(abc.ABCMeta):
                 task_entries.append(attr_value)
                 # make later resolution works
                 attr_value = attrs[attr_name]
+
+            if attr_name.startswith("_"):
+                continue
 
             # log enhancement
             if callable(attr_value):
