@@ -285,9 +285,9 @@ class PostgrestDAL(TableLikeDataAccessLayer, DataAccessLayerWithAuth):
     
     async def delete(
         self,
-         to_delete: SchemeTV | typing.Type[SchemeTV],
-         *query_coms: QueryComLikeType,
-         path: Opt[DALPath] = None,
+        to_delete: SchemeTV | typing.Type[SchemeTV],
+        *query_coms: QueryComLikeType,
+        path: Opt[DALPath] = None,
      ) -> None:
         
         if path is None:
@@ -303,7 +303,10 @@ class PostgrestDAL(TableLikeDataAccessLayer, DataAccessLayerWithAuth):
         query = self.__apply_filters_to_base_query(
             base_query, dump_query_coms_like(*query_coms, scheme_like=to_delete)
         )
-        await self.__execute_query(query)
+        res = await self.__execute_query(query)
+
+        if len(res.data) == 0:
+            raise DeleteFailure(path, self)  # TODO add NoEffect (checkout filters, RLS)
 
     @typing.overload
     async def update(
