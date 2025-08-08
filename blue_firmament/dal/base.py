@@ -500,7 +500,7 @@ class DataAccessObject(
     ):
         if not isinstance(self.__dal, TableLikeDataAccessLayer):
             raise TypeError(f"{self.__dal.__name__} not support TableLike operation")
-        return self.__dal.select(  
+        return self.__dal.select_one(
             to_select,
             *query_coms,
             task_context=task_context
