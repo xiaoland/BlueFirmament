@@ -432,6 +432,12 @@ class Field(typing.Generic[FieldValueTV]):
             return self.__converter.type
         else:
             raise ValueError('Field value type is not defined')
+
+    def load_val(self, value: typing.Any) -> FieldValueTV:
+        if value is _undefined:
+            return self.default_value
+        else:
+            return self.convert(value)
     
     def dump_val_to_str(self, value: FieldValueTV):
         """Dump field value to string

@@ -270,7 +270,8 @@ class PostgrestDAL(TableLikeDataAccessLayer, DataAccessLayerWithAuth):
         # parse res to the same as to_selec
         if isinstance(to_select, Field):
             return tuple(
-                i[to_select.name] for i in res.data
+                to_select.load_val(i[to_select.name])
+                for i in res.data
             )
         elif safe_issubclass(to_select, BaseScheme): 
             sc = SchemeConverter(scheme_cls=to_select)
@@ -392,7 +393,7 @@ class PostgrestDAL(TableLikeDataAccessLayer, DataAccessLayerWithAuth):
                 exclude_natural_key=exclude_natural_key
             )
         elif isinstance(to_update, FieldValueProxy):
-            processed_to_update = { to_update.field.name: to_update.obj }
+            processed_to_update = {to_update.field.name: to_update.obj}
         elif isinstance(to_update, tuple):
             if len(to_update) != 2:
                 raise ValueError(f"Invalid tuple length for to_update, {len(to_update)}")
@@ -421,7 +422,7 @@ class PostgrestDAL(TableLikeDataAccessLayer, DataAccessLayerWithAuth):
                 **to_update.dump_to_dict(only_private=True)
             )
         elif isinstance(to_update, FieldValueProxy):
-            return res.data[0][to_update.field.name]
+            return to_update.field.load_val(res.data[0][to_update.field.name])
         elif isinstance(to_update, tuple):
             return res.data[0][to_update[0].name]
         elif isinstance(to_update, dict):
