@@ -134,6 +134,8 @@ class TableLikeDataAccessLayer(DataAccessLayer):
             its primary key will be used as a filter when no filter provided.
         :param path: DALPath.
             Use the data model DALPath when None.
+
+        :raise NoEffect: No row deleted.
         """
 
     @typing.overload
@@ -202,7 +204,7 @@ class TableLikeDataAccessLayer(DataAccessLayer):
 
         :param to_update: New data.
             Can be:
-            - a dict `{'field_a': 2}`
+            - a dict `{'field_a': 2}`, `{Field: 2}`
             - data model instance `MyScheme(field_a=2)`
             - a field value proxy instance `MyScheme.field_a`
             - field and its value `(MyScheme.field_a, 2)`

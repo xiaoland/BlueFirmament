@@ -96,7 +96,7 @@ class PostgrestDAL(TableLikeDataAccessLayer, DataAccessLayerWithAuth):
     def __apply_filters_to_base_query(
         self,
         base_query: QueryTV,
-        query_coms: tuple[DALQueryComponent]
+        query_coms: typing.Iterable[DALQueryComponent]
     ) -> QueryTV:
         """将过滤器应用到查询对象
 
@@ -119,6 +119,7 @@ class PostgrestDAL(TableLikeDataAccessLayer, DataAccessLayerWithAuth):
 
         处理这些异常：
         - PGRST301 -> Unauthorized
+        - code42501 -> New row violates row-level security policy
         """
         try:
             return await query.execute()
@@ -397,7 +398,10 @@ class PostgrestDAL(TableLikeDataAccessLayer, DataAccessLayerWithAuth):
                 raise ValueError(f"Invalid tuple length for to_update, {len(to_update)}")
             processed_to_update = { to_update[0].name: to_update[1] }
         elif isinstance(to_update, dict):
-            processed_to_update = to_update
+            processed_to_update = {
+                k.name if isinstance(k, Field) else k: v
+                for k, v in to_update.items()
+            }
         else:
             raise ValueError(f"Invalid type for to_update, {type(to_update)}")
 
