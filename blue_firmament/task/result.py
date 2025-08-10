@@ -11,6 +11,7 @@ __all__ = [
 ]
 
 import abc
+import json
 import typing
 from typing import Annotated as Anno, Optional as Opt, Literal as Lit
 import enum
@@ -29,10 +30,18 @@ class Body(abc.ABC, typing.Generic[TV]):
     def __init__(self, data: TV = None) -> None:
         self._data: TV = data
 
-    @abc.abstractmethod
     def dump_to_bytes(self, encoding: str = "utf-8") -> bytes:
+        """Dump body to bytes.
+
+        Extend supported value types by overriding this method,
+        currently supported types are:
+        - bytes
+        - str (will be encoded to bytes using specified encoding)
+        """
         if isinstance(self._data, bytes):
             return self._data
+        if isinstance(self._data, str):
+            return self._data.encode(encoding)
         raise NotImplementedError("This body is not supporting bytes serialization")
 
     def dump_to_dict(self) -> dict:
@@ -41,12 +50,17 @@ class Body(abc.ABC, typing.Generic[TV]):
         raise NotImplementedError("This body is not supporting dict serialization")
 
     def dump_to_json(self) -> str:
-        raise NotImplementedError('This body is not supporting JSON serialization')
+        try:
+            return json.dumps(self._data, ensure_ascii=False)
+        except TypeError:
+            raise NotImplementedError('This body is not supporting JSON serialization')
 
-    async def __aiter__(self) -> typing.AsyncGenerator["Body", None]:
-        yield self
+    def dump_to_str(self) -> str:
+        if isinstance(self._data, str):
+            return self._data
+        raise NotImplementedError("This body is not supporting str serialization")
 
-    def cleanup(self) -> None:
+    async def cleanup(self) -> None:
         pass
 
 
@@ -64,6 +78,12 @@ class EmptyBody(Body):
     def dump_to_json(self) -> str:
         return ''
 
+class PlainTextBody(Body[str]):
+    """Plain text body
+    """
+
+    def dump_to_str(self) -> str:
+        return self._data
 
 class JsonBody(Body[JsonDumpable]):
 
@@ -86,18 +106,22 @@ class JsonBody(Body[JsonDumpable]):
 
 
 class StreamingBody(Body):
-    """
+    """An iterable body that yield events.
+
     :ivar __generator: 事件生成器
     :ivar __cleanup: 清理函数
     """
 
+    type GeneratorType = typing.AsyncGenerator["Body", None]
+
     def __init__(
         self,
-        generator: typing.AsyncGenerator["Body", None],
+        generator: GeneratorType,
         cleanup: typing.Callable
     ) -> None:
         """
-        :param generator: Event generator, yields Body other than StreamingBody.
+        :param generator:
+            Event generator, yields Body other than StreamingBody.
         :param cleanup: Cleanup function to call when sending stopped unexpectedly.
         """
         super().__init__()
@@ -107,10 +131,10 @@ class StreamingBody(Body):
     def dump_to_bytes(self, encoding: str = "utf-8") -> bytes:
         raise NotImplementedError('This body is not supporting bytes serialization')
 
-    async def __aiter__(self) -> typing.AsyncGenerator["Body", None]:
+    def __aiter__(self) -> GeneratorType:
         return self.__generator
     
-    def cleanup(self) -> None:
+    async def cleanup(self) -> None:
         self.__cleanup()
 
 

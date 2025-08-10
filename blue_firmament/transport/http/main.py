@@ -280,6 +280,8 @@ class HTTPTransporter(BaseTransporter):
 
             # send response
             try:
+
+
                 res_headers = HTTPHeaders()
                 if isinstance(task_result.body, JsonBody):
                     res_headers.set_content_type(MIMEType.JSON)
@@ -297,21 +299,31 @@ class HTTPTransporter(BaseTransporter):
                     )
                 ))
 
-                async for chunk in task_result.body:
+                res_body = task_result.body
+                if isinstance(res_body, StreamingBody):
+                    async for chunk in res_body:
+                        body_ = f"data: {chunk.dump_to_str()}\n\n".encode("utf-8")
+                        await send(http_types.HTTPResponseBodyEvent(
+                            type="http.response.body",
+                            body=body_,
+                            more_body=True
+                        ))
+
                     await send(http_types.HTTPResponseBodyEvent(
                         type="http.response.body",
-                        body=chunk.dump_to_bytes(encoding="utf-8"),
-                        more_body=True
+                        body=b'',
+                        more_body=False
+                    ))
+                else:
+                    await send(http_types.HTTPResponseBodyEvent(
+                        type="http.response.body",
+                        body=res_body.dump_to_bytes(encoding="utf-8"),
+                        more_body=False
                     ))
 
-                await send(http_types.HTTPResponseBodyEvent(
-                    type="http.response.body",
-                    body=b'',
-                    more_body=False
-                ))
             except OSError:   # Disconnected unexpectedly
                 self._logger.warning('Connection closed before all body were sent')
-                task_result.body.cleanup()
+                await task_result.body.cleanup()
         else:
             self._logger.warning(f"Request omitted due to unsupported protocol {scope['type']}")
 
@@ -338,7 +350,7 @@ class HTTPTransporter(BaseTransporter):
     def parse_query_params(
         query_bytes: bytes,
         encoding: str = 'latin-1',
-    ) -> dict[str, str | int | float | bool | None]:
+    ) -> dict[str, str | int | float | bool | None | list]:
         """解析查询参数
 
         将查询字符串解析为字典
@@ -350,6 +362,7 @@ class HTTPTransporter(BaseTransporter):
         解析
         ^^^^^^
         - 尝试将值转换为布尔、整数或浮点数，如果失败则为字符串
+        - 如果有多个相同的键，使用元组存储所有值
         - 空字符串被转换为None
         
         """
@@ -357,5 +370,12 @@ class HTTPTransporter(BaseTransporter):
         parsed_dict = {}
         pairs: list[tuple[str, str]] = urllib.parse.parse_qsl(query_string)
         for key, value in pairs:
-            parsed_dict[key] = try_convert_str(value)
+            # TODO performance optimization required
+            if key in parsed_dict:
+                if isinstance(parsed_dict[key], list):
+                    parsed_dict[key].append(try_convert_str(value))
+                else:
+                    parsed_dict[key] = [parsed_dict[key], try_convert_str(value)]
+            else:
+                parsed_dict[key] = try_convert_str(value)
         return parsed_dict
