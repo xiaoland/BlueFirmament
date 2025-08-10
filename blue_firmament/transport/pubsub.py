@@ -38,9 +38,17 @@ class PubSubTransporter(BaseTransporter):
         self.__stop = False
         await self.__pubsub_dal.subscribe(*self.__channel_names)
         self._logger.info("Listening to Pub/Sub channels", channels=self.__channel_names)
-        while not self.__stop:
-            message = await self.__pubsub_dal.get_message()
-            await self(message)
+        async for message in self.__pubsub_dal.listen():
+            try:
+                await self(message)
+            except TaskHandlerNotFound as e:
+                self._logger.warning("No handler found for the task", task=e.task_id)
+            except Exception as e:
+                self._logger.exception(
+                    f"Unknown error occured when handling task from Pub/Sub {self.name}"
+                )
+            if self.__stop:
+                break
 
     async def stop(self):
         self.__stop = True

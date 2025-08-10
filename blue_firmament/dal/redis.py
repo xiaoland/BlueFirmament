@@ -81,7 +81,7 @@ class RedisDAL(
         await self._pubsub.unsubscribe(*channel_names)
         await self._pubsub.close()
 
-    async def get_message(self, timeout: int = 0) -> PubSubMessage:
+    async def get_message(self, timeout: Opt[int] = None) -> PubSubMessage:
         message = None
         while message is None:
             message = await self._pubsub.get_message(timeout=timeout)
@@ -91,12 +91,10 @@ class RedisDAL(
             data=message["data"],
         )
 
-
-class DefaultRedisDAL(
-    RedisDAL,
-    host=get_dal_setting().redis_host,
-    port=get_dal_setting().redis_port,
-    password=get_dal_setting().redis_password,
-    db=get_dal_setting().redis_db
-):
-    pass
+    async def listen(self) -> typing.AsyncIterable[PubSubMessage]:
+        async for message in self._pubsub.listen():
+            if message['type'] == "message":
+                yield PubSubMessage(
+                    channel=message['channel'],
+                    data=message['data']
+                )

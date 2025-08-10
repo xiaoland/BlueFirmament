@@ -445,12 +445,12 @@ class PubSubLikeDataAccessLayer(DataAccessLayer):
         """
         ...
 
-    async def listen(self, timeout: int = 0) -> typing.AsyncIterator[PubSubMessage]:
+    def listen(self) -> typing.AsyncIterable[PubSubMessage]:
         """Listen to messages on subscribed channels.
+
+        You can iterate over the returned AsyncIterator to get messages.
         """
-        while True:
-            message = await self.get_message(timeout=timeout)
-            yield message
+        ...
 
 
 class DataAccessObject(
