@@ -25,9 +25,10 @@ A backend framework for Python applications that covers all you need, and aims a
 pip install blue-firmament
 ```
 
-## Usage
+## Example
 
 ```python
+# main.py
 import blue_firmament
 
 # 获取日志器
@@ -67,6 +68,58 @@ app.provide_crud_over_scheme('account', disabled_operations=(TransportOperationT
 
 # 启动服务
 app.run()
+```
+
+### Manager
+
+```python
+# manager.py
+
+import typing
+from blue_firmament import listen_to, Method
+from blue_firmament.manager import CommonManager
+from blue_firmament.scheme import BusinessScheme
+from blue_firmament.scheme.enum import Status
+from blue_firmament.exceptions import Forbidden
+
+
+class PRStatus(Status):
+    DRAFT = "draft"
+    EXECUTING = "executing"
+    CANCELLED = "cancelled"
+    
+    def to_cancelled(self) -> typing.Self:
+        return self._to_target_status(self.CANCELLED, self.DRAFT)
+
+class PartnerRequest(BusinessScheme[int]):
+    status: PRStatus
+    created_by: str
+    
+    def is_admin(self, account_id: str) -> bool:
+        return self.created_by == account_id
+
+class PartnerRequestManager(CommonManager[PartnerRequest, int]):
+  
+    async def _must_be_admin(
+        self,
+        pr_id: None | int = None,
+    ) -> None:
+        self._scheme = await self._get_scheme(_id=pr_id)
+        if not self._scheme.is_admin(self._operator.id):
+            raise Forbidden("must be admin")
+  
+    @listen_to(Method.PUT, '/{pr_id}/cancel')
+    async def cancel(
+        self,
+        pr_id: int
+    ):
+        self._scheme = self._get_scheme(pr_id)
+        await self._must_be_admin()
+        self._scheme.status.to_cancelled()
+        await self._update_scheme()
+        self._emit(".cancelled", pr_id=self._scheme._id)
+        return self._scheme
+
 ```
 
 ## Documentation

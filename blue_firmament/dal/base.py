@@ -62,6 +62,11 @@ class DataAccessLayer(abc.ABC):
     def default_path(self) -> StrictDALPath:
         return self.__default_path
 
+    @abc.abstractmethod
+    async def close(self):
+        raise NotImplementedError("not implemented close method")
+
+
 class DataAccessLayerWithAuth(DataAccessLayer):
 
     def __init_subclass__(
@@ -77,6 +82,8 @@ class DataAccessLayerWithAuth(DataAccessLayer):
             raise ParamsInvalid("auth_session must be provided")
         self._auth_session = auth_session
         super().__init__()
+
+# TODO DataAccessLayerWithConnPool
 
 class TableLikeDataAccessLayer(DataAccessLayer):
 
@@ -374,20 +381,30 @@ class QueueLikeDataAccessLayer(DataAccessLayer):
         **kwargs
     ):
         cls.__queue_name__ = queue_name
-
         super().__init_subclass__(**kwargs)
 
+    def __init__(self, queue_name: Opt[str] = None, **kwargs) -> None:
+        if queue_name:
+            self.__queue_name__ = queue_name
+        super().__init__(**kwargs)
+
     @abc.abstractmethod
-    async def push(self, item: bytes) -> None:
+    async def push(self, item: bytes, queue_name: Opt[str] = None) -> None:
         """Push an item to the head of the queue.
+
+        :param item: The item to push.
+        :param queue_name: The name of the queue.
+            If not provided, the ins_var:queue_name will be used.
         """
         ...
 
     @abc.abstractmethod
-    async def pop(self, wait: bool = True) -> bytes:
+    async def pop(self, queue_name: Opt[str] = None, wait: bool = True) -> bytes:
         """Pop the first item of the queue.
 
         :param wait: Blocks until an item is available.
+        :param queue_name: The name of the queue.
+            If not provided, the ins_var:queue_name will be used.
         """
         ...
 
@@ -410,6 +427,11 @@ class PubSubLikeDataAccessLayer(DataAccessLayer):
         cls.__channel_name__ = channel_name
 
         super().__init_subclass__(**kwargs)
+
+    def __init__(self, channel_name: Opt[str] = None, **kwargs) -> None:
+        if channel_name:
+            self.__channel_name__ = channel_name
+        super().__init__(**kwargs)
 
     @abc.abstractmethod
     async def publish(self, item: bytes, *channel_names: str) -> None:
@@ -460,7 +482,7 @@ class DataAccessObject(
     def __init__(
         self,
         dal: DataAccessLayer,
-        scheme_cls: typing.Type[SchemeTV],
+        scheme_cls: type[SchemeTV],
     ) -> None:
         self.__dal = dal
         self.__scheme_cls = scheme_cls
@@ -498,9 +520,11 @@ class DataAccessObject(
         *query_coms: QueryComLikeType,
         task_context: Opt["ExtendedTaskContext"] = None,
     ):
+        """Select a field, returns a tuple of field values.
+        """
         if not isinstance(self.__dal, TableLikeDataAccessLayer):
             raise TypeError(f"{self.__dal.__name__} not support TableLike operation")
-        return self.__dal.select_one(
+        return self.__dal.select(
             to_select,
             *query_coms,
             task_context=task_context
@@ -525,6 +549,8 @@ class DataAccessObject(
         *query_coms: QueryComLikeType,
         task_context: Opt["ExtendedTaskContext"] = None,
     ):
+        """Select a field, returns a single field value.
+        """
         if not isinstance(self.__dal, TableLikeDataAccessLayer):
             raise TypeError(f"{self.__dal.__name__} not support TableLike operation")
         return self.__dal.select_one(
@@ -598,7 +624,8 @@ class DataAccessObject(
             to_update,
             *query_coms,
             only_dirty=only_dirty,
-            exclude_natural_key=exclude_natural_key
+            exclude_natural_key=exclude_natural_key,
+            path=self.__scheme_cls.dal_path()
         )
     
     def delete(self, 

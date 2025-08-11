@@ -11,9 +11,7 @@ class DALQueryComponent(abc.ABC):
         """序列化为SQL语句
         """
 
-    def dump_to_postgrest(
-        self
-    ) -> tuple[
+    def dump_to_postgrest(self) -> tuple[
         str, tuple | dict | None
     ]:
         """Serialize to a call to postgrest lib's RequestBuilder.

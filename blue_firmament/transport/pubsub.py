@@ -1,13 +1,15 @@
 """Transporter listening to a Pub/Sub model channel.
+
+TODO better logging
 """
 
 __all__ = [
     "PubSubTransporter"
 ]
 
-import json
 import typing
-from typing import Annotated as Anno, Optional as Opt, Literal as Lit
+
+from ..exceptions import TaskHandlerNotFound
 from ..transport.base import BaseTransporter
 from ..task import Task, TaskResult
 from ..dal.base import PubSubLikeDataAccessLayer, PubSubMessage

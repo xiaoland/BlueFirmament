@@ -16,6 +16,7 @@ __all__ = [
     'AtLeastOne',
     'NotImplemented',
     'NotFound',
+    'TaskHandlerNotFound',
     'DuplicateOrConflict',
     'Duplicate',
     'Conflict',
@@ -29,7 +30,7 @@ import abc
 import typing
 from typing import Optional as Opt, Annotated as Anno, Literal as Lit
 from .utils.typing_ import JsonDumpable
-from .task import TaskStatus
+from .task import TaskStatus, TaskID
 from .log.main import get_logger
 LOGGER = get_logger(__name__)
 """默认日志记录器
@@ -55,7 +56,10 @@ class BlueFirmamentException(Exception, abc.ABC):
         *args, **kwargs
     ):
         if isinstance(errmsg, str):
-            errmsg = {"errmsg": errmsg}
+            errmsg = {
+                "errmsg": errmsg,
+                **kwargs
+            }
         
         self.errmsg: dict = errmsg
 
@@ -300,6 +304,17 @@ class NotFound(ClientError, KeyError):
     def task_status(self) -> TaskStatus:
         return TaskStatus.NOT_FOUND
 
+class TaskHandlerNotFound(NotFound):
+    """没有该任务的处理器
+    """
+
+    def __init__(self, task_id: TaskID):
+        super().__init__("task handler not found", task_id=task_id)
+
+    @property
+    def task_id(self):
+        return self.errmsg.get("task_id", None)
+
 class DuplicateOrConflict(InternalError):
 
     """冲突或重复
@@ -319,7 +334,8 @@ class DuplicateOrConflict(InternalError):
         """
 
         super().__init__(
-            f"Cannot perform {operation} on {resource[0]}: {resource[1]} cause: \n{msg}")
+            f"Cannot perform {operation} on {resource[0]}: {resource[1]} cause: \n{msg}"
+        )
 
     @classmethod
     def from_scheme(cls, 
@@ -327,7 +343,6 @@ class DuplicateOrConflict(InternalError):
         operation: str,
         errmsg: str = '',
     ) -> 'DuplicateOrConflict':
-        
         """从数据模型 实例创建冲突异常
         """
         return cls(

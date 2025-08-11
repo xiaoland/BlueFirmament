@@ -31,7 +31,7 @@ class RedisDAL(
             **kwargs
         )
 
-    def __init__(self) -> None:
+    def __init__(self, **kwargs) -> None:
         self._client = redis.Redis(
             host=self.__host,
             port=self.__port,
@@ -39,6 +39,11 @@ class RedisDAL(
             db=self.default_path[0]
         )
         self._pubsub = self._client.pubsub(ignore_subscribe_messages=True)
+        super().__init__(**kwargs)
+
+    async def close(self):
+        await self._pubsub.aclose()
+        await self._client.aclose()
 
     def get(self, key: str) -> Opt[typing.Any]:
         return self._client.get(key)
@@ -46,19 +51,26 @@ class RedisDAL(
     async def set(self, key: str, value: typing.Any) -> None:
         await self._client.set(key, value)
 
-    async def push(self, item: bytes) -> None:
-        await self._client.lpush(self.__queue_name__, item)
+    async def push(self, item: bytes, queue_name: Opt[str] = None) -> None:
+        await self._client.lpush(queue_name or self.__queue_name__, item)
 
-    async def pop(self, wait: bool = True) -> bytes:
+    async def pop(
+        self,
+        queue_name: Opt[str] = None,
+        wait: bool = True
+    ) -> bytes:
+        queue_name = queue_name or self.__queue_name__
+
         if not wait:
-            res = await self._client.lpop(self.__queue_name__)
+            res = await self._client.lpop(queue_name)
         else:
-            res = await self._client.blpop(*self.__queue_name__, timeout=0)
+            _, res = typing.cast(
+                tuple[bytes, bytes],
+                await self._client.blpop([queue_name], timeout=0)
+            )
 
         if res is None:
-            raise NotFound(f"No available items in queue {self.__queue_name__}")
-        if isinstance(res, list):
-            res = res[0]
+            raise NotFound(f"No available items in queue {queue_name}")
         if isinstance(res, str):
             return res.encode('utf-8')
 
