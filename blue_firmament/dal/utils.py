@@ -2,17 +2,17 @@
 
 
 import typing
-from .types import FilterLikeType, FieldLikeType
-from ..utils import dump_enum
+from .types import QueryComLikeType, FieldLikeType
+from ..utils.enum_ import dump_enum
 
 if typing.TYPE_CHECKING:
-    from .filters import DALFilter
+    from .query_components import DALQueryComponent
 
 
-def dump_filters_like(
-    *value: FilterLikeType,
+def dump_query_coms_like(
+    *values: QueryComLikeType,
     scheme_like: typing.Any | None = None
-) -> typing.Iterable["DALFilter"]:
+) -> typing.Iterable["DALQueryComponent"]:
 
     """Convert list of FilterLikeType to DALFilter list
 
@@ -27,29 +27,37 @@ def dump_filters_like(
 
     from ..scheme import BaseScheme
     from ..scheme.field import Field
-    for item in value:
+    for item in values:
         if isinstance(item, (str, int)):
             try:
                 if scheme_like:
                     if isinstance(scheme_like, Field):
                         scheme_like = scheme_like.scheme_cls
-                    if isinstance(scheme_like, BaseScheme):
-                        res.append(scheme_like.get_key_field().equals(item))
+                    if issubclass(scheme_like, BaseScheme) or isinstance(scheme_like, BaseScheme):
+                        res.append(scheme_like._get_key_field().equals(item))
                         continue
 
                 raise ValueError
             except (AttributeError, ValueError):
                 raise ValueError(
-                    "Cannot dump filter-like value that is not a DALFilter withoutscheme"
+                    "Cannot dump filter-like value that is not a DALQueryComponent without scheme"
                 )
         elif isinstance(item, BaseScheme):
             res.extend(item.equals())
         else:
             res.append(item)
 
-    return typing.cast(typing.Iterable["DALFilter"], res)
+    return typing.cast(typing.Iterable["DALQueryComponent"], res)
 
 
 def dump_field_like(value: FieldLikeType) -> str:
+    """Convert FieldLikeType to field name string
+
+    :param value: to dump value
+    :param dal_path: optional, Path to execute current query.
+        If provided, will prepend the field name with `scheme_dal_path[0].` if
+        the `dal_path` is different from the scheme's dal_path.
+        (for resolving reference)
+    """
     from ..scheme.field import dump_field_name
     return dump_field_name(dump_enum(value))

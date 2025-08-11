@@ -28,7 +28,7 @@ class HTTPHeader(enum.Enum):
 
 TStatus2HCode: dict[TaskStatus, int] = {
     TaskStatus.OK: 200,
-    TaskStatus.NO_CONTENT: 204,
+    TaskStatus.DELETED: 204,
     TaskStatus.CREATED: 201,
     TaskStatus.BAD_REQUEST: 400,
     TaskStatus.CONFLICT: 409,

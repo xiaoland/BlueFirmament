@@ -1,9 +1,8 @@
-"""Queue based transporter.
+"""Transporter listening to a Queue.
 """
-import json
 import typing
 from .base import BaseTransporter
-from ..task import Task, TaskMetadata, TaskResult
+from ..task import Task, TaskResult
 
 if typing.TYPE_CHECKING:
     from ..dal.base import QueueLikeDataAccessLayer
@@ -11,44 +10,34 @@ if typing.TYPE_CHECKING:
 
 
 class QueueTransporter(BaseTransporter):
+    """
+
+    :ivar __dal: Listening this queue dal for tasks.
+    :ivar __handling_dal: The queue storing handling tasks.
+    """
 
     def __init__(
         self,
         app: BlueFirmamentApp,
         queue_dal: QueueLikeDataAccessLayer,
-        queue_name: str = "blue_firmament_event",
-        handling_queue_name: str = "blue_firmament_handling_event"
+        handling_queue_dal: QueueLikeDataAccessLayer,
+        name: str = "default"
     ):
-        super().__init__(app)
+        super().__init__(app=app, name=name)
         self.__dal = queue_dal
-        self.__queue_name = queue_name
-        self.__handling_queue_name = handling_queue_name
+        self.__handling_dal = handling_queue_dal
         self.__stop = False
 
-    async def start_listening(self):
+    async def start(self):
         while not self.__stop:
-            event = await self.__dal.blocking_pop_and_push(
-                queue=self.__queue_name, dst_queue=self.__handling_queue_name
-            )
-            await self(event)
+            await self(await self.__dal.pop())
 
-    async def stop_listening(self):
+    async def stop(self):
         self.__stop = True
 
-    async def __call__(self, event: bytes):
-        parsed_event = json.loads(event)
-        if isinstance(parsed_event, dict):
-            task_id = parsed_event["task_id"]
-            metadata = parsed_event.get("metadata", {})
-            parameters = parsed_event.get("parameters", {})
-
-            await self._app.handle_task(
-                task=Task(
-                    task_id=task_id,
-                    metadata=TaskMetadata(**metadata),
-                    parameters=parameters
-                ),
-                task_result=TaskResult()
-            )
-        else:
-            self._logger.warning(f"Unsupported event type: {type(parsed_event)}")
+    async def __call__(self, raw: bytes):
+        await self._app.handle_task(
+            task=Task.load_from_bytes(raw),
+            task_result=TaskResult(),
+            transporter=self
+        )

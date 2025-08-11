@@ -1,15 +1,19 @@
+"""Main module of HTTP Transporter.
+"""
+
 import uvicorn
 import enum
 import typing
 from typing import Optional as Opt
 import json
 import urllib.parse
-from http.cookies import SimpleCookie
+import http.cookies
 from ...task import Task, TaskID, TaskMetadata
 from ...task.result import TaskResult, JsonBody, StreamingBody
 from . import _types as http_types
 from .base import MIMEType, HTTPHeader, TStatus2HCode
-from ...utils import try_convert_str, dump_enum
+from ...utils.main import try_convert_str
+from ...utils.enum_ import dump_enum
 from ..base import BaseTransporter
 from ...task.main import Method, LazyParameter
 from ...exceptions import BlueFirmamentException
@@ -44,53 +48,58 @@ class HTTPHeaders:
         if len(res) == 0:
             return None
         if len(res) == 1:
-            return res[0]
+            res = res[0]
+        
+        self.__parsed_headers[key] = res
         return res
     
     def get(self, key: str | enum.Enum, default: TV = None) -> list[str] | str | TV:
         res = self.__parsed_headers.get(dump_enum(key), None)
         if res is None:
-            res = self._lookup_in_raw_headers(key)
+            res = self._lookup_in_raw_headers(dump_enum(key))
             if res is None:
                 return default
         return res
 
-    def get_as_str(self, key: str | enum.Enum, default: TV = None) -> str | TV:
+    def get_as_str(self, key: str | enum.Enum, default: str = "") -> str:
         res = self.get(key, default)
+        if res is None:
+            return ""
         if isinstance(res, str):
             return res
         else:
             raise TypeError("Header exist but value is not a string")
         
-    def get_as_list(self, key: str | enum.Enum, default: TV = None) -> list[str] | TV:
+    def get_as_list(self, key: str | enum.Enum, default: Opt[list] = None) -> list[str]:
         res = self.get(key, None)
         if isinstance(res, list):
             return res
         if res is None:
-            return default
+            return default or []
         else:
             return [res]
         
-    def get_content_type(self) -> Opt[tuple[MIMEType, str]]:
-        """Get 'Content-Type' in header
+    def get_content_type(self) -> tuple[Opt[MIMEType], str]:
+        """Get Header 'Content-Type'
 
         :returns: a tuple, 0 for MIME type, 1 for charset
 
-            If charset not set, defaults to `utf-8`
+            If charset not set, defaults to `utf-8`.
+            If MIMEType not set, defaults to None.
         """
-        content_type_str = self.get_as_str(HTTPHeader.CONTENT_TYPE, None)
-        if content_type_str is None:
-            return None
+        content_type_str = self.get_as_str(HTTPHeader.CONTENT_TYPE)
+        if not content_type_str:
+            return None, "utf-8"
         split = content_type_str.split(';')
-        return MIMEType(split[0]), split[1].split('=')[1]
+        return MIMEType(split[0]), split[1].split('=')[1] if len(split) > 1 else "utf-8"
 
     def get_accept(self) -> tuple[MIMEType, ...]:
         """Get 'Accept' in header
 
         :returns: a list of MIME types that client accepts
         """
-        accept_str = self.get_as_str(HTTPHeader.ACCEPT, None)
-        if accept_str is None:
+        accept_str = self.get_as_str(HTTPHeader.ACCEPT)
+        if not accept_str:
             return (MIMEType.JSON,)
         return tuple(
             MIMEType(i.strip().split(';')[0])
@@ -102,8 +111,8 @@ class HTTPHeaders:
 
         :returns: a string of charset that client accepts
         """
-        accept_charset_str = self.get_as_str(HTTPHeader.ACCEPT_CHARSET, None)
-        if accept_charset_str is None:
+        accept_charset_str = self.get_as_str(HTTPHeader.ACCEPT_CHARSET)
+        if not accept_charset_str:
             return ('utf-8',)
         return tuple(
             i.strip().split(';')[0]
@@ -207,22 +216,27 @@ class HTTPTransporter(BaseTransporter):
     """Transporter serves HTTP/S protocol.
     """
 
-    def __init__(self,
+    def __init__(
+        self,
         app: "BlueFirmamentApp",
         host: str,
         port: int,
-        uds: Opt[str] = None
+        uds: Opt[str] = None,
+        name: str = "default"
     ):
         """
         :param uds: Unix domain socket. E.g /tmp/blue_firmament.sock
         """
-        super().__init__(app)
+        super().__init__(app=app, name=name)
         self.__asgi_server = uvicorn.Server(uvicorn.Config(
             app=self, host=host, port=port, uds=uds
         ))
 
-    def start_listening(self):
+    def start(self):
         return self.__asgi_server.serve()
+
+    def stop(self):
+        return self.__asgi_server.shutdown()
 
     async def __call__(self, 
         scope: http_types.Scope, 
@@ -235,15 +249,6 @@ class HTTPTransporter(BaseTransporter):
         if scope['type'] == 'http':
             # parse headers
             headers = HTTPHeaders(scope['headers'])
-
-            # parse cookies
-            # TODO what to do with cookies?
-            cookies = {}
-            for cookie_str in headers.get_as_list('cookie', []):
-                cookie = SimpleCookie()
-                cookie.load(cookie_str)
-                for name, morsel in cookie.items():
-                    cookies[name] = morsel.value
 
             # compose task and task_result
             h_content_type = headers.get_content_type()
@@ -266,7 +271,9 @@ class HTTPTransporter(BaseTransporter):
             task_result = TaskResult()
 
             try:
-                await self._app.handle_task(task=task, task_result=task_result)
+                await self._app.handle_task(
+                    task=task, task_result=task_result, transporter=self
+                )
             except BlueFirmamentException as e:
                 task_result.status = e.task_status
                 task_result.body = JsonBody(e.dump_details_to_dict())
@@ -290,38 +297,58 @@ class HTTPTransporter(BaseTransporter):
                     )
                 ))
 
-                async for chunk in task_result.body:
+                res_body = task_result.body
+                if isinstance(res_body, StreamingBody):
+                    async for chunk in res_body:
+                        body_ = f"data: {chunk.dump_to_str()}\n\n".encode("utf-8")
+                        await send(http_types.HTTPResponseBodyEvent(
+                            type="http.response.body",
+                            body=body_,
+                            more_body=True
+                        ))
+
                     await send(http_types.HTTPResponseBodyEvent(
                         type="http.response.body",
-                        body=chunk.dump_to_bytes(encoding="utf-8"),
-                        more_body=True
+                        body=b'',
+                        more_body=False
+                    ))
+                else:
+                    await send(http_types.HTTPResponseBodyEvent(
+                        type="http.response.body",
+                        body=res_body.dump_to_bytes(encoding="utf-8"),
+                        more_body=False
                     ))
 
-                await send(http_types.HTTPResponseBodyEvent(
-                    type="http.response.body",
-                    body=b'',
-                    more_body=False
-                ))
             except OSError:   # Disconnected unexpectedly
                 self._logger.warning('Connection closed before all body were sent')
-                task_result.body.cleanup()
+                await task_result.body.cleanup()
         else:
             self._logger.warning(f"Request omitted due to unsupported protocol {scope['type']}")
 
     @staticmethod
     def parse_metadata(headers: HTTPHeaders) -> TaskMetadata:
-        authorization=headers.get_as_str('authorization').split(" ")
+        # parse authorization header
+        authorization = headers.get_as_str('authorization').split(" ")
+        # parse cookies
+        cookies = {}
+        for cookie_str in headers.get_as_list('cookie', []):
+            cookie = http.cookies.SimpleCookie()
+            cookie.load(cookie_str)
+            for name, morsel in cookie.items():
+                cookies[name] = morsel.value
         return TaskMetadata(
-            authorization=(authorization[0], authorization[1]),
+            authorization=(authorization[0], authorization[1]) \
+                if len(authorization) == 2 else None,
             trace_id=headers.get_as_str('x-trace-id'),
             client_id=headers.get_as_str('x-client-id'),
+            state=cookies
         )
 
     @staticmethod
     def parse_query_params(
         query_bytes: bytes,
         encoding: str = 'latin-1',
-    ) -> dict[str, str | int | float | bool | None]:
+    ) -> dict[str, str | int | float | bool | None | list]:
         """解析查询参数
 
         将查询字符串解析为字典
@@ -333,6 +360,7 @@ class HTTPTransporter(BaseTransporter):
         解析
         ^^^^^^
         - 尝试将值转换为布尔、整数或浮点数，如果失败则为字符串
+        - 如果有多个相同的键，使用元组存储所有值
         - 空字符串被转换为None
         
         """
@@ -340,5 +368,12 @@ class HTTPTransporter(BaseTransporter):
         parsed_dict = {}
         pairs: list[tuple[str, str]] = urllib.parse.parse_qsl(query_string)
         for key, value in pairs:
-            parsed_dict[key] = try_convert_str(value)
+            # TODO performance optimization required
+            if key in parsed_dict:
+                if isinstance(parsed_dict[key], list):
+                    parsed_dict[key].append(try_convert_str(value))
+                else:
+                    parsed_dict[key] = [parsed_dict[key], try_convert_str(value)]
+            else:
+                parsed_dict[key] = try_convert_str(value)
         return parsed_dict

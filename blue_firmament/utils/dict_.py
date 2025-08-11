@@ -7,7 +7,7 @@ import typing
 from typing import Annotated as Anno
 from typing import Literal as Lit
 from typing import Optional as Opt
-from . import dump_enum
+from .enum_ import dump_enum
 
 
 class EnhancedDict:

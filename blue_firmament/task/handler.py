@@ -11,8 +11,8 @@ from ..scheme import BaseConverter
 from ..scheme.converter import get_converter_from_anno
 from . import Task
 from .result import TaskResult, Body, EmptyBody, JsonBody
-from ..utils import call_as_async
-from ..utils.type import get_origin, safe_issubclass, is_json_dumpable
+from ..utils.main import call_as_async
+from ..utils.typing_ import get_origin, safe_issubclass, is_json_dumpable
 
 if typing.TYPE_CHECKING:
     from .main import BaseTaskContext
@@ -26,35 +26,39 @@ class TaskHandler:
     TaskContext.
     """
 
-    type HandlerKwargsT = typing.Dict[
+    type FunctionKwargsT = typing.Dict[
         str,
         typing.Callable[
             ["BaseTaskContext", PathParamsT], typing.Coroutine,
         ]
     ]
     """Inner handler parameters"""
-    type InnerHandlerT = typing.Union[
+    type FunctionT = typing.Union[
         typing.Callable[..., typing.Any],
         typing.Callable[..., typing.Awaitable[typing.Any]]
     ]
 
-    def __init__(self,
-        inner_handler: InnerHandlerT,
+    def __init__(
+        self,
+        function: FunctionT,
         manager_cls: Opt[typing.Type["BaseManager"]] = None,
     ):
-
         """
-        :param inner_handler:
+        :param function:
         :param manager_cls:
             When the inner_handler is a manager method
             (excludes classmethod, staticmethod).
         """
-        self.__inner_handler = inner_handler
+        self.__function = function
         self.__method_manager_cls = manager_cls
 
         # parse handler kwargs
-        self.__handler_kwargs: TaskHandler.HandlerKwargsT =\
-            self._parse_handler_kwargs(self.__inner_handler)
+        self.__handler_kwargs: TaskHandler.FunctionKwargsT =\
+            self._parse_handler_kwargs(self.__function)
+
+    @property
+    def function(self) -> FunctionT:
+        return self.__function
 
     def set_manager_cls(self, manager_cls: typing.Type["BaseManager"]):
         """Set inner handler's manager class if it's a manager method.
@@ -65,7 +69,7 @@ class TaskHandler:
         self.__method_manager_cls = manager_cls
 
     @staticmethod
-    def get_param_getter(name: str, converter: BaseConverter):
+    def get_param_getter(name: str, converter: BaseConverter, safe: bool = True):
         """Get a getter resolves parameter from
         task parameters or path parameters.
         """
@@ -74,13 +78,16 @@ class TaskHandler:
             if val is _undefined:
                 val = await tc._task.parameters.get(name, _undefined)
                 if val is _undefined:
-                    raise ValueError(f'{name} not found in task parameters or path parameters')
-            return converter(val, _request_context=tc)
+                    if not safe:
+                        raise ValueError(f'{name} not found in task parameters or path parameters')
+                    else:
+                        return _undefined
+            return converter(val, _task_context=tc)
 
         return getter
 
     @classmethod
-    def _parse_handler_kwargs(cls, handler: InnerHandlerT) -> HandlerKwargsT:
+    def _parse_handler_kwargs(cls, handler: FunctionT) -> FunctionKwargsT:
         """
         Rationale
         ---------
@@ -112,7 +119,7 @@ class TaskHandler:
         参数获取器接收 :class:`blue_firmament.transport.context.RequestContext` 作为参数，从中解析出本参数需要的值。
         """
         handler_params_sig = inspect.signature(handler).parameters
-        kwargs: TaskHandler.HandlerKwargsT = {}
+        kwargs: TaskHandler.FunctionKwargsT = {}
 
         for name, param_sig in handler_params_sig.items():
             if name in ('self', 'cls'):
@@ -146,10 +153,11 @@ class TaskHandler:
         - 自动处理返回值：处理器的返回值会被解析到响应对象中
         """
         # get kwargs
-        kwargs = {
-            name: await getter(task_context, path_params)
-            for name, getter in self.__handler_kwargs.items()
-        }
+        kwargs = {}
+        for name, getter in self.__handler_kwargs.items():
+            value = await getter(task_context, path_params)
+            if value is not _undefined:
+                kwargs[name] = value
 
         # get args
         args = []
@@ -159,7 +167,7 @@ class TaskHandler:
             args.append(manager)
 
         # call handler
-        result = await call_as_async(self.__inner_handler, *args, **kwargs)
+        result = await call_as_async(self.__function, *args, **kwargs)
 
         # process result
         # TODO process result correctly

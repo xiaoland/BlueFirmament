@@ -15,7 +15,7 @@ import typing
 from typing import Optional as Opt, Annotated as Anno, Literal as Lit
 
 from .._types import Undefined, _undefined
-from ..utils import call_function
+from ..utils.main import call_as_sync
 
 if typing.TYPE_CHECKING:
     from .field import Field
@@ -66,19 +66,22 @@ class FieldValidator(BaseValidator[T], typing.Generic[T]):
     ]
     """Function types that FieldValidator can accept.
     """
+    ModeT = Lit["init_assign", "after", "assign"]
 
     def __init__(self, 
         field: "Field",
         func: FuncT,
-        mode: Lit["before", "after"] = "after",
+        mode: ModeT = "after",
     ) -> None:
         
         """
         :param field: The field to validate.
         :param func: The function to call to validate the field.
         :param mode: 
-            ``before``: validate before scheme instantiated.
-            ``after``: validate after scheme instantiated.
+            init_assign: validate only when assigning during scheme instantiating.
+            after: validate immediately after all fields are initialized and when assigning after
+            instantiating.
+            assign: validate when field is assigned a new value (after scheme instantiating).
         """
         
         self.__func = func
@@ -102,10 +105,9 @@ class FieldValidator(BaseValidator[T], typing.Generic[T]):
         force: bool = False,
         **kwargs
     ) -> None:
-        
         """
         :param scheme_ins: If func is instance method, provide the instance.
-        :param force: 
+        :param force:
             If True, bypass mode check
         """
         if scheme_ins is _undefined:
@@ -117,26 +119,35 @@ class FieldValidator(BaseValidator[T], typing.Generic[T]):
                 if not scheme_ins.__instantiated__:
                     scheme_ins.__after_field_validators__.append(self)
                     return None
+            if self.__mode == "init_assign":
+                if scheme_ins.__instantiated__:
+                    return None
+            if self.__mode == "assign":
+                if not scheme_ins.__instantiated__:
+                    return None
         
         logger = self._get_logger(scheme_ins=scheme_ins)
 
         # log extrance
-        logger.info("Enter field validator", 
+        logger.debug(
+            "Enter field validator",
             field_name=self._field.in_scheme_name, value=value
         )
         
         scheme_ins_copy = copy.copy(scheme_ins)
         scheme_ins_copy._set_logger(logger)
-        call_function(self.__func, scheme_ins_copy, value)
+        call_as_sync(self.__func, scheme_ins_copy, value)
+        return None
 
 
 def field_validator(
     field: "Field[T]",
-    mode: Lit["before", "after"] = "after",
+    mode: FieldValidator.ModeT = "after",
 ): 
     """Decorator to create a field validator.
 
     :param field: The field to validate.
+    :param mode:
 
     Examples
     --------
@@ -182,7 +193,7 @@ def field_validator(
 
 def field_validators(
     *fields: "Field",
-    mode: Lit["before", "after"] = "after",
+    mode: FieldValidator.ModeT = "after",
 ):
     def wrapper(func: FieldValidator.FuncT) -> typing.List[FieldValidator]:
         """
@@ -254,7 +265,7 @@ class SchemeValidator(BaseValidator):
 
         scheme_ins_copy = copy.copy(scheme_ins)
         scheme_ins_copy._set_logger(logger)
-        call_function(self.__func, scheme_ins_copy)
+        call_as_sync(self.__func, scheme_ins_copy)
 
 
 def scheme_validator(func: SchemeValidator.FuncT) -> SchemeValidator:

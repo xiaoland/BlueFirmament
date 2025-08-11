@@ -17,11 +17,13 @@ import functools
 import typing
 from typing import Optional as Opt
 from .._types import Undefined, _undefined
-from ..utils.type import safe_issubclass
-from ..dal.filters import (
+from ..utils.typing_ import safe_issubclass
+from blue_firmament.dal.query_components.filters import (
     ContainsFilter, EqFilter, NotEqFilter,
-    InFilter, OrderModifier, NotFilter
+    InFilter, IsFilter
 )
+from ..dal.query_components.modifiers import OrderModifier
+from blue_firmament.dal.query_components.operators import NotOperator
 from .converter import BaseConverter, get_converter_from_anno
 
 if typing.TYPE_CHECKING:
@@ -31,9 +33,7 @@ if typing.TYPE_CHECKING:
 
 FieldValueTV = typing.TypeVar('FieldValueTV')
 class FieldValueProxy(typing.Generic[FieldValueTV]):
-
-    '''
-    字段值代理对象
+    """字段值代理对象
 
     字段值必然是原生值，不能是用户自定义类
 
@@ -46,7 +46,7 @@ class FieldValueProxy(typing.Generic[FieldValueTV]):
     ^^^^^^^^^^
     - 在下方通过 for 循环注册了一堆特殊方法
     - `__bool__` 特殊处理
-    ''' 
+    """
 
     def __init__(self, 
         obj: FieldValueTV, 
@@ -155,6 +155,13 @@ class Field(typing.Generic[FieldValueTV]):
     Validator
     ^^^^^^^^^
     See :doc:`/design/scheme/validator`
+
+    Inherit
+    ^^^^^^^
+    - Make sure your `__init__` accepts the same parameters as `Field` or use
+    `**kwargs` to achieve that. (Set your parameters in kwargs to avoid conflict)
+      Or set your parameters in `_post_init` instead of
+    overriding `__init__`.
     """
 
     def __init__(
@@ -166,7 +173,7 @@ class Field(typing.Generic[FieldValueTV]):
         in_scheme_name: Opt[str] = None,
         scheme_cls: Opt[typing.Type["BaseScheme"]] = None,
         is_key: bool = False,
-        is_natural_key: bool = True,
+        is_key_natural: bool = False,
         is_foreign_key: bool = False,
         converter: Opt[BaseConverter[FieldValueTV]] = None,
         validators: Opt[typing.Iterable["BaseValidator"]] = None,
@@ -174,7 +181,6 @@ class Field(typing.Generic[FieldValueTV]):
         dump_flags: Opt[set[str]] = None,
         init: bool = True,
     ):
-
         """
         :param default:
             Immutable value used when set value not provided(``_undefined``).
@@ -200,8 +206,8 @@ class Field(typing.Generic[FieldValueTV]):
             dumping scheme.
         :param is_key: 
             This field is a key
-        :param is_natural_key:
-            If this field is a key, it is managed by DAL (False for surrogate)
+        :param is_key_natural:
+            If this field is a key, it is managed by DataSource (False for surrogate)
         :param is_foreign_key:
             If you want to mark a primary or composite key, use KeyField instead
         :param init: 
@@ -214,15 +220,18 @@ class Field(typing.Generic[FieldValueTV]):
         self.__default_factory = default_factory
         self.__vtype = vtype
         self.__is_key = is_key
-        self.__is_natural_key = is_natural_key
+        self.__is_key_natural = is_key_natural
         self.__is_foreign_key = is_foreign_key
         self.__converter: BaseConverter | None = converter
         self.__validators: typing.List["BaseValidator"] = list(validators or [])
         self.__is_partial = is_partial
         self.__dump_flags = dump_flags or set()
         self.__init = init
-        
-    def fork(self, 
+
+    # FIXME all default must be negative, or default value will override original value even if \
+    #  no new value is set
+    def fork(
+        self,
         default: Undefined | FieldValueTV = _undefined,
         default_factory: Opt[typing.Callable[[], FieldValueTV]] = None,
         vtype: Undefined | typing.Type[FieldValueTV] = _undefined,
@@ -230,34 +239,30 @@ class Field(typing.Generic[FieldValueTV]):
         in_scheme_name: Opt[str] = None,
         scheme_cls: Opt[typing.Type["BaseScheme"]] = None,
         is_key: bool = False,
-        is_natural_key: bool = True,
+        is_key_natural: bool = False,
         is_foreign_key: bool = False,
         converter: Opt[BaseConverter[FieldValueTV]] = None,
-        fork_validators: bool = True,
+        fork_validators: bool = False,
         is_partial: Opt[bool] = None,
         dump_flags: Opt[set[str]] = None,
         init: Opt[bool] = None,
     ) -> typing.Self:
-        try:
-            return self.__class__(
-                default=default if default is not _undefined else self.__default,
-                default_factory=default_factory or self.__default_factory,
-                name=name or self.__name,
-                in_scheme_name=in_scheme_name or self.__in_scheme_name,
-                scheme_cls=scheme_cls or self.__scheme_cls,
-                is_key = is_key or self.__is_key,
-                is_natural_key = is_natural_key or self.__is_natural_key,
-                is_foreign_key=is_foreign_key or self.__is_foreign_key,
-                converter=converter or self.__converter,
-                validators=self.__validators if fork_validators else None,
-                is_partial=is_partial or self.__is_partial,
-                dump_flags=dump_flags or self.__dump_flags,
-                init=init or self.__init,
-                vtype=vtype if vtype is not _undefined else self.__vtype
-            )
-        except TypeError:
-            # customized no-parameter field
-            return self.__class__()
+        return self.__class__(
+            default=default if default is not _undefined else self.__default,
+            default_factory=default_factory or self.__default_factory,
+            name=name or self.__name,
+            in_scheme_name=in_scheme_name or self.__in_scheme_name,
+            scheme_cls=scheme_cls or self.__scheme_cls,
+            is_key=is_key or self.__is_key,
+            is_key_natural=is_key_natural or self.__is_key_natural,
+            is_foreign_key=is_foreign_key or self.__is_foreign_key,
+            converter=converter or self.__converter,
+            validators=self.__validators if fork_validators else None,
+            is_partial=is_partial or self.__is_partial,
+            dump_flags=dump_flags or self.__dump_flags,
+            init=init or self.__init,
+            vtype=vtype if vtype is not _undefined else self.__vtype
+        )
     
     def __hash__(self) -> int:
         """哈希值
@@ -291,8 +296,8 @@ class Field(typing.Generic[FieldValueTV]):
     
     def is_key(self) -> bool: 
         return self.__is_key
-    def is_natural_key(self) -> bool:
-        return self.__is_natural_key
+    def is_key_natural(self) -> bool:
+        return self.__is_key_natural
 
     def _set_name(self, value: str, no_raise: bool = False) -> None:
         """设置字段名称
@@ -335,6 +340,10 @@ class Field(typing.Generic[FieldValueTV]):
     @property
     def dump_flags(self) -> set[str]:
         return self.__dump_flags
+
+    @dump_flags.setter
+    def dump_flags(self, value: set[str]) -> None:
+        self.__dump_flags = value
 
     def _set_scheme_cls(self, 
         scheme_cls: Opt[typing.Type["BaseScheme"]],
@@ -423,6 +432,12 @@ class Field(typing.Generic[FieldValueTV]):
             return self.__converter.type
         else:
             raise ValueError('Field value type is not defined')
+
+    def load_val(self, value: typing.Any) -> FieldValueTV:
+        if value is _undefined:
+            return self.default_value
+        else:
+            return self.convert(value)
     
     def dump_val_to_str(self, value: FieldValueTV):
         """Dump field value to string
@@ -433,7 +448,6 @@ class Field(typing.Generic[FieldValueTV]):
             return _undefined.value
 
     def dump_val_to_jsonable(self, value: FieldValueTV):
-
         """Dump field value to jsonable types
         """
         if value is not _undefined:
@@ -477,23 +491,21 @@ class Field(typing.Generic[FieldValueTV]):
         
     def validate(self, 
         value: typing.Any,
-        scheme_ins: Opt["BaseScheme"] = None
+        scheme_ins: Opt["BaseScheme"] = None,
     ) -> None:
+        """Run validator bind to this field.
 
-        """校验字段值
-
-        :raises ValueError: 如果值不合法
+        :raises ValueError: If invalid.
         """
         for validator in self.__validators:
             validator(value, scheme_ins=scheme_ins)
         
     def equals(self, value: typing.Any) -> EqFilter:
-        '''该字段等于该值的筛选器
-        '''
+        """该字段等于该值的筛选器
+        """
         return EqFilter(self, value)
     
     def contains(self, *value: typing.Any) -> ContainsFilter:
-
         """该字段包含所有元素的筛选器
         """
         return ContainsFilter(self, *value)
@@ -508,8 +520,14 @@ class Field(typing.Generic[FieldValueTV]):
         """
         return InFilter(self, value)
     
-    def not_in_(self, value: typing.Iterable[typing.Any]) -> tuple[NotFilter, InFilter]:
-        return (NotFilter(), self.in_(value))
+    def not_in_(self, value: typing.Iterable[typing.Any]) -> tuple[NotOperator, InFilter]:
+        return (NotOperator(), self.in_(value))
+
+    def is_(self, value: bool | None) -> IsFilter:
+        return IsFilter(self, value)
+
+    def is_not(self, value: bool | None) -> tuple[NotOperator, IsFilter]:
+        return (NotOperator(), IsFilter(self, value))
     
     def order_by(self, *, desc: bool = False) -> OrderModifier:
 
@@ -534,24 +552,26 @@ class Field(typing.Generic[FieldValueTV]):
         return typing.cast(FieldValueTV, instance._get_value(self))
         
     def __set__(self, instance: "BaseScheme", value: FieldValueTV) -> None:
-
         """
         .. versionchanged:: 0.1.2
             if initialized, set to undefined will change nothing
         """
-
         initialized = self.in_scheme_name in instance.__field_values__
 
         # convert value
         if value is _undefined:
             if initialized:
-                return
-            if self.__is_partial or instance.__partial__:
-                instance._set_value(self, _undefined)
-                instance._mark_partial(self.in_scheme_name)
-                return
-            else:
-                value = self.default_value                        
+                return  # remain value unchanged
+
+            instance._mark_unset(self.in_scheme_name)
+            try:
+                value = self.default_value
+            except ValueError as e:
+                if self.__is_partial or instance.__partial__:
+                    instance._set_value(self, _undefined)
+                    return
+                else:
+                    raise e
         else:
             value = self.convert(value)
 
@@ -567,7 +587,7 @@ class Field(typing.Generic[FieldValueTV]):
 
         # if already initialized, mark as dirty
         if initialized:
-            instance.mark_dirty(self.in_scheme_name)
+            instance._mark_dirty(self.in_scheme_name)
 
     def _proxy_value(self, 
         value: FieldValueTV, instance: "BaseScheme"
@@ -577,7 +597,7 @@ class Field(typing.Generic[FieldValueTV]):
             # 避免循环代理
             return FieldValueProxy(
                 value, 
-                lambda: instance.mark_dirty(self.in_scheme_name),
+                lambda: instance._mark_dirty(self.in_scheme_name),
                 self,
                 instance
             )
@@ -620,8 +640,8 @@ def field(
     default_factory: Opt[typing.Callable[[], T]] = None,
     name: Opt[str] = None,
     is_key: bool = False,
-    is_natural_key: bool = True,
-    is_foreign_key: bool = False,
+    is_natural_key: bool = False,
+    is_foreign_key: bool = False,  # TODO no needed, remove
     converter: Opt[BaseConverter] = None,
     validators: Opt[typing.Iterable['BaseValidator']] = None,
     is_partial: bool = False,
@@ -632,8 +652,8 @@ def field(
         default=default, 
         default_factory=default_factory, 
         name=name, 
-        is_key=is_key,
-        is_natural_key=is_natural_key,
+        is_key=is_key or is_natural_key,
+        is_key_natural=is_natural_key,
         is_foreign_key=is_foreign_key, 
         converter=converter,
         validators=validators,
@@ -658,6 +678,11 @@ class PrivateField[FieldValueType](Field[FieldValueType]):
     def name(self): raise ValueError('Private field name is forbidden')
     
     def __set__(self, instance: "BaseScheme", value: FieldValueType) -> None:
+        try:
+            if value is _undefined:
+                value = self.default_value
+        except ValueError:
+            value = _undefined
         instance._set_value(self, value)
 
 def private_field(

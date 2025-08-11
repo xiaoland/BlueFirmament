@@ -8,9 +8,11 @@ import abc
 import typing
 from typing import Optional as Opt
 
+from .._types import TaskRegistriesT
+from ..transport.base import BaseTransporter
 from ..task.registry import TaskRegistry, TaskEntry
+from ..task.context import BaseTaskContext
 from ..exceptions import BFExceptionTV
-from blue_firmament.task.context import BaseTaskContext
 from ..scheme.field import Field
 from ..scheme import SchemeTV
 from ..log import log_manager_handler
@@ -41,33 +43,41 @@ class ManagerMetaclass(abc.ABCMeta):
     def __new__(
         cls,
         name: str, 
-        bases: typing.Tuple[type[typing.Any], ...], 
-        attrs: typing.Dict[str, typing.Any],
-        router: Opt[TaskRegistry] = None,
+        bases: tuple[type[typing.Any], ...],
+        attrs: dict[str, typing.Any],
+        path_prefix: str = "",
         **kwargs
     ):
-        
+
         # exclude BaseManager
         if name in ("BaseManager",):
             return super().__new__(cls, name, bases, attrs, **kwargs)
 
-        task_entries: typing.List[TaskEntry] = []
+        attrs['__path_prefix__'] = path_prefix
+        attrs['__task_registries__']: dict[BaseTransporter | str, TaskRegistry] = {}
+        task_entries: list[tuple[tuple[BaseTransporter | str], TaskEntry]] = []
         
         for attr_name, attr_value in attrs.items():
-            if attr_name.startswith("_"):
-                continue
-
             # resolve task_entries
-            if isinstance(attr_value, TaskEntry):
-                entry_handlers = attr_value.handlers
-                if len(entry_handlers) != 1:
-                    raise ValueError("TaskEntry must have exactly one handler")
+            if (
+                isinstance(attr_value, tuple) and
+                len(attr_value) == 2 and
+                isinstance(attr_value[0], tuple) and
+                isinstance(attr_value[1], TaskEntry)
+            ):
+                task_entry = attr_value[1]
+                entry_handlers = task_entry.handlers
                 # unwrap handler
-                attrs[attr_name] = attr_value.handlers[0]
+                if len(entry_handlers) != 1:
+                    raise ValueError("Must have exactly one handler")
+                attrs[attr_name] = entry_handlers[0].function
                 # add to entries
                 task_entries.append(attr_value)
                 # make later resolution works
-                attr_value = attr_value.handlers[0]
+                attr_value = attrs[attr_name]
+
+            if attr_name.startswith("_"):
+                continue
 
             # log enhancement
             if callable(attr_value):
@@ -76,11 +86,17 @@ class ManagerMetaclass(abc.ABCMeta):
 
         new_cls = super().__new__(cls, name, bases, attrs, **kwargs)
 
+        if not issubclass(new_cls, BaseManager):
+            raise TypeError(f"{name} should not directly use the ManagerMetaclass")
+
         # set task handlers' manager class
-        for task_entry in task_entries:
-            task_entry.set_manager_cls(new_cls)
-            if router:
-                router.add_entry(task_entry)
+        for i in task_entries:
+            i[1].set_manager_cls(new_cls)
+            for transporter in i[0]:
+                attrs['__task_registries__'].setdefault(transporter, TaskRegistry(
+                    name=str(transporter),
+                    path_prefix=path_prefix
+                )).add_entry(i[1])
 
         return new_cls
 
@@ -98,11 +114,11 @@ class BaseManager(
     Config through bases parameters.
     """
     
-    __scheme_cls__: typing.Type[SchemeTV]
+    __scheme_cls__: type[SchemeTV]
     """Scheme class this manager is managing
     """
-    __task_registry__: TaskRegistry
-    """Manager task registry
+    __task_registries__: TaskRegistriesT
+    """Task entries of this manager
     """
     __manager_name__: str
     '''Friendly name of this manager.
@@ -110,22 +126,36 @@ class BaseManager(
     - no ``manager``
     - use ``_`` and lowercase
     '''
+    __path_prefix__: str
+
+
+    class ManagingScheme:
+        def __init__(self, scheme: Opt[SchemeTV] = None):
+            self.__scheme: Opt[SchemeTV] = scheme
+        def set(self, scheme: SchemeTV):
+            self.__scheme = scheme
+        def get(self) -> SchemeTV:
+            return self.__scheme
+        def __bool__(self):
+            return self.__scheme is not None
 
     def __init_subclass__(
         cls,
-        scheme_cls: Opt[typing.Type[SchemeTV]] = None,
-        manager_name: str = ""
+        scheme_cls: Opt[type[SchemeTV]] = None,
+        manager_name: Opt[str] = None,
+        **kwargs
     ):
         if scheme_cls:
             cls.__scheme_cls__ = scheme_cls
-        cls.__manager_name__ = manager_name
+        if manager_name:
+            cls.__manager_name__ = manager_name
 
-        super().__init_subclass__()
+        super().__init_subclass__(**kwargs)
 
     def __init__(self, task_context: BaseTaskContext) -> None:
         BaseTaskContext.__init__(self, task_context)
 
-        self.__scheme: Opt[SchemeTV] = None
+        self.__scheme = self.ManagingScheme(None)
         self._logger = self._logger.bind(
             manager_name=self.__manager_name__
         )
@@ -143,30 +173,23 @@ class BaseManager(
     @property
     def _scheme_key(self) -> Field:
         """Key field of managing scheme"""
-        return self._scheme_cls.get_key_field()
+        return self._scheme_cls._get_key_field()
 
     @property
     def _scheme(self) -> SchemeTV:
         """Managing scheme
-        
+
         :raise ValueError: scheme not set
         """
         if not self.__scheme:
             raise ValueError('scheme is not set')
-        return self.__scheme
-    
+        return self.__scheme.get()
+
     @_scheme.setter
-    def _scheme(self,
-        scheme: SchemeTV,
-    ) -> None:
+    def _scheme(self, scheme: SchemeTV):
         """Set managing scheme
         """
-        self.__scheme = scheme
-
-    def _reset_scheme(self):
-        """Set managing scheme to None
-        """
-        self.__scheme = None
+        self.__scheme.set(scheme)
 
     def _try_get_scheme(self) -> Opt[SchemeTV]:
         """Get scheme without exception

@@ -21,20 +21,20 @@ class BusinessScheme(
     BaseScheme, 
 ):
     
-    def __init_subclass__(cls, 
-        key_type: Opt[typing.Type] = None,
-        dal_path: DALPath | None = None,
-        dal: type[DataAccessLayer] | None = None,
-        proxy: bool | None = None,
-        disable_log: bool | None = None,
-        partial: bool | None = None,
-        inherit_validators: bool | None = None
+    def __init_subclass__(
+        cls,
+        key_type: Opt[type[KeyTV]] = None,
+        dump_flags: Opt[dict[str, set[str]]] = None,
+        **kwargs
     ) -> None:
-        super().__init_subclass__(dal_path, dal, proxy, disable_log, partial, inherit_validators)
+        super().__init_subclass__(**kwargs)
         if key_type:
             cls._id._set_converter_from_anno(key_type)
+        if dump_flags:
+            if "_id" in dump_flags:
+                cls._id.dump_flags = dump_flags["_id"]
 
-    _id: FieldT[KeyTV] = field(is_key=True)
+    _id: FieldT[KeyTV] = field(is_key=True, is_natural_key=True)
 
     @property
     def _inserted(self):
@@ -57,16 +57,18 @@ class BusinessScheme(
         """
         if isinstance(self._id, int):
             return self._id != 0
-        elif isinstance(self._id, str):
+        if isinstance(self._id, str):
             return self._id != ''
-        elif isinstance(self._id, BaseScheme):
+        if isinstance(self._id, BaseScheme):
             return all(
                 bool(i)
                 for i in self._id.__field_values__.values()
             )
+        return False
 
 
-class EditableScheme(NoProxyScheme,
+class EditableScheme(
+    NoProxyScheme,
     partial=True,
     inherit_validators=True             
 ):

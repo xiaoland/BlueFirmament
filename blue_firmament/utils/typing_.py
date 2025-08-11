@@ -3,6 +3,7 @@
 import typing
 import types
 import inspect
+import datetime
 
 if typing.TYPE_CHECKING:
     from ..task.result import JsonBody
@@ -132,6 +133,7 @@ def isclassmethod(func: typing.Any) -> bool:
 
 type JsonDumpable = typing.Union[
     str, int, float, bool, None, 
+    datetime.datetime,
     typing.List['JsonDumpable'], 
     typing.Tuple['JsonDumpable', ...],
     typing.Dict[str, 'JsonDumpable'],
@@ -160,6 +162,7 @@ def is_json_dumpable(val: typing.Any) -> typing.TypeGuard[JsonDumpable]:
     if isinstance(val, (
         str, int, float, bool,
         list, tuple, dict, set,
+        datetime.datetime,
         BaseScheme, JsonBody
     )):
         return True

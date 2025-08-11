@@ -33,13 +33,13 @@ def get_datetimez(
     获取当前时间对象（带时区）
 
     :param rfc3339: RFC3339格式时间字符串，如"2024-11-10T12:00:00+08:00"
-    :param timestamp: 时间戳（秒级浮点）
+    :param timestamp: 时间戳（秒级浮点）；如果使用此，时区固定为 UTC+0
     :param iso8601: ISO8601格式时间字符串，如"2024-11-10 12:00:00"
-    :param timezone: 时区对象，如get_timezone(8)
+    :param timezone: 时区对象，可以通过 `get_timezone(8)` 获取东八区时区
     :raise ValueError: 如果rfc3339或iso8601都未提供，则抛出异常
     """
     if timestamp:
-        return datetime.datetime.fromtimestamp(timestamp, tz=timezone)
+        return datetime.datetime.fromtimestamp(timestamp, tz=get_timezone(0))
     if rfc3339 or iso8601:
         val = rfc3339 or iso8601
         if val is None:

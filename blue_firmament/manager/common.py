@@ -8,19 +8,22 @@ __all__ = [
 
 from dataclasses import dataclass
 import typing
-from typing import Literal as Lit, Optional as Opt
+from typing import Literal as Lit, Optional as Opt, Annotated as Anno
+
+from ..scheme import EditableScheme
+from .. import event
 from ..utils.exec_ import build_func_sig
-from blue_firmament.task.registry import TaskRegistry
-from blue_firmament.task.context.common import CommonTaskContext
+from ..task.registry import TaskRegistry
+from ..task.context.common import CommonTaskContext
 from ..dal import KeyableType, DataAccessObject
 from ..scheme.field import CompositeField, FieldValueProxy
 from ..log.main import get_logger
 # from .base import BaseFieldManager, 
 from .base import BaseManager, SchemeTV
-from ..utils.type import safe_issubclass
+from ..utils.typing_ import safe_issubclass
 from ..task.main import Method
 from ..scheme import BaseScheme
-from blue_firmament.task import TaskID
+from ..task import TaskID, TaskMetadata
 
 if typing.TYPE_CHECKING:
     from ..core.app import BlueFirmamentApp
@@ -79,6 +82,7 @@ class PresetHandlerConfig:
 
     - Requiring editable
     """
+    # TODO ad put_as_patch
     put: bool = False
     """
     
@@ -112,25 +116,20 @@ class CommonManager(
     - preset_handler_config:
     """
 
-    __path_prefix__: str
-    
-    def __init_subclass__(cls,
-        scheme_cls: Opt[typing.Type[SchemeTV]] = None,
-        path_prefix: str = '',
-        manager_name: str = '',
-        preset_handler_config: Opt[PresetHandlerConfig] = None
+    def __init__(self, task_context: CommonTaskContext):
+        BaseManager.__init__(self, task_context)
+        CommonTaskContext.__init__(self, tc=task_context, skip_btc_init=True)
+
+    def __init_subclass__(
+        cls,
+        preset_handler_config: Opt[PresetHandlerConfig] = None,
+        **kwargs
     ):
-        cls.__path_prefix__ = path_prefix
+        super().__init_subclass__(**kwargs)
+        scheme_cls = cls.__scheme_cls__
+        manager_name = cls.__manager_name__
 
-        super().__init_subclass__(
-            scheme_cls=scheme_cls,
-            router=TaskRegistry(
-                name=f"{manager_name}_router", 
-                path_prefix=path_prefix
-            ),
-            manager_name=manager_name
-        )
-
+        # REFACTOR
         if preset_handler_config:
             if not scheme_cls:
                 raise ValueError("scheme cls is required if you want to set up \
@@ -139,16 +138,18 @@ class CommonManager(
             exec_namespaces = globals().copy()
             handlers: dict[str, typing.Callable] = {}
 
-            key_field = scheme_cls.get_key_field()
+            exec_namespaces["Editable"] = preset_handler_config.editable
+
+            key_field = scheme_cls._get_key_field()
             if isinstance(key_field, CompositeField) \
                 and not preset_handler_config.key_fields:
                     raise ValueError("key fields required for composite key")
 
             
-            key_aliases: typing.Iterable[str]
+            key_aliases: typing.Sequence[str]
             if preset_handler_config.sup_path and preset_handler_config.key_fields:
                 key_aliases = TaskID.resolve_dynamic_indices(
-                    path_prefix + preset_handler_config.sup_path
+                    cls.__path_prefix__ + preset_handler_config.sup_path
                 )
                 sup_path = preset_handler_config.sup_path
                 exec_namespaces.update({
@@ -169,6 +170,7 @@ class CommonManager(
                         for i in key_aliases
                     ),
                     async_=True,
+                    method=True
                 )
                 if isinstance(key_field, CompositeField):
                     func_body = f"    return await self.get(_id={key_aliases[0]}_conv({ \
@@ -183,9 +185,44 @@ class CommonManager(
                 exec(func_sig + func_body, exec_namespaces, handlers)
                 setattr(cls, handler_name, handlers[handler_name])
 
-                cls.__task_registry__.add_handler(
+                cls.__task_registries__.setdefault("default", TaskRegistry(
+                    name="default", path_prefix=cls.__path_prefix__
+                )).add_handler(
                     method=Method.GET, path=sup_path,
-                    inner_handler=handlers[handler_name],
+                    function=handlers[handler_name],
+                    handler_manager_cls=cls
+                )
+
+            if preset_handler_config.put:
+                handler_name = f'put_{manager_name}'
+                func_sig = build_func_sig(
+                    handler_name,
+                    ("body", "Editable"),
+                    *(
+                        (i, f"Anno[typing.Any, {i}_conv]")
+                        for i in key_aliases
+                    ),
+                    async_=True,
+                    method=True
+                )
+                if isinstance(key_field, CompositeField):
+                    func_body = f"    return await self.put(editable=body, _id={key_aliases[0]}_conv({ \
+                        ",".join(
+                            f"{preset_handler_config.key_fields[i].in_scheme_name}={i}"  # type: ignore
+                            for i in key_aliases
+                        ) \
+                    }))"
+                else:
+                    func_body = f"    return await self.put(editable=body, _id={key_aliases[0]})"
+
+                exec(func_sig + func_body, exec_namespaces, handlers)
+                setattr(cls, handler_name, handlers[handler_name])
+
+                cls.__task_registries__.setdefault("default", TaskRegistry(
+                    name="default", path_prefix=cls.__path_prefix__
+                )).add_handler(
+                    method=Method.PUT, path=sup_path,
+                    function=handlers[handler_name],
                     handler_manager_cls=cls
                 )
 
@@ -194,9 +231,29 @@ class CommonManager(
         """DAO of managing scheme.
         """
         return self._daos(self._scheme_cls)
-    
+
+    def _emit(
+        self,
+        name: str,
+        parameters: Opt[dict] = None,
+        metadata: Opt[dict | TaskMetadata] = None,
+        without_prefix: bool = False
+    ):
+        """:meth:`event.simple_emit` but prefix name with manager path prefix.
+
+        :param name: Name of event. Starts with dot.
+        :param metadata: TaskMetadata.
+            If not provided, use current task's metadata.
+        :param without_prefix:
+            If True, do not prefix name with manager path prefix.
+        """
+        return event.simple_emit(
+            name=f"{self.__path_prefix__.replace('/', '.') if not without_prefix else ""}{name}",
+            parameters=parameters,
+            metadata=metadata or self._task.metadata
+        )
+
     async def _get_scheme(self, _id: Opt[KeyTV] = None) -> SchemeTV:
-        
         """Get managing scheme.
 
         :param _id: Key value
@@ -216,7 +273,6 @@ class CommonManager(
         """
         try:
             scheme = self._scheme
-
             if _id is not None:
                 if scheme.key_value == _id:
                     return scheme
@@ -226,9 +282,8 @@ class CommonManager(
             if _id is not None:
                 return await self.get(_id=_id)
             raise e
-    
+
     async def get(self, _id: KeyTV) -> SchemeTV:
-        
         """Get scheme
 
         If success, set as managing scheme.
@@ -237,28 +292,33 @@ class CommonManager(
             _id, task_context=self
         )
         return self._scheme
-    
-    async def insert(self, 
-        scheme: Opt[SchemeTV] = None,
-    ) -> SchemeTV:
+
+    async def insert(self, scheme: Opt[SchemeTV] = None) -> SchemeTV:
         """插入数据模型实例到 DAO
 
         - 插入成功则设置为当前实例
-        - 如果键不是自然键，则关闭键排除
-        
+
         :param scheme: 数据模型实例；不提供则为当前实例
 
         """
         self._scheme = await self._dao.insert(
             to_insert=scheme or await self._get_scheme(),
-            exclude_key=(False 
-                if self._scheme_cls.get_key_field().is_natural_key() 
-                else True
-            )
         )
         return self._scheme
+
+    async def patch(self, editable: EditableScheme, _id: Opt[KeyTV] = None) -> SchemeTV:
+        """Patch managing scheme to DAO.
+
+        :param editable: Editable version of managing scheme.
+        :param _id: which scheme to put, if not provided, use current managing scheme.
+        :return:
+        """
+        self._scheme = await self._get_scheme(_id=_id)
+        self._scheme._merge(scheme=editable)
+        return await self._update_scheme(self._scheme)
     
-    async def _update_scheme(self,
+    async def _update_scheme(
+        self,
         scheme: Opt[SchemeTV] = None,
     ) -> SchemeTV:
         """Update dirty fields to dal.
@@ -271,7 +331,8 @@ class CommonManager(
         )
         return self._scheme
 
-    async def get_a_field(self, 
+    async def get_a_field(
+        self,
         field: "Field[TV]", 
         _id: Opt[KeyTV] = None,
     ) -> TV:
@@ -281,15 +342,16 @@ class CommonManager(
         """
         scheme = self._try_get_scheme()
         if not scheme:
-            return await self._dao.select_one(
-                self._scheme_cls.get_key_field().equals(_id),
-                field=field, 
+            return await self._dao.select_a_field(
+                field,
+                self._scheme_cls._get_key_field().equals(_id),
                 task_context=self
             )
         else:
             return FieldValueProxy.dump(scheme._get_value(field))
         
-    async def put_a_field(self, 
+    async def put_a_field(
+        self,
         field: "Field[TV]", 
         value: TV,  
         _id: Opt[KeyTV] = None,
@@ -306,7 +368,8 @@ class CommonManager(
         return (await self._update_scheme(scheme))[field]
 
     IoDableT = typing.TypeVar('IoDableT', bound=typing.List | typing.Set)
-    async def insert_item(self, 
+    async def insert_item(
+        self,
         field: "Field[IoDableT]",
         values: typing.Iterable[TV],
         _id: Opt[KeyTV] = None,
@@ -349,7 +412,8 @@ class CommonManager(
             _id=_id,
         )
     
-    async def delete_item(self, 
+    async def delete_item(
+        self,
         field: "Field[IoDableT]", 
         values: typing.Union[
             typing.Iterable[TV],
@@ -394,8 +458,8 @@ class CommonManager(
             If not provided, use managing scheme's.
         """
         scheme = await self._get_scheme(_id=_id)
-        await self._dao.delete(scheme)
-        self._reset_scheme()
+        await self._dao.delete(to_delete=scheme)
+        self._scheme = None
 
 
 # CommonManagerTV = typing.TypeVar('CommonManagerTV', bound=CommonManager)
@@ -564,7 +628,7 @@ def common_handler_adder(
             register = None
 
         if safe_issubclass(manager_cls.__scheme_cls__, BaseScheme):
-            primary_key_field = manager_cls.__scheme_cls__.get_key_field()
+            primary_key_field = manager_cls.__scheme_cls__._get_key_field()
         else:
             primary_key_field = None
 

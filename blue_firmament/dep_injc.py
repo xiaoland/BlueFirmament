@@ -5,7 +5,8 @@ import inspect
 import typing
 from typing import Optional as Opt, Annotated as Anno, Literal as Lit
 
-from .utils import args_to_kwargs_by_sig, call_function
+from .utils.main import call_as_sync
+from .utils.inspect_ import args_to_kwargs_by_sig
 
 
 class DependencyInjector:
@@ -105,7 +106,7 @@ class DependencyInjector:
                 except KeyError:
                     continue
 
-        return call_function(self.__callable, *args, **kwargs)
+        return call_as_sync(self.__callable, *args, **kwargs)
 
     def _parse_args(self, callable: typing.Callable) -> typing.Tuple[
         typing.Tuple[Opt[ArgGetterT], ...],

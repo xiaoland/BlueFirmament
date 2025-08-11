@@ -12,7 +12,7 @@ logger = get_logger(__name__)
 from ..data.settings.i18n import get_setting
 
 # utils
-from ..utils import dump_enum as get_enum_value
+from .enum_ import dump_enum as get_enum_value
 
 # libs
 import gettext
