@@ -13,7 +13,7 @@ import inspect
 import typing
 from typing import Optional as Opt, Annotated as Anno, Literal as Lit
 
-from ..exceptions import NotFound
+from ..exceptions import TaskHandlerNotFound
 from .._types import PathParamsT, CallableTV
 from ..transport.base import BaseTransporter
 from .result import Body, JsonBody
@@ -245,7 +245,7 @@ class TaskRegistry:
             The (shallow) copy of the matched TaskEntry
             with path_params set.
         """
-        if task_id.is_dynamic():
+        if task_id.is_dynamic(allow_method_dynamic=True):
             raise TypeError("Cannot lookup a dynamic task_id")
 
         entry = self.__static_entries.get(task_id, None)
@@ -262,7 +262,9 @@ class TaskRegistry:
                 else:
                     continue
 
-        raise NotFound(f"TaskID {task_id} don't has an entry in registry {self.name}")
+        raise TaskHandlerNotFound(
+            task_id=task_id,
+        )
 
 
 def listen_to(

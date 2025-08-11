@@ -11,6 +11,8 @@ class DALModifier(DALQueryComponent):
 
 class LimitModifier(DALModifier):
     """结果只保留X个记录
+
+    如果要限制更新、删除的记录数量，请在 update, delete 方法中使用 `limit` 参数。
     """
 
     def __init__(self, size: int = 1) -> None:

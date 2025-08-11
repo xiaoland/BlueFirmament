@@ -72,11 +72,8 @@ class PostgrestDAL(TableLikeDataAccessLayer, DataAccessLayerWithAuth):
             }
         )
 
-    def destroy(self) -> None:
-        """
-        close postgrest client conn
-        """
-        call_as_sync(self._client.aclose)
+    async def close(self) -> None:
+        await self._client.aclose
 
     def set_schema(self, schema: str) -> None:
         """设置操作的表组（schema）"""

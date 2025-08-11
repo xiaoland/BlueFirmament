@@ -641,7 +641,6 @@ class SetConverter(BaseConverter[typing.Set[T]], typing.Generic[T]):
         self.sub_conveter: BaseConverter[T] = get_converter_from_anno(element_type)
 
     def __call__(self, value, **kwargs) -> set:
-        
         # is a set
         if not isinstance(value, set):
             if self.is_base:

@@ -40,14 +40,14 @@ def dump_query_coms_like(
                 raise ValueError
             except (AttributeError, ValueError):
                 raise ValueError(
-                    "Cannot dump filter-like value that is not a DALFilter without scheme"
+                    "Cannot dump filter-like value that is not a DALQueryComponent without scheme"
                 )
         elif isinstance(item, BaseScheme):
             res.extend(item.equals())
         else:
             res.append(item)
 
-    return typing.cast(typing.Iterable["DALFilter"], res)
+    return typing.cast(typing.Iterable["DALQueryComponent"], res)
 
 
 def dump_field_like(value: FieldLikeType) -> str:

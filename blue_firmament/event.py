@@ -40,7 +40,7 @@ async def emit(event: Event) -> None:
     """Emit an event to the event broker.
     """
     await EVENT_BROKER.publish(await event.dump_to_bytes())
-    LOGGER.debug("Event emitted", event_id=event.id)
+    LOGGER.info("Event emitted", event_id=event.id)
 
 def simple_emit(
     name: str,

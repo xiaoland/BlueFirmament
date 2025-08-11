@@ -23,7 +23,7 @@ from .base import BaseManager, SchemeTV
 from ..utils.typing_ import safe_issubclass
 from ..task.main import Method
 from ..scheme import BaseScheme
-from ..task import TaskID
+from ..task import TaskID, TaskMetadata
 
 if typing.TYPE_CHECKING:
     from ..core.app import BlueFirmamentApp
@@ -82,6 +82,7 @@ class PresetHandlerConfig:
 
     - Requiring editable
     """
+    # TODO ad put_as_patch
     put: bool = False
     """
     
@@ -235,19 +236,21 @@ class CommonManager(
         self,
         name: str,
         parameters: Opt[dict] = None,
-        metadata: Opt[dict] = None,
+        metadata: Opt[dict | TaskMetadata] = None,
         without_prefix: bool = False
     ):
         """:meth:`event.simple_emit` but prefix name with manager path prefix.
 
         :param name: Name of event. Starts with dot.
+        :param metadata: TaskMetadata.
+            If not provided, use current task's metadata.
         :param without_prefix:
             If True, do not prefix name with manager path prefix.
         """
         return event.simple_emit(
             name=f"{self.__path_prefix__.replace('/', '.') if not without_prefix else ""}{name}",
             parameters=parameters,
-            metadata=metadata
+            metadata=metadata or self._task.metadata
         )
 
     async def _get_scheme(self, _id: Opt[KeyTV] = None) -> SchemeTV:
@@ -303,18 +306,19 @@ class CommonManager(
         )
         return self._scheme
 
-    async def put(self, editable: EditableScheme, _id: Opt[KeyTV] = None) -> SchemeTV:
-        """Put some fields of managing scheme to DAO.
+    async def patch(self, editable: EditableScheme, _id: Opt[KeyTV] = None) -> SchemeTV:
+        """Patch managing scheme to DAO.
 
         :param editable: Editable version of managing scheme.
         :param _id: which scheme to put, if not provided, use current managing scheme.
         :return:
         """
         self._scheme = await self._get_scheme(_id=_id)
-        self._scheme._update(scheme=editable)
+        self._scheme._merge(scheme=editable)
         return await self._update_scheme(self._scheme)
     
-    async def _update_scheme(self,
+    async def _update_scheme(
+        self,
         scheme: Opt[SchemeTV] = None,
     ) -> SchemeTV:
         """Update dirty fields to dal.
@@ -327,7 +331,8 @@ class CommonManager(
         )
         return self._scheme
 
-    async def get_a_field(self, 
+    async def get_a_field(
+        self,
         field: "Field[TV]", 
         _id: Opt[KeyTV] = None,
     ) -> TV:
@@ -337,15 +342,16 @@ class CommonManager(
         """
         scheme = self._try_get_scheme()
         if not scheme:
-            return await self._dao.select_one(
+            return await self._dao.select_a_field(
+                field,
                 self._scheme_cls._get_key_field().equals(_id),
-                field=field, 
                 task_context=self
             )
         else:
             return FieldValueProxy.dump(scheme._get_value(field))
         
-    async def put_a_field(self, 
+    async def put_a_field(
+        self,
         field: "Field[TV]", 
         value: TV,  
         _id: Opt[KeyTV] = None,
@@ -362,7 +368,8 @@ class CommonManager(
         return (await self._update_scheme(scheme))[field]
 
     IoDableT = typing.TypeVar('IoDableT', bound=typing.List | typing.Set)
-    async def insert_item(self, 
+    async def insert_item(
+        self,
         field: "Field[IoDableT]",
         values: typing.Iterable[TV],
         _id: Opt[KeyTV] = None,
@@ -405,7 +412,8 @@ class CommonManager(
             _id=_id,
         )
     
-    async def delete_item(self, 
+    async def delete_item(
+        self,
         field: "Field[IoDableT]", 
         values: typing.Union[
             typing.Iterable[TV],
@@ -451,7 +459,7 @@ class CommonManager(
         """
         scheme = await self._get_scheme(_id=_id)
         await self._dao.delete(to_delete=scheme)
-        self._reset_scheme()
+        self._scheme = None
 
 
 # CommonManagerTV = typing.TypeVar('CommonManagerTV', bound=CommonManager)

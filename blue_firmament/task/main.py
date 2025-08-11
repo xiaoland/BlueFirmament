@@ -209,13 +209,15 @@ class TaskID:
     def segments(self) -> typing.List[str]:
         return self.__segments
 
-    def is_dynamic(self) -> bool:
+    def is_dynamic(self, allow_method_dynamic: bool = False) -> bool:
         """Is the TaskID dynamic.
 
         :return: If True, it's dynamic, otherwise static.
             Dynamic means it has path parameters or method is None (wildcard).
         """
-        return len(self.__dynamic_indices) != 0 or self.__method is None
+        return len(self.__dynamic_indices) != 0 or (
+            self.__method is None and not allow_method_dynamic
+        )
 
     def resolve_params(self, segments: list[str]) -> dict[str, typing.Any]:
         """Resolve path parameters from (static) segments.

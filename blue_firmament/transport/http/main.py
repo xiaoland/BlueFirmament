@@ -280,8 +280,6 @@ class HTTPTransporter(BaseTransporter):
 
             # send response
             try:
-
-
                 res_headers = HTTPHeaders()
                 if isinstance(task_result.body, JsonBody):
                     res_headers.set_content_type(MIMEType.JSON)

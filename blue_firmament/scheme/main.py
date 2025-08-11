@@ -726,8 +726,8 @@ class BaseScheme(metaclass=SchemeMetaclass):
         """
         return self.__field_values__[field.in_scheme_name]
 
-    def _update(self, scheme: "BaseScheme") -> None:
-        """Update current scheme with another scheme's values.
+    def _merge(self, scheme: "BaseScheme") -> None:
+        """Merge current scheme with another scheme's values.
 
         Use ``dump_to_dict`` to get the values of the other scheme.
 

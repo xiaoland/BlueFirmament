@@ -68,7 +68,7 @@ def log_manager_handler(func: typing.Callable[P, R]) -> typing.Callable[P, R]:
 
         # bind logger
         logger = self._logger.bind(
-            hanler_name=func_name,
+            handler_name=func_name,
         )
         self_copy = copy.copy(self)
         self_copy._logger = logger
