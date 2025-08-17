@@ -28,6 +28,8 @@ def dump_query_coms_like(
     from ..scheme import BaseScheme
     from ..scheme.field import Field
     for item in values:
+        if item is None:
+            continue
         if isinstance(item, (str, int)):
             try:
                 if scheme_like:

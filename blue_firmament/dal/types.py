@@ -2,9 +2,12 @@
 """
 
 import typing
+from typing import Optional as Opt
 import enum
 if typing.TYPE_CHECKING:
     from .query_components import DALQueryComponent
+    from ..scheme import BaseScheme
+    from ..scheme.field import Field
 
 DALPath = typing.NewType('DALPath', typing.Tuple[str | enum.Enum | None, ...])
 '''Path of DataAccessLayer
@@ -19,5 +22,5 @@ type FieldLikeType = typing.Union[str, enum.Enum, "Field"]
 '''可以作为字段的类型'''
 type KeyableType = typing.Union[str, int, "BaseScheme"]
 """Field value type that field as a key"""
-type QueryComLikeType = typing.Union[KeyableType, "DALQueryComponent"]
+type QueryComLikeType = typing.Union[KeyableType, Opt["DALQueryComponent"]]
 '''Value type that can be used as query component'''
