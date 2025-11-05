@@ -65,6 +65,7 @@ Boundary
 - Value set should be idempotent.
 - Methods should be idempotent.
 - No interaction with Task, TaskResult or Session.
+- Only read to DAL.
 
 Best Practice
 -------------
@@ -78,8 +79,8 @@ Best Practice
 
 Access Control
 --------------
-- By Row
-- By column
+- On Row
+- On Column
 - By Behaviour
 - By Role
 

@@ -500,7 +500,7 @@ class Field(typing.Generic[FieldValueTV]):
         for validator in self.__validators:
             validator(value, scheme_ins=scheme_ins)
         
-    def equals(self, value: typing.Any) -> EqFilter:
+    def equals(self, value: FieldValueTV) -> EqFilter:
         """该字段等于该值的筛选器
         """
         return EqFilter(self, value)

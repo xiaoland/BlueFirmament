@@ -1,5 +1,4 @@
-"""Common Session and its fields
-"""
+"""Common Session and its fields"""
 
 import typing
 import uuid
@@ -11,11 +10,11 @@ from ..auth import AuthSession, User
 from ..dal.base import DataAccessObjects
 from . import Session, SessionField
 from ..log.main import get_logger
+
 LOGGER = get_logger(__name__)
 
 
 class AuthSessionField(SessionField[AuthSession | None]):
-
     class FromToken(typing.TypedDict):
         access_token: str
         access_token_type: str
@@ -27,12 +26,14 @@ class AuthSessionField(SessionField[AuthSession | None]):
         from_token: Opt[FromToken] = None,
     ):
         if from_token:
-            super().__init__(AuthSession.from_token(
-                access_token=from_token["access_token"],
-                access_token_type=from_token["access_token_type"],
-                access_token_payload=from_token["access_token_payload"],
-                refresh_token=from_token.get("refresh_token", None)
-            ))
+            super().__init__(
+                AuthSession.from_token(
+                    access_token=from_token["access_token"],
+                    access_token_type=from_token["access_token_type"],
+                    access_token_payload=from_token["access_token_payload"],
+                    refresh_token=from_token.get("refresh_token", None),
+                )
+            )
         else:
             super().__init__(None)
 
@@ -45,8 +46,8 @@ class AuthSessionField(SessionField[AuthSession | None]):
         if self.value:
             self.value.refresh()
 
-class DAOsField(SessionField[DataAccessObjects]):
 
+class DAOsField(SessionField[DataAccessObjects]):
     def __init__(self, auth_session: AuthSession | AuthSessionField | None = None):
         if isinstance(auth_session, AuthSessionField):
             super().__init__(DataAccessObjects(auth_session.value))
@@ -63,8 +64,8 @@ class CommonSession(Session):
     Configure by setting class variables.
     """
 
-    ACCESS_TOKEN_TYPE = "jwt"
-    ACCESS_TOKEN_PAYLOAD_ID_CLAIM = "sid"
+    ACCESS_TOKEN_TYPE: str = "jwt"
+    ACCESS_TOKEN_PAYLOAD_ID_CLAIM: str = "sid"
     """which claim in access token payload will be used as session id.
     """
     __fields__ = ("auth_session", "daos")
@@ -79,12 +80,15 @@ class CommonSession(Session):
 
     @property
     def daos(self) -> DataAccessObjects:
-        """DataAccessObjects
-        """
+        """DataAccessObjects"""
         return self.__daos.value
 
     @property
     def operator(self) -> User:
+        return self.auth_session.user
+
+    @property
+    def auth_session(self) -> AuthSession:
         if self.__auth_session.value:
             return self.__auth_session.value.user
         raise Unauthorized("tries to access operator but unauthorized")
@@ -95,13 +99,15 @@ class CommonSession(Session):
         if authorization:
             access_token = authorization[1]
         else:
-            LOGGER.warning('authorization not found in metadata')
+            LOGGER.warning("authorization not found in metadata")
             access_token = None
         refresh_token = task.metadata.state.get("refresh_token", None)
 
         access_token_payload = {}
         if access_token:
-            access_token_payload = auth_.decode_token(access_token, cls.ACCESS_TOKEN_TYPE)
+            access_token_payload = auth_.decode_token(
+                access_token, cls.ACCESS_TOKEN_TYPE
+            )
 
         def get_fields():
             fields = {}
@@ -111,7 +117,7 @@ class CommonSession(Session):
                         access_token=access_token,
                         access_token_type=cls.ACCESS_TOKEN_TYPE,
                         access_token_payload=access_token_payload,
-                        refresh_token=refresh_token
+                        refresh_token=refresh_token,
                     )
                 )
             else:
@@ -120,6 +126,8 @@ class CommonSession(Session):
             return fields
 
         return cls.upsert(
-            access_token_payload.get(cls.ACCESS_TOKEN_PAYLOAD_ID_CLAIM, uuid.uuid4().hex),
-            fields_getter=get_fields
+            access_token_payload.get(
+                cls.ACCESS_TOKEN_PAYLOAD_ID_CLAIM, uuid.uuid4().hex
+            ),
+            fields_getter=get_fields,
         )
