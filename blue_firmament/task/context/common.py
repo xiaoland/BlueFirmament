@@ -39,6 +39,7 @@ class CommonTaskContext(
 
 
 class SoCommonTC(SoBaseTC):
+    """Scheme of CommonTaskContext"""
 
     _task_context: FieldT[CommonTaskContext] = private_field(
         default_factory=CommonTaskContext.from_contextvar
