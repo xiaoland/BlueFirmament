@@ -1,6 +1,9 @@
 """Tests for dal/column.py and dal/model.py"""
 
 from blue_firmament.dal import Column, column, DALModel
+from blue_firmament.dal.query_components.filters import EqFilter, ContainsFilter, NotEqFilter, InFilter, IsFilter
+from blue_firmament.dal.query_components.modifiers import OrderModifier
+from blue_firmament.dal.query_components.operators import NotOperator
 
 
 def test_column_basic():
@@ -45,6 +48,50 @@ def test_column_foreign_key():
     col = column(foreign_key='departments._id')
     assert col.foreign_key == 'departments._id'
     assert col.is_key() is False  # foreign key is not a key in this model
+
+
+def test_column_dal_query_methods():
+    """Test Column DAL query methods (equals, contains, etc.)"""
+    col = Column[str](name='status', in_model_name='status')
+    
+    # Test equals
+    eq = col.equals('active')
+    assert isinstance(eq, EqFilter)
+    
+    # Test contains
+    contains = col.contains('a', 'b')
+    assert isinstance(contains, ContainsFilter)
+    
+    # Test not_equals
+    neq = col.not_equals('inactive')
+    assert isinstance(neq, NotEqFilter)
+    
+    # Test in_
+    in_filter = col.in_(['active', 'pending'])
+    assert isinstance(in_filter, InFilter)
+    
+    # Test not_in_
+    not_in = col.not_in_(['deleted', 'archived'])
+    assert isinstance(not_in, tuple)
+    assert isinstance(not_in[0], NotOperator)
+    assert isinstance(not_in[1], InFilter)
+    
+    # Test is_
+    is_filter = col.is_(True)
+    assert isinstance(is_filter, IsFilter)
+    
+    # Test is_not
+    is_not = col.is_not(None)
+    assert isinstance(is_not, tuple)
+    assert isinstance(is_not[0], NotOperator)
+    assert isinstance(is_not[1], IsFilter)
+    
+    # Test order_by
+    order = col.order_by()
+    assert isinstance(order, OrderModifier)
+    
+    order_desc = col.order_by(desc=True)
+    assert isinstance(order_desc, OrderModifier)
 
 
 def test_dal_model_path():

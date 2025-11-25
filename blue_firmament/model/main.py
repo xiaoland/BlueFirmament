@@ -34,10 +34,6 @@ from .field import (
 )
 from .field import FieldValueProxy
 if typing.TYPE_CHECKING:
-    from ..dal.types import DALPath
-    from ..dal.query_components.filters import EqFilter
-    from ..dal.query_components import DALQueryComponent
-    from ..dal.base import DataAccessLayer
     from ..log import LoggerT
 
 
@@ -102,8 +98,6 @@ class BFModelMetaclass(abc.ABCMeta):
     """
 
     __builtin_cvars__: typing.Dict[str, typing.Any] = {
-        '__dal__': None,
-        '__dal_path__': None, 
         '__proxy__': False,
         '__disable_log__': False,
         '__key__': None,
@@ -136,8 +130,6 @@ class BFModelMetaclass(abc.ABCMeta):
         cls, name: str, 
         bases: typing.Tuple[type[typing.Any], ...], 
         attrs: typing.Dict[str, typing.Any],
-        dal_path: Opt["DALPath"] = None,
-        dal: Opt[typing.Type["DataAccessLayer"]] = None,
         proxy: Opt[bool] = None,
         disable_log: Opt[bool] = None,
         partial: Opt[bool] = None,
@@ -152,10 +144,6 @@ class BFModelMetaclass(abc.ABCMeta):
             return super().__new__(cls, name, bases, attrs, **kwargs)
 
         # Set up class vars
-        if dal_path:
-            attrs["__dal_path__"] = dal_path
-        if dal:
-            attrs["__dal__"] = dal
         if proxy:
             attrs["__proxy__"] = proxy
         if disable_log:
@@ -429,8 +417,6 @@ class BaseModel(metaclass=BFModelMetaclass):
     """
 
     # class vars
-    __dal__: typing.ClassVar[Opt[typing.Type["DataAccessLayer"]]]
-    __dal_path__: typing.ClassVar[Opt["DALPath"]]
     __key__: typing.ClassVar[Opt[Field]]  # TODO use field
     """Field that uniquely identifies an instance.
 
@@ -538,23 +524,6 @@ class BaseModel(metaclass=BFModelMetaclass):
         self.__dirty_fields__.add(field_.name)
 
     @classmethod
-    def dal_path(cls) -> "DALPath":
-        """
-        :raise ValueError: when not set
-        """
-        if not cls.__dal_path__:
-            raise ValueError("dal path not set")
-        return cls.__dal_path__
-    
-    def equals(self) -> typing.Tuple["DALQueryComponent", ...]:
-        """Get EqFilter of all fields.
-        """
-        return tuple(
-            field.equals(self._get_value(field))
-            for field in self.__fields__.values()
-        )
-
-    @classmethod
     def _get_key_field(cls) -> Field:
         """
         :raise KeyError: if no key on model
@@ -568,15 +537,6 @@ class BaseModel(metaclass=BFModelMetaclass):
         """Try to get key field, return None if not exists.
         """
         return cls.__key__ if cls.__key__ else None
-    
-    @property
-    def key_value(self) -> typing.Any:
-        return self._get_value(self._get_key_field())
-    
-    @property
-    def key_eqf(self) -> "EqFilter":
-        key_field = self._get_key_field()
-        return key_field.equals(self._get_value(key_field))
     
     # def dump(self, target_type: typing.Type[TV]) -> TV:
     #     """Serialize

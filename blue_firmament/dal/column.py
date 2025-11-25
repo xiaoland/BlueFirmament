@@ -17,6 +17,12 @@ from .._types import Undefined, _undefined
 # is not imported directly by model/field.py
 from ..model.field import Field
 from ..model.converter import BaseConverter
+from .query_components.filters import (
+    ContainsFilter, EqFilter, NotEqFilter,
+    InFilter, IsFilter
+)
+from .query_components.modifiers import OrderModifier
+from .query_components.operators import NotOperator
 
 
 FieldValueTV = typing.TypeVar('FieldValueTV')
@@ -243,6 +249,51 @@ class Column(Field[FieldValueTV]):
             return type_mapping.get(vtype, "TEXT")
         except ValueError:
             return "TEXT"
+
+    # DAL Query Methods
+    def equals(self, value: FieldValueTV) -> EqFilter:
+        """Get an EqFilter for this column equals the given value.
+        
+        Example
+        -------
+        >>> Column[int](name='_id').equals(1)
+        EqFilter(field='_id', value=1)
+        """
+        return EqFilter(self, value)
+    
+    def contains(self, *value: typing.Any) -> ContainsFilter:
+        """Get a ContainsFilter for this column containing all given values."""
+        return ContainsFilter(self, *value)
+    
+    def not_equals(self, value: typing.Any) -> NotEqFilter:
+        """Get a NotEqFilter for this column not equaling the given value."""
+        return NotEqFilter(self, value)
+    
+    def in_(self, value: typing.Iterable[typing.Any]) -> InFilter:
+        """Get an InFilter for this column being in the given values."""
+        return InFilter(self, value)
+    
+    def not_in_(self, value: typing.Iterable[typing.Any]) -> tuple[NotOperator, InFilter]:
+        """Get filters for this column not being in the given values."""
+        return (NotOperator(), self.in_(value))
+
+    def is_(self, value: bool | None) -> IsFilter:
+        """Get an IsFilter for this column being the given boolean or None."""
+        return IsFilter(self, value)
+
+    def is_not(self, value: bool | None) -> tuple[NotOperator, IsFilter]:
+        """Get filters for this column not being the given boolean or None."""
+        return (NotOperator(), self.is_(value))
+    
+    def order_by(self, *, desc: bool = False) -> OrderModifier:
+        """Get an OrderModifier for ordering by this column.
+        
+        Parameters
+        ----------
+        desc : bool
+            If True, order descending. Default is ascending.
+        """
+        return OrderModifier(self, desc=desc)
 
     def fork(
         self,
