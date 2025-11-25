@@ -10,6 +10,8 @@ build/
 
 # Package management
 poetry.lock
+.pdm-python
+pdm.lock
 
 # Unit test / coverage reports
 htmlcov/

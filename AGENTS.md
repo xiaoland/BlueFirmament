@@ -1,0 +1,2 @@
+- This is a Python backend framework, combines HTTP Server, Data Model, DAL, Config Management, Observability all together.
+- Use `pdm` for package management.
