@@ -23,9 +23,9 @@ class DALFilter(DALQueryComponent):
     def dal_path(self) -> Opt[DALPath]:
         from ...model.field import Field, FieldValueProxy
         if isinstance(self._field, Field):
-            return self._field.scheme_cls.dal_path()
+            return self._field.model_cls.dal_path()
         if isinstance(self._field, FieldValueProxy):
-            return self._field.scheme.dal_path()
+            return self._field.model.dal_path()
         return None
 
     @property
