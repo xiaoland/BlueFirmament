@@ -27,9 +27,6 @@ dependencies = [
     "black (>=25.1.0,<26.0.0)",
 ]
 
-[tool.group.poetry.dev-dependencies]
-poetry = "^2.1.1"
-
 [project.optional-dependencies]
 docs = [
     "sphinx>=4.0.0",
@@ -38,16 +35,6 @@ docs = [
     "doc8>=1.1.2",
 ]
 common = ["supabase-auth>=2.12.0,<3.0.0", "redis>=6.2.0,<7.0.0"]
-
-[tool.poetry]
-
-[tool.poetry.dependencies]
-python = "^3.12"
-
-[[tool.poetry.source]]
-name = "mirrors"
-url = "https://mirrors.tuna.tsinghua.edu.cn/pypi/web/simple/"
-priority = "primary"
 
 
 [tool.poetry.group.dev.dependencies]
