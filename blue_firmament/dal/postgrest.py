@@ -1,8 +1,9 @@
 """PostgrestDAL
 """
 
+import typing
 import postgrest
-
+import enum
 from ..task.context import ExtendedTaskContext
 from .._types import _undefined
 from ..scheme.converter import SchemeConverter
@@ -11,14 +12,13 @@ from ..exceptions import Unauthorized
 from ..utils.typing_ import safe_issubclass
 from ..exceptions import NotFound
 from ..scheme.field import Field, FieldValueProxy, FieldValueTV
-from blue_firmament.dal.query_components.filters import *
+from .query_components.filters import *
 from .base import TableLikeDataAccessLayer, DataAccessLayerWithAuth
 from .. import __version__, __name__ as __package_name__
 from .types import (
     DALPath, FieldLikeType, QueryComLikeType, StrictDALPath
 )
 from .query_components import DALQueryComponent
-from ..utils.main import call_as_sync
 from ..utils.enum_ import dump_enum
 from ..scheme import BaseScheme, SchemeTV
 
@@ -82,7 +82,7 @@ class PostgrestDAL(TableLikeDataAccessLayer, DataAccessLayerWithAuth):
     def __get_base_query_from_path(self, path: DALPath | None = None):
         """从路径中获取查询对象"""
         dp = self.dump_path(path)
-        return self._client.schema(dp[1]).from_table(dp[0])
+        return self._client.schema(dp[1]).from_(dp[0])
     
 
     QueryTV = typing.TypeVar('QueryTV', 
