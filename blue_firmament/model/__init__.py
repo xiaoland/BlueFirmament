@@ -84,8 +84,8 @@ from .converter import (
     TimeConverter,
     BoolConverter,
     EnumConverter,
-    SchemeConverter,
-    SchemeConverter as ModelConverter,
+    ModelConverter,
+    ModelConverter as SchemeConverter,  # Backwards compatibility
 )
 from .validator import (
     field_validator,

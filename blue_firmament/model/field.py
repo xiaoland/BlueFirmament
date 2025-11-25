@@ -17,20 +17,17 @@ import typing
 from typing import Optional as Opt
 from .._types import Undefined, _undefined
 from ..utils.typing_ import safe_issubclass
-from blue_firmament.dal.query_components.filters import (
-    ContainsFilter, EqFilter, NotEqFilter,
-    InFilter, IsFilter
-)
-from ..dal.query_components.modifiers import OrderModifier
-from blue_firmament.dal.query_components.operators import NotOperator
 from .converter import BaseConverter, get_converter_from_anno
 
 if typing.TYPE_CHECKING:
     from .main import BaseModel
     from .validator import BaseValidator
-
-# Backwards compatibility
-BaseScheme = typing.TYPE_CHECKING and "BaseModel" or None
+    from ..dal.query_components.filters import (
+        ContainsFilter, EqFilter, NotEqFilter,
+        InFilter, IsFilter
+    )
+    from ..dal.query_components.modifiers import OrderModifier
+    from ..dal.query_components.operators import NotOperator
 
 
 FieldValueTV = typing.TypeVar('FieldValueTV')
@@ -528,39 +525,47 @@ class Field(typing.Generic[FieldValueTV]):
         for validator in self.__validators:
             validator(value, model_ins=model_ins)
         
-    def equals(self, value: FieldValueTV) -> EqFilter:
+    def equals(self, value: FieldValueTV) -> "EqFilter":
         """该字段等于该值的筛选器
         """
+        from ..dal.query_components.filters import EqFilter
         return EqFilter(self, value)
     
-    def contains(self, *value: typing.Any) -> ContainsFilter:
+    def contains(self, *value: typing.Any) -> "ContainsFilter":
         """该字段包含所有元素的筛选器
         """
+        from ..dal.query_components.filters import ContainsFilter
         return ContainsFilter(self, *value)
     
-    def not_equals(self, value: typing.Any) -> NotEqFilter:
+    def not_equals(self, value: typing.Any) -> "NotEqFilter":
         """该字段不等于该值的筛选器
         """
+        from ..dal.query_components.filters import NotEqFilter
         return NotEqFilter(self, value)
     
-    def in_(self, value: typing.Iterable[typing.Any]) -> InFilter:
+    def in_(self, value: typing.Iterable[typing.Any]) -> "InFilter":
         """该字段在该列表中的筛选器
         """
+        from ..dal.query_components.filters import InFilter
         return InFilter(self, value)
     
-    def not_in_(self, value: typing.Iterable[typing.Any]) -> tuple[NotOperator, InFilter]:
+    def not_in_(self, value: typing.Iterable[typing.Any]) -> tuple["NotOperator", "InFilter"]:
+        from ..dal.query_components.operators import NotOperator
         return (NotOperator(), self.in_(value))
 
-    def is_(self, value: bool | None) -> IsFilter:
+    def is_(self, value: bool | None) -> "IsFilter":
+        from ..dal.query_components.filters import IsFilter
         return IsFilter(self, value)
 
-    def is_not(self, value: bool | None) -> tuple[NotOperator, IsFilter]:
-        return (NotOperator(), IsFilter(self, value))
+    def is_not(self, value: bool | None) -> tuple["NotOperator", "IsFilter"]:
+        from ..dal.query_components.operators import NotOperator
+        return (NotOperator(), self.is_(value))
     
-    def order_by(self, *, desc: bool = False) -> OrderModifier:
+    def order_by(self, *, desc: bool = False) -> "OrderModifier":
 
         """按该字段进行排序的修改器
         """
+        from ..dal.query_components.modifiers import OrderModifier
         return OrderModifier(self, desc=desc)
 
     @typing.overload

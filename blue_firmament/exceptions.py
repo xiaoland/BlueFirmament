@@ -39,7 +39,7 @@ LOGGER = get_logger(__name__)
 """
 
 if typing.TYPE_CHECKING:
-    from .model import BaseScheme
+    from .model import BaseModel
 
 
 BFExceptionTV = typing.TypeVar("BFExceptionTV", bound="BlueFirmamentException")

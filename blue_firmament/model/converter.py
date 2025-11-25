@@ -136,7 +136,7 @@ def get_converter_from_anno(
 
     ortp = get_origin(tp)
     if safe_issubclass(ortp, BaseModel):
-        return SchemeConverter(ortp)
+        return ModelConverter(ortp)
     if safe_issubclass(ortp, enum.Enum):
         return EnumConverter(ortp)
 
@@ -209,9 +209,9 @@ class AnyConverter(BaseConverter[typing.Any]):
     def type(self): return typing.Type[typing.Any]
 
 
-class SchemeConverter(BaseConverter[ModelTV], typing.Generic[ModelTV]):
+class ModelConverter(BaseConverter[ModelTV], typing.Generic[ModelTV]):
 
-    """Model Converter (SchemeConverter for backwards compatibility)
+    """Model Converter for converting data to model instances.
     """
 
     def __init__(self, 
@@ -245,6 +245,10 @@ class SchemeConverter(BaseConverter[ModelTV], typing.Generic[ModelTV]):
 
     def dump_to_jsonable(self, value): 
         return value.dump_to_dict(jsonable=True)
+
+
+# Backwards compatibility alias
+SchemeConverter = ModelConverter
 
 
 class EnumConverter(BaseConverter[EnumMemberTV], typing.Generic[EnumMemberTV]):

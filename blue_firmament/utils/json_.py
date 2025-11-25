@@ -6,7 +6,7 @@ import datetime
 import json
 from ..model.field import FieldValueProxy
 from .typing_ import JsonDumpable
-from ..model import BaseScheme
+from ..model import BaseModel
 from ..log import get_logger
 from ..task.result import JsonBody
 
@@ -16,7 +16,7 @@ LOGGER = get_logger(__name__)
 class JsonEncoder(json.JSONEncoder):
     
     def default(self, o):
-        if isinstance(o, BaseScheme):
+        if isinstance(o, BaseModel):
             return o.dump_to_dict()
         if isinstance(o, JsonBody):
             return o.dump_to_dict()
