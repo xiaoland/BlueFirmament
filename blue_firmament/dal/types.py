@@ -6,8 +6,8 @@ from typing import Optional as Opt
 import enum
 if typing.TYPE_CHECKING:
     from .query_components import DALQueryComponent
-    from ..scheme import BaseScheme
-    from ..scheme.field import Field
+    from ..model import BaseScheme
+    from ..model.field import Field
 
 DALPath = typing.NewType('DALPath', typing.Tuple[str | enum.Enum | None, ...])
 '''Path of DataAccessLayer

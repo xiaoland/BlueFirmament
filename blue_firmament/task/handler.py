@@ -7,8 +7,8 @@ from typing import Optional as Opt
 
 from .._types import PathParamsT, _undefined
 from ..exceptions import InternalError
-from ..scheme import BaseConverter
-from ..scheme.converter import get_converter_from_anno
+from ..model import BaseConverter
+from ..model.converter import get_converter_from_anno
 from . import Task
 from .result import TaskResult, Body, EmptyBody, JsonBody
 from ..utils.main import call_as_async

@@ -12,8 +12,8 @@ from ..transport.base import BaseTransporter
 from ..task.registry import TaskRegistry, TaskEntry
 from ..task.context import BaseTaskContext
 from ..exceptions import BFExceptionTV
-from ..scheme.field import Field
-from ..scheme import SchemeTV
+from ..model.field import Field
+from ..model import SchemeTV
 from ..log import log_manager_handler
 
 

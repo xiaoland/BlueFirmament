@@ -9,7 +9,7 @@ if typing.TYPE_CHECKING:
     from ..task.result import JsonBody
 
 if typing.TYPE_CHECKING:
-    from ..scheme import BaseScheme
+    from ..model import BaseScheme
 
 def is_annotated(tp: typing.Type) -> typing.TypeGuard[typing.Annotated]:
 
@@ -157,7 +157,7 @@ def is_json_dumpable(val: typing.Any) -> typing.TypeGuard[JsonDumpable]:
     if val is None:
         return True
 
-    from ..scheme import BaseScheme
+    from ..model import BaseScheme
     from ..task.result import JsonBody
     if isinstance(val, (
         str, int, float, bool,

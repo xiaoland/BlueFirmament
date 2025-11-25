@@ -8,7 +8,7 @@ from . import DALQueryComponent
 from ..utils import dump_field_like
 from ..types import FieldLikeType, DALPath
 if typing.TYPE_CHECKING:
-    from ...scheme.field import Field
+    from ...model.field import Field
 
 
 class DALFilter(DALQueryComponent):
@@ -21,7 +21,7 @@ class DALFilter(DALQueryComponent):
 
     @property
     def dal_path(self) -> Opt[DALPath]:
-        from ...scheme.field import Field, FieldValueProxy
+        from ...model.field import Field, FieldValueProxy
         if isinstance(self._field, Field):
             return self._field.scheme_cls.dal_path()
         if isinstance(self._field, FieldValueProxy):
@@ -40,7 +40,7 @@ class DALFilter(DALQueryComponent):
         return field_name
 
     def _dump_value(self, val: typing.Any):
-        from ...scheme.field import Field, FieldValueProxy
+        from ...model.field import Field, FieldValueProxy
         if isinstance(self._field, Field):
             return self._field.dump_val_to_jsonable(val)
         if isinstance(self._field, FieldValueProxy):

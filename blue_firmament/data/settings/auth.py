@@ -2,7 +2,7 @@ import datetime
 import typing
 
 from ...utils.datetime_ import get_datetimez
-from ...scheme import private_field
+from ...model import private_field
 from ...setting import EnvJsonSetting, make_setting_singleton
 
 type AuthSessionField = typing.Literal[

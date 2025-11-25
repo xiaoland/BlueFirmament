@@ -1,5 +1,4 @@
-"""BlueFirmament Scheme Field module
-"""
+"""BF Model Field module"""
 
 __all__ = [
     "FieldValueProxy",
@@ -27,13 +26,16 @@ from blue_firmament.dal.query_components.operators import NotOperator
 from .converter import BaseConverter, get_converter_from_anno
 
 if typing.TYPE_CHECKING:
-    from .main import BaseScheme
+    from .main import BaseModel
     from .validator import BaseValidator
+
+# Backwards compatibility
+BaseScheme = typing.TYPE_CHECKING and "BaseModel" or None
 
 
 FieldValueTV = typing.TypeVar('FieldValueTV')
 class FieldValueProxy(typing.Generic[FieldValueTV]):
-    """字段值代理对象
+    """Field Value Proxy
 
     字段值必然是原生值，不能是用户自定义类
 
@@ -52,16 +54,20 @@ class FieldValueProxy(typing.Generic[FieldValueTV]):
         obj: FieldValueTV, 
         modified: typing.Callable,
         field: "Field[FieldValueTV]",
-        scheme: "BaseScheme"
+        model: "BaseModel"
     ) -> None:
 
         self._obj: FieldValueTV = obj
         self._modified = modified
         self._field: "Field[FieldValueTV]" = field
-        self._scheme: "BaseScheme" = scheme
+        self._model: "BaseModel" = model
 
     @property
-    def scheme(self): return self._scheme
+    def model(self): return self._model
+
+    # Backwards compatibility
+    @property
+    def scheme(self): return self._model
     
     @property
     def field(self): return self._field
@@ -107,7 +113,7 @@ class FieldValueProxy(typing.Generic[FieldValueTV]):
     
     def __setattr__(self, name: str, value: typing.Any) -> None:
         
-        if name in ('_obj', '_modified', '_field', '_scheme'):
+        if name in ('_obj', '_modified', '_field', '_model'):
             super().__setattr__(name, value)
         else:
             setattr(self._obj, name, value)
@@ -138,12 +144,12 @@ for i in (
 class FieldValueProtocol(typing.Protocol[FieldValueTV]):
 
     __field__: "Field[FieldValueTV]"
-    __scheme__: "BaseScheme"
+    __model__: "BaseModel"
 
 
 class Field(typing.Generic[FieldValueTV]):
 
-    """Scheme Field of BlueFirmament.
+    """BF Model Field.
 
     Features
     --------
@@ -154,7 +160,7 @@ class Field(typing.Generic[FieldValueTV]):
 
     Validator
     ^^^^^^^^^
-    See :doc:`/design/scheme/validator`
+    See :doc:`/design/model/validator`
 
     Inherit
     ^^^^^^^
@@ -170,8 +176,8 @@ class Field(typing.Generic[FieldValueTV]):
         default_factory: Opt[typing.Callable[[], FieldValueTV]] = None,
         vtype: Undefined | typing.Type[FieldValueTV] = _undefined,
         name: Opt[str] = None,
-        in_scheme_name: Opt[str] = None,
-        scheme_cls: Opt[typing.Type["BaseScheme"]] = None,
+        in_model_name: Opt[str] = None,
+        model_cls: Opt[typing.Type["BaseModel"]] = None,
         is_key: bool = False,
         is_key_natural: bool = False,
         is_foreign_key: bool = False,
@@ -190,20 +196,20 @@ class Field(typing.Generic[FieldValueTV]):
             Field value type.
         :param name:
             Field name in DAL.
-        :param in_scheme_name:
-            Field name in scheme.
-        :param scheme_cls:
-            Scheme class this field attached on.
+        :param in_model_name:
+            Field name in model.
+        :param model_cls:
+            Model class this field attached on.
         :param converter:
-            See :doc:`/design/scheme/converter`
+            See :doc:`/design/model/converter`
         :param validators:
-            See :doc:`/design/scheme/validator`
+            See :doc:`/design/model/validator`
         :param is_partial:
             If True, field value left undefined if not provided, and
             default value will not be applied.
         :param dump_flags:
             Flags control whether this field should be dumped when
-            dumping scheme.
+            dumping model.
         :param is_key: 
             This field is a key
         :param is_key_natural:
@@ -214,8 +220,8 @@ class Field(typing.Generic[FieldValueTV]):
             see `Dataclass field specifier parameters <https://typing.python.org/en/latest/spec/dataclasses.html#field-specifier-parameters>`_
         """
         self.__name = name
-        self.__in_scheme_name = in_scheme_name or name
-        self.__scheme_cls = scheme_cls
+        self.__in_model_name = in_model_name or name
+        self.__model_cls = model_cls
         self.__default = default
         self.__default_factory = default_factory
         self.__vtype = vtype
@@ -236,8 +242,8 @@ class Field(typing.Generic[FieldValueTV]):
         default_factory: Opt[typing.Callable[[], FieldValueTV]] = None,
         vtype: Undefined | typing.Type[FieldValueTV] = _undefined,
         name: Opt[str] = None,
-        in_scheme_name: Opt[str] = None,
-        scheme_cls: Opt[typing.Type["BaseScheme"]] = None,
+        in_model_name: Opt[str] = None,
+        model_cls: Opt[typing.Type["BaseModel"]] = None,
         is_key: bool = False,
         is_key_natural: bool = False,
         is_foreign_key: bool = False,
@@ -251,8 +257,8 @@ class Field(typing.Generic[FieldValueTV]):
             default=default if default is not _undefined else self.__default,
             default_factory=default_factory or self.__default_factory,
             name=name or self.__name,
-            in_scheme_name=in_scheme_name or self.__in_scheme_name,
-            scheme_cls=scheme_cls or self.__scheme_cls,
+            in_model_name=in_model_name or self.__in_model_name,
+            model_cls=model_cls or self.__model_cls,
             is_key=is_key or self.__is_key,
             is_key_natural=is_key_natural or self.__is_key_natural,
             is_foreign_key=is_foreign_key or self.__is_foreign_key,
@@ -267,16 +273,16 @@ class Field(typing.Generic[FieldValueTV]):
     def __hash__(self) -> int:
         """哈希值
 
-        in_scheme_name or name
+        in_model_name or name
         """
-        return hash(self.__in_scheme_name or self.__name)
+        return hash(self.__in_model_name or self.__name)
     
     def __eq__(self, value) -> bool:
 
-        """Make BlueFirmamentField(name='name') == 'name'
+        """Make Field(name='name') == 'name'
         """
         if isinstance(value, str):
-            return self.__name == value or self.__in_scheme_name == value
+            return self.__name == value or self.__in_model_name == value
         elif isinstance(value, Field):
             # name, vtype
             return self.__name == value.name and self.value_type == value.value_type
@@ -289,10 +295,15 @@ class Field(typing.Generic[FieldValueTV]):
         return self.__name
     
     @property
+    def in_model_name(self) -> str:
+        if self.__in_model_name is None:
+            raise ValueError('Field in_model_name is not defined')
+        return self.__in_model_name
+
+    # Backwards compatibility
+    @property
     def in_scheme_name(self) -> str:
-        if self.__in_scheme_name is None:
-            raise ValueError('Field in_scheme_name is not defined')
-        return self.__in_scheme_name
+        return self.in_model_name
     
     def is_key(self) -> bool: 
         return self.__is_key
@@ -310,16 +321,20 @@ class Field(typing.Generic[FieldValueTV]):
             raise ValueError('Field name is immutable')
         self.__name = value
 
-    def _set_in_scheme_name(self, value: str, no_raise: bool = False) -> None:
+    def _set_in_model_name(self, value: str, no_raise: bool = False) -> None:
         """设置字段在数据模型中的名称
 
         如果已经设置过名称，则抛出错误
         """
-        if self.__in_scheme_name is not None:
+        if self.__in_model_name is not None:
             if no_raise:
                 return None
-            raise ValueError('Field in_scheme_name is immutable')
-        self.__in_scheme_name = value
+            raise ValueError('Field in_model_name is immutable')
+        self.__in_model_name = value
+
+    # Backwards compatibility
+    def _set_in_scheme_name(self, value: str, no_raise: bool = False) -> None:
+        return self._set_in_model_name(value, no_raise)
 
     @property
     def vtype(self) -> typing.Type[FieldValueTV]:
@@ -332,10 +347,15 @@ class Field(typing.Generic[FieldValueTV]):
         return self.__is_partial
 
     @property
-    def scheme_cls(self) -> typing.Type["BaseScheme"]: 
-        if self.__scheme_cls is None:
-            raise ValueError('Field scheme is not defined')
-        return self.__scheme_cls
+    def model_cls(self) -> typing.Type["BaseModel"]: 
+        if self.__model_cls is None:
+            raise ValueError('Field model is not defined')
+        return self.__model_cls
+
+    # Backwards compatibility
+    @property
+    def scheme_cls(self) -> typing.Type["BaseModel"]:
+        return self.model_cls
     
     @property
     def dump_flags(self) -> set[str]:
@@ -345,8 +365,8 @@ class Field(typing.Generic[FieldValueTV]):
     def dump_flags(self, value: set[str]) -> None:
         self.__dump_flags = value
 
-    def _set_scheme_cls(self, 
-        scheme_cls: Opt[typing.Type["BaseScheme"]],
+    def _set_model_cls(self, 
+        model_cls: Opt[typing.Type["BaseModel"]],
         no_raise: bool = False,
         force: bool = False
     ) -> None:
@@ -357,10 +377,18 @@ class Field(typing.Generic[FieldValueTV]):
         :param force: 是否强制设置 \n
             建议使用 :meth:`fork` 来设置值（但元类是特例）
         """
-        if self.__scheme_cls is not None and not force:
+        if self.__model_cls is not None and not force:
             if no_raise: return None
-            raise ValueError('Field scheme is immutable')
-        self.__scheme_cls = scheme_cls
+            raise ValueError('Field model is immutable')
+        self.__model_cls = model_cls
+
+    # Backwards compatibility
+    def _set_scheme_cls(self, 
+        scheme_cls: Opt[typing.Type["BaseModel"]],
+        no_raise: bool = False,
+        force: bool = False
+    ) -> None:
+        return self._set_model_cls(scheme_cls, no_raise, force)
 
     @property
     def init(self) -> bool: return self.__init
@@ -389,8 +417,8 @@ class Field(typing.Generic[FieldValueTV]):
 
         """从类型注解设置转换器
 
-        - 支持 `BlueFirmamentField[type]`
-        - 支持 `BlueFirmamentFieldSublcass` （必须是直接子类，不能是孙类）
+        - 支持 `Field[type]`
+        - 支持 `FieldSubclass` （必须是直接子类，不能是孙类）
         - 用户不应当调用
 
         :param annotation: 类型注解
@@ -458,7 +486,7 @@ class Field(typing.Generic[FieldValueTV]):
     @property
     def converter(self) -> BaseConverter:
         if self.__converter is None:
-            raise ValueError('converter is not defined on field %s' % self.in_scheme_name)
+            raise ValueError('converter is not defined on field %s' % self.in_model_name)
         return self.__converter
 
     @property
@@ -475,7 +503,7 @@ class Field(typing.Generic[FieldValueTV]):
         elif self.__default is not _undefined:
             return self.__default
         else:
-            raise ValueError('No default value provided for field %s' % self.in_scheme_name)
+            raise ValueError('No default value provided for field %s' % self.in_model_name)
     
     def convert(self, value: typing.Any) -> FieldValueTV:
 
@@ -491,14 +519,14 @@ class Field(typing.Generic[FieldValueTV]):
         
     def validate(self, 
         value: typing.Any,
-        scheme_ins: Opt["BaseScheme"] = None,
+        model_ins: Opt["BaseModel"] = None,
     ) -> None:
         """Run validator bind to this field.
 
         :raises ValueError: If invalid.
         """
         for validator in self.__validators:
-            validator(value, scheme_ins=scheme_ins)
+            validator(value, model_ins=model_ins)
         
     def equals(self, value: FieldValueTV) -> EqFilter:
         """该字段等于该值的筛选器
@@ -540,30 +568,30 @@ class Field(typing.Generic[FieldValueTV]):
         ...
 
     @typing.overload
-    def __get__(self, instance: "BaseScheme", owner) -> FieldValueTV:
+    def __get__(self, instance: "BaseModel", owner) -> FieldValueTV:
         # 实际上是 FieldValueProxy[FieldValueType]
         ...
     
-    def __get__(self, instance: Opt["BaseScheme"], owner) \
+    def __get__(self, instance: Opt["BaseModel"], owner) \
         -> "Field" | FieldValueTV:
 
         if instance is None:
             return self
         return typing.cast(FieldValueTV, instance._get_value(self))
         
-    def __set__(self, instance: "BaseScheme", value: FieldValueTV) -> None:
+    def __set__(self, instance: "BaseModel", value: FieldValueTV) -> None:
         """
         .. versionchanged:: 0.1.2
             if initialized, set to undefined will change nothing
         """
-        initialized = self.in_scheme_name in instance.__field_values__
+        initialized = self.in_model_name in instance.__field_values__
 
         # convert value
         if value is _undefined:
             if initialized:
                 return  # remain value unchanged
 
-            instance._mark_unset(self.in_scheme_name)
+            instance._mark_unset(self.in_model_name)
             try:
                 value = self.default_value
             except ValueError as e:
@@ -576,7 +604,7 @@ class Field(typing.Generic[FieldValueTV]):
             value = self.convert(value)
 
         # validate value
-        self.validate(value, scheme_ins=instance)
+        self.validate(value, model_ins=instance)
 
         if instance.__proxy__:
             value_ = self._proxy_value(value, instance)
@@ -587,17 +615,17 @@ class Field(typing.Generic[FieldValueTV]):
 
         # if already initialized, mark as dirty
         if initialized:
-            instance._mark_dirty(self.in_scheme_name)
+            instance._mark_dirty(self.in_model_name)
 
     def _proxy_value(self, 
-        value: FieldValueTV, instance: "BaseScheme"
+        value: FieldValueTV, instance: "BaseModel"
     ) -> FieldValueProxy[FieldValueTV]:
         
         if not isinstance(value, FieldValueProxy):
             # 避免循环代理
             return FieldValueProxy(
                 value, 
-                lambda: instance._mark_dirty(self.in_scheme_name),
+                lambda: instance._mark_dirty(self.in_model_name),
                 self,
                 instance
             )
@@ -613,25 +641,30 @@ class Field(typing.Generic[FieldValueTV]):
             self.name: self.convert(value)
         }
 
-    def dump_to_scheme(self) -> typing.Type["BaseScheme"]:
+    def dump_to_model(self) -> typing.Type["BaseModel"]:
 
         """
         根据字段实例创建数据模型
 
         这个数据模型只包含本字段
         """
+        from .main import BaseModel
 
         exec_namespace = {
-            "BaseScheme": BaseScheme,
+            "BaseModel": BaseModel,
             "FieldIns": self,
         }
         exec_result = {}
 
-        class_sig = "class AnonymousScheme(BaseScheme):\n"
+        class_sig = "class AnonymousModel(BaseModel):\n"
         class_body = f"    {self.name} = FieldIns\n"
 
         exec(class_sig + class_body, exec_namespace, exec_result)
-        return exec_result["AnonymousScheme"]
+        return exec_result["AnonymousModel"]
+
+    # Backwards compatibility
+    def dump_to_scheme(self) -> typing.Type["BaseModel"]:
+        return self.dump_to_model()
 
 
 T = typing.TypeVar('T')
@@ -665,7 +698,7 @@ def field(
 
 class PrivateField[FieldValueType](Field[FieldValueType]):
 
-    """碧霄私有字段
+    """BF Private Field
 
     - 不会被外部访问？（setting 那边的实践有问题）
     - 不会被序列化
@@ -677,7 +710,7 @@ class PrivateField[FieldValueType](Field[FieldValueType]):
     @property
     def name(self): raise ValueError('Private field name is forbidden')
     
-    def __set__(self, instance: "BaseScheme", value: FieldValueType) -> None:
+    def __set__(self, instance: "BaseModel", value: FieldValueType) -> None:
         try:
             if value is _undefined:
                 value = self.default_value
@@ -696,14 +729,14 @@ def private_field(
     )
 
 
-SchemeTV = typing.TypeVar("SchemeTV", bound="BaseScheme")
+ModelTV = typing.TypeVar("ModelTV", bound="BaseModel")
 class CompositeField(
-    Field[SchemeTV],
-    typing.Generic[SchemeTV], 
+    Field[ModelTV],
+    typing.Generic[ModelTV], 
 ):
-    """
+    """Composite Field
 
-    - Enable partial for composite field makes sub scheme partial.
+    - Enable partial for composite field makes sub model partial.
     """
     
     @property
@@ -714,7 +747,7 @@ class CompositeField(
             return None
         raise ValueError("CompositeField can't have a name")
     
-    def dump_val_to_jsonable(self, value: SchemeTV) -> typing.Dict[str, typing.Any]:
+    def dump_val_to_jsonable(self, value: ModelTV) -> typing.Dict[str, typing.Any]:
         return value.dump_to_dict(jsonable=True)
     
     @property
@@ -722,7 +755,7 @@ class CompositeField(
         return self.vtype.__fields__.values()
     
     @property
-    def _sub(self) -> typing.Type[SchemeTV]:
+    def _sub(self) -> typing.Type[ModelTV]:
         return self.vtype
 
 
@@ -734,10 +767,10 @@ def get_default(field: Field[T]) -> T:
     '''
     return typing.cast(Field[T], field).default_value
 
-def dump_field_name(field: Field | str, in_scheme: bool = False) -> str:
+def dump_field_name(field: Field | str, in_model: bool = False) -> str:
 
     if isinstance(field, Field):
-        return field.name if not in_scheme else field.in_scheme_name
+        return field.name if not in_model else field.in_model_name
     return field
 
 

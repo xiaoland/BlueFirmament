@@ -3,7 +3,7 @@ import logging
 import typing
 from typing import Optional as Opt, Annotated as Anno, Literal as Lit
 from ...setting import Setting, make_setting_singleton
-from ...scheme import private_field
+from ...model import private_field
 
 
 class LogSetting(Setting):

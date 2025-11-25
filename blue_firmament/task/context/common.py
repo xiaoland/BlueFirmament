@@ -8,7 +8,7 @@ __all__ = [
 
 import typing
 from ... import event
-from ...scheme import FieldT, private_field
+from ...model import FieldT, private_field
 from ..context import SoBaseTC, ExtendedTaskContext
 from ...session.common import CommonSession
 if typing.TYPE_CHECKING:

@@ -1,11 +1,19 @@
 
 __all__ = [
+    # New names (BF prefix)
+    'BFModelMetaclass',
+    'BFModel',
+    'BaseModel',
+    'ModelTV',
+    'NoProxyModel',
+    'BaseRootModel',
+    'merge',
+    # Backwards compatibility aliases
     'SchemeMetaclass',
-    'BaseScheme', 
+    'BaseScheme',
     'SchemeTV',
     'NoProxyScheme',
     'BaseRootScheme',
-    "merge"
 ]
 
 import abc
@@ -17,7 +25,9 @@ from typing import Optional as Opt
 
 from ..utils.typing_ import safe_issubclass
 from .._types import Undefined, _undefined
-from .validator import SchemeValidator, FieldValidator
+from .validator import ModelValidator, FieldValidator
+# Backwards compatibility
+SchemeValidator = ModelValidator
 from .field import (
     CompositeField, PrivateField, Field, 
     field, dump_field_name
@@ -38,9 +48,9 @@ if typing.TYPE_CHECKING:
         field
     )
 )
-class SchemeMetaclass(abc.ABCMeta):
+class BFModelMetaclass(abc.ABCMeta):
 
-    """碧霄数据模型元类
+    """BF Model Metaclass (碧霄数据模型元类)
 
     Design Doc: :doc:`/design/scheme/index`
 
@@ -62,24 +72,24 @@ class SchemeMetaclass(abc.ABCMeta):
     基本示例：
 
     ```python
-    class MyScheme(BlueFirmamentScheme):
+    class MyModel(BFModel):
         table_name = 'my_table'
         
-        _id: BlueFirmamentSequenceField = BlueFirmamentField(is_primary_key=True)  # 类型为自增的字段
+        _id: BFSequenceField = BFField(is_primary_key=True)  # 类型为自增的字段
         name: str = 'default_name'
     ```
     
-    可以直接使用`BlueFirmamentField`定义字段，也可以直接使用值定义字段。值将会作为字段的默认值，类变量名将自动作为字段名。
+    可以直接使用`Field`定义字段，也可以直接使用值定义字段。值将会作为字段的默认值，类变量名将自动作为字段名。
 
     名称为下列的类变量会被解析为内置字段：（不会继承）
     - ``_table_name``：表名
     - ``_schema_name``：数据库名/表组名（来源于PostgreSQL，相当于MySQL的数据库）
 
-    声明私有字段使用``BlueFirmamentPrivateField``
+    声明私有字段使用``PrivateField``
 
     数据模型实例化
     ^^^^^^^^^^^^^^^^
-    - 未传递的字段将使用默认值，没有默认值将变为BlueFirmamentUndefinedValue
+    - 未传递的字段将使用默认值，没有默认值将变为Undefined
 
     Behavior
     ---------
@@ -101,12 +111,12 @@ class SchemeMetaclass(abc.ABCMeta):
         '__partial__': False,
         '__inherit_validators__': True,
         '__private_fields__': dict,
-        '__scheme_validators__': list,
+        '__model_validators__': list,
         '__after_field_validators__': list,
         '__default_edflags__': None,
         '__default_idflags__': None
     }
-    """Builtin class variables of BlueFirmamentScheme
+    """Builtin class variables of BFModel
     
     values are the default value (callable for mutable values).
     """
@@ -117,7 +127,7 @@ class SchemeMetaclass(abc.ABCMeta):
         '__dirty_fields__': set,
         '__field_values__': dict,
     }
-    """Builtin instance variables of BlueFirmamentScheme
+    """Builtin instance variables of BFModel
     
     values are the default value (callable for mutable values).
     """
@@ -137,8 +147,8 @@ class SchemeMetaclass(abc.ABCMeta):
         **kwargs
     ):
 
-        # Exclude base scheme class
-        if name in ("BaseScheme",):
+        # Exclude base model classes
+        if name in ("BaseScheme", "BaseModel", "BFModel"):
             return super().__new__(cls, name, bases, attrs, **kwargs)
 
         # Set up class vars
@@ -196,12 +206,12 @@ class SchemeMetaclass(abc.ABCMeta):
             k: v.fork(fork_validators=attrs['__inherit_validators__'])
             for k, v in private_fields.items()
         })
-        scheme_validators: typing.List[SchemeValidator]
+        model_validators: typing.List[ModelValidator]
         if not attrs['__inherit_validators__']:
-            scheme_validators = list()
-            attrs['__scheme_validators__'] = scheme_validators
+            model_validators = list()
+            attrs['__model_validators__'] = model_validators
         else:
-            scheme_validators = attrs['__scheme_validators__']
+            model_validators = attrs['__model_validators__']
 
         # Resolve attrs
         for k, v in attrs.items():
@@ -225,16 +235,16 @@ class SchemeMetaclass(abc.ABCMeta):
             ):
                 continue
 
-            # Resolve scheme validators
-            if isinstance(v, SchemeValidator):
-                scheme_validators.append(v)
+            # Resolve model validators
+            if isinstance(v, ModelValidator):
+                model_validators.append(v)
                 continue
 
             # Resolve private fields 
             if isinstance(v, PrivateField):
                 private_fields[k] = v
                 v._set_name(k, True) # 如果没有配置名称，则使用类变量名作为字段名
-                v._set_in_scheme_name(k, True)
+                v._set_in_model_name(k, True)
                 continue
 
             # Resolve fields
@@ -242,21 +252,21 @@ class SchemeMetaclass(abc.ABCMeta):
                 # already a field instance
                 fields[k] = v
                 v._set_name(k, True) # TODO rename as try
-                v._set_in_scheme_name(k, True)
+                v._set_in_model_name(k, True)
             else:
                 # not a field instance
                 if k in fields:
                     fields[k] = fields[k].fork(
-                        default=v, name=k, in_scheme_name=k
+                        default=v, name=k, in_model_name=k
                     )
                     continue
                 elif k in private_fields:
                     private_fields[k] = private_fields[k].fork(
-                        default=v, name=k, in_scheme_name=k,
+                        default=v, name=k, in_model_name=k,
                     )
                     continue
 
-                fields[k] = Field(v, name=k, in_scheme_name=k)
+                fields[k] = Field(v, name=k, in_model_name=k)
 
         # Set up field converter from annotations
         for k, field_ in (fields | private_fields).items():
@@ -276,7 +286,7 @@ class SchemeMetaclass(abc.ABCMeta):
                 orig = typing.get_origin(anno)
                 if safe_issubclass(orig, Field):
                     field = orig(
-                        name=k, in_scheme_name=k, 
+                        name=k, in_model_name=k, 
                         vtype=typing.get_args(anno)[0]
                     )
                     field._set_converter_from_anno(anno)
@@ -285,7 +295,7 @@ class SchemeMetaclass(abc.ABCMeta):
 
                 # ValueT
                 # not yet resolved above
-                fields[k] = Field(name=k, in_scheme_name=k, vtype=anno)
+                fields[k] = Field(name=k, in_model_name=k, vtype=anno)
                 fields[k]._set_converter_from_anno(anno)
 
 
@@ -312,21 +322,21 @@ class SchemeMetaclass(abc.ABCMeta):
             # type_str = cls._get_type_from_anno(cls_annotations, k, new_globals)
             init_params.add(k)
             if isinstance(field_ins, CompositeField):
-                sub_scheme_name = field_ins._sub.__name__
+                sub_model_name = field_ins._sub.__name__
                 if field_ins.is_partial or attrs['__partial__']:
-                    partial_sub_scheme = copy.copy(field_ins._sub)
-                    setattr(partial_sub_scheme, '__partial__', True)
-                    new_globals[sub_scheme_name] = partial_sub_scheme
+                    partial_sub_model = copy.copy(field_ins._sub)
+                    setattr(partial_sub_model, '__partial__', True)
+                    new_globals[sub_model_name] = partial_sub_model
                 else:
-                    new_globals[sub_scheme_name] = field_ins._sub
+                    new_globals[sub_model_name] = field_ins._sub
 
                 for sub_field in field_ins.sub_fields:
-                    init_params.add(sub_field.in_scheme_name)
+                    init_params.add(sub_field.in_model_name)
 
                 init_assignments.append(f"    self.{k} = {k} if {k} is not _undefined \
-                    else {sub_scheme_name}({
+                    else {sub_model_name}({
                     ",".join(
-                        f"{i.in_scheme_name}={i.in_scheme_name}"
+                        f"{i.in_model_name}={i.in_model_name}"
                         for i in field_ins.sub_fields
                     )
                 })")
@@ -338,13 +348,13 @@ class SchemeMetaclass(abc.ABCMeta):
         else:
             init_sig = "def __init__(self, **kwargs):\n"
         init_body = '\n'
-        init_body += '    SchemeMetaclass.init_ivars(self)\n'
+        init_body += '    BFModelMetaclass.init_ivars(self)\n'
         init_body += '\n'.join(init_assignments)
-        init_body += '\n    SchemeMetaclass.run_scheme_validators(self)\n'
+        init_body += '\n    BFModelMetaclass.run_model_validators(self)\n'
         init_body += '    self.__instantiated__ = True\n'
-        init_body += '    SchemeMetaclass.run_after_field_validators(self)\n'
+        init_body += '    BFModelMetaclass.run_after_field_validators(self)\n'
         init_body += '    if not self.__disable_log__:\n'
-        init_body += '        self._logger.info("Scheme instantiated", scheme_data=self.dump_to_dict())\n'
+        init_body += '        self._logger.info("Model instantiated", model_data=self.dump_to_dict())\n'
         init_body += '    self.__post_init__()\n'
 
         init_method = init_sig + init_body
@@ -353,10 +363,10 @@ class SchemeMetaclass(abc.ABCMeta):
 
         result_class = super().__new__(cls, name, bases, attrs, **kwargs)
 
-        # set fields' scheme
+        # set fields' model class
         for k, default_v in (result_class.__fields__).items():
-            default_v._set_scheme_cls(
-                typing.cast(typing.Type["BaseScheme"], result_class), 
+            default_v._set_model_cls(
+                typing.cast(typing.Type["BaseModel"], result_class), 
                 no_raise=True, force=True
             )
 
@@ -377,29 +387,32 @@ class SchemeMetaclass(abc.ABCMeta):
         return type_str
     
     @staticmethod
-    def init_ivars(ins: "BaseScheme"):
+    def init_ivars(ins: "BaseModel"):
         """Initialize instance variables
         """
-        for k, default_v in SchemeMetaclass.__builtin_ivars__.items():
+        for k, default_v in BFModelMetaclass.__builtin_ivars__.items():
             setattr(ins, k, default_v() if callable(default_v) else default_v)
 
     @staticmethod
-    def run_scheme_validators(ins: "BaseScheme"):
-        for validator in ins.__scheme_validators__:
+    def run_model_validators(ins: "BaseModel"):
+        for validator in ins.__model_validators__:
             validator(ins)
 
     @staticmethod
-    def run_after_field_validators(ins: "BaseScheme"):
+    def run_after_field_validators(ins: "BaseModel"):
         for _ in range(len(ins.__after_field_validators__)):
             validator = ins.__after_field_validators__.pop(0)
-            validator(value=ins[validator._field], scheme_ins=ins)
+            validator(value=ins[validator._field], model_ins=ins)
 
 
 TV = typing.TypeVar("TV")
 
+# Backwards compatibility alias
+SchemeMetaclass = BFModelMetaclass
 
-class BaseScheme(metaclass=SchemeMetaclass):
-    """Base data model class of BlueFirmament
+
+class BaseModel(metaclass=BFModelMetaclass):
+    """BF Base Model - Base data model class
 
     Features
     ---------
@@ -424,32 +437,32 @@ class BaseScheme(metaclass=SchemeMetaclass):
     Includes primary key, composite key.
     """
     __disable_log__: typing.ClassVar[bool]
-    """Disable scheme internal logs
+    """Disable model internal logs
     """
     __proxy__: typing.ClassVar[bool]
     """Proxy field value or not
 
     If disabled:
     - Mutable field value modification will not be tracked
-    - Cannot get scheme or field info from field value
+    - Cannot get model or field info from field value
     """
     __fields__: typing.ClassVar[typing.Dict[str, Field]]
-    """Fields and their instances defined in the scheme
+    """Fields and their instances defined in the model
     """
     __private_fields__: typing.ClassVar[typing.Dict[str, PrivateField]]
-    """Private fields and their instances defined in the scheme
+    """Private fields and their instances defined in the model
     """
-    __scheme_validators__: typing.ClassVar[typing.List[SchemeValidator]]
+    __model_validators__: typing.ClassVar[typing.List[ModelValidator]]
     __after_field_validators__: typing.ClassVar[typing.List[FieldValidator]]
     """Field validators needed to be ran
-    immediately after scheme instantiation
+    immediately after model instantiation
     """
     __partial__: typing.ClassVar[bool]
     """If True, all fields are partial
     """
     __inherit_validators__: typing.ClassVar[bool]
-    """If False, scheme and field validators will not be inherited by
-    sub scheme.
+    """If False, model and field validators will not be inherited by
+    sub model.
     """
     __default_edflags__: typing.ClassVar[Opt[set[str]]]
     __default_idflags__: typing.ClassVar[Opt[set[str]]]
@@ -458,7 +471,7 @@ class BaseScheme(metaclass=SchemeMetaclass):
     __field_values__: typing.ClassVar[typing.Dict[str, typing.Any]]
     """Storing each field's value
     
-    - Key is the field's in_scheme_name.
+    - Key is the field's in_model_name.
     """
     __dirty_fields__: typing.ClassVar[typing.Set[str]]
     """Which fields are modified since last dump
@@ -472,12 +485,12 @@ class BaseScheme(metaclass=SchemeMetaclass):
     - Instance variable
     """
     __logger__: typing.ClassVar[Opt["LoggerT"]]
-    """Scheme level logger
+    """Model level logger
 
     - Instance variable
     """
     __instantiated__: typing.ClassVar[bool]
-    """Whether the scheme is instantiated
+    """Whether the model is instantiated
 
     - Instance variable
     """
@@ -486,7 +499,7 @@ class BaseScheme(metaclass=SchemeMetaclass):
         """数据模型实例化后执行的操作；可以被重写"""
 
     @staticmethod
-    def _init_private_fields(obj: 'BaseScheme', data: typing.Any):
+    def _init_private_fields(obj: 'BaseModel', data: typing.Any):
 
         for k, v in obj.__private_fields__.items():
             if k in data:
@@ -495,8 +508,8 @@ class BaseScheme(metaclass=SchemeMetaclass):
                 setattr(obj, k, v.default_value)
 
     @classmethod
-    def __from_parents__(cls, /, *parents: "BaseScheme") -> typing.Self:
-        """Instantiate this scheme from its parent schemes.
+    def __from_parents__(cls, /, *parents: "BaseModel") -> typing.Self:
+        """Instantiate this model from its parent models.
 
         Precondition:
         - Inherited fields' name unchanged.
@@ -513,7 +526,7 @@ class BaseScheme(metaclass=SchemeMetaclass):
         """Mark field as unset (not provided during instantiation)
         """
         if isinstance(field_, Field):
-            self.__unset_fields__.add(field_.in_scheme_name)
+            self.__unset_fields__.add(field_.in_model_name)
         else:
             self.__unset_fields__.add(field_)
 
@@ -544,7 +557,7 @@ class BaseScheme(metaclass=SchemeMetaclass):
     @classmethod
     def _get_key_field(cls) -> Field:
         """
-        :raise KeyError: if no key on scheme
+        :raise KeyError: if no key on model
         """
         if not cls.__key__:
             raise KeyError(f'{cls.__name__} does not have a key')
@@ -582,7 +595,7 @@ class BaseScheme(metaclass=SchemeMetaclass):
     ) -> str:
         """Serialize model to string
 
-        :param use_name: use field's name instead of in_scheme_name,
+        :param use_name: use field's name instead of in_model_name,
                         defaults to False
         :type use_name: bool, optional
         """
@@ -610,16 +623,16 @@ class BaseScheme(metaclass=SchemeMetaclass):
             If True, exclude natural key field.
         :param exclude_unset:
             If True, exclude unset fields.
-            If None and is partial scheme, defaults to True.
+            If None and is partial model, defaults to True.
         :param exclude_flags:
             If provided, exclude fields with all these flags.
             If not provided, ``default_exclude_dump_flags`` configured on
-            scheme will be used.
-            Prior to ``include_flags`` (same for scheme default).
+            model will be used.
+            Prior to ``include_flags`` (same for model default).
         :param include_flags:
             If provided, only dumps fields with all these flags.
             If not provided, ``default_include_dump_flags`` configured on
-            scheme will be used.
+            model will be used.
         :param only_private:
             If True, only private fields will de dumped.
         :param jsonable:
@@ -645,7 +658,7 @@ class BaseScheme(metaclass=SchemeMetaclass):
             if exclude_natural_key:
                 key_field = self._try_get_key_field()
                 if key_field and key_field.is_key_natural():
-                    field_names = field_names - {key_field.in_scheme_name}
+                    field_names = field_names - {key_field.in_model_name}
 
             if exclude_unset is True or (exclude_unset is None and self.__partial__):
                 field_names = field_names - self.__unset_fields__
@@ -684,7 +697,7 @@ class BaseScheme(metaclass=SchemeMetaclass):
         Note: 不可以是其他属性，只可以是字段
         """
         if key in self.__fields__:
-            return getattr(self, dump_field_name(key, in_scheme=True))
+            return getattr(self, dump_field_name(key, in_model=True))
         
         raise KeyError(f'{key} is not a field of {self.__class__.__name__}')
     
@@ -714,7 +727,7 @@ class BaseScheme(metaclass=SchemeMetaclass):
 
         :param field: 字段名或字段实例
         """
-        self.__field_values__[field.in_scheme_name] = value
+        self.__field_values__[field.in_model_name] = value
 
     def _get_value(
         self,
@@ -724,80 +737,85 @@ class BaseScheme(metaclass=SchemeMetaclass):
 
         :param field: 字段名或字段实例
         """
-        return self.__field_values__[field.in_scheme_name]
+        return self.__field_values__[field.in_model_name]
 
-    def _merge(self, scheme: "BaseScheme") -> None:
-        """Merge current scheme with another scheme's values.
+    def _merge(self, model: "BaseModel") -> None:
+        """Merge current model with another model's values.
 
-        Use ``dump_to_dict`` to get the values of the other scheme.
+        Use ``dump_to_dict`` to get the values of the other model.
 
-        :param scheme: The scheme to update from
+        :param model: The model to update from
         """
-        if not isinstance(scheme, BaseScheme):
-            raise TypeError(f"Expected BaseScheme, got {type(scheme)}")
+        if not isinstance(model, BaseModel):
+            raise TypeError(f"Expected BaseModel, got {type(model)}")
 
-        dumped = scheme.dump_to_dict()
+        dumped = model.dump_to_dict()
         for field_name, value in dumped.items():
             self.__fields__[field_name].__set__(self, value)
 
     @property
     def _logger(self):
-        """Scheme level logger
+        """Model level logger
 
         Context:
-        - scheme_id: id(self)
+        - model_id: id(self)
         """
         if not self.__logger__:
             from ..log import get_logger
             logger = get_logger(self.__class__.__name__)
             logger = logger.bind(
-                scheme_id=id(self),
+                model_id=id(self),
             )
             self.__logger__ = logger
         return self.__logger__
     
     def _set_logger(self, logger: "LoggerT") -> None:
-        """Set scheme level logger"""
+        """Set model level logger"""
         self.__logger__ = logger
 
 
-SchemeTV = typing.TypeVar('SchemeTV', bound=BaseScheme)
-"""数据模型类型变量
-"""
+# Aliases for new naming
+BFModel = BaseModel
+ModelTV = typing.TypeVar('ModelTV', bound=BaseModel)
+"""Model type variable"""
 
 
-class NoProxyScheme(BaseScheme,
-    proxy=False                    
-):
+class NoProxyModel(BaseModel, proxy=False):
+    """Model with proxy disabled"""
     pass
 
 
-class BaseRootScheme(BaseScheme):
+class BaseRootModel(BaseModel):
+    """Root Model class
 
-    """根数据模型类
-
-    - 只有一个 root 字段
-    - 序列化时 root 不会作为字段名，而是直接序列化 root 字段的值
+    - Has only one root field
+    - When serializing, root won't be used as field name
     """
-
     root: Field
 
 
-def merge(scheme1: BaseScheme, scheme2: BaseScheme) -> None:
-    """Merge same fields (by name)'s value from scheme2 to scheme1.
+def merge(model1: BaseModel, model2: BaseModel) -> None:
+    """Merge same fields (by name)'s value from model2 to model1.
 
-    Will firstly dump scheme2 (so partial will not be included)
+    Will firstly dump model2 (so partial will not be included)
 
     Examples
     --------
-    >>> merge(SchemeA(a=1, b=3), SchemeB(a=2))
-    SchemeA: a=2, b=3
-    >>> merge(SchemeA(a=1), SchemeB(a=_undefined))
-    SchemeB: a=1
+    >>> merge(ModelA(a=1, b=3), ModelB(a=2))
+    ModelA: a=2, b=3
+    >>> merge(ModelA(a=1), ModelB(a=_undefined))
+    ModelB: a=1
     """
-    for field_ in scheme2.dump_to_dict():
+    for field_ in model2.dump_to_dict():
         try:
-            scheme1[field_] = scheme2[field_]
+            model1[field_] = model2[field_]
         except KeyError:
             continue
+
+
+# Backwards compatibility aliases
+BaseScheme = BaseModel
+SchemeTV = ModelTV
+NoProxyScheme = NoProxyModel
+BaseRootScheme = BaseRootModel
 

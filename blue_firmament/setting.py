@@ -61,15 +61,15 @@ import typing
 from pathlib import Path
 from typing import Optional as Opt
 
-from .scheme.field import Field, get_default, private_field, FieldValueTV
-from .scheme import FieldT, field, private_field, BaseScheme
-from .scheme.converter import BaseConverter, get_converter_from_anno
+from .model.field import Field, get_default, private_field, FieldValueTV
+from .model import FieldT, field, private_field, BaseScheme
+from .model.converter import BaseConverter, get_converter_from_anno
 from .utils.file import load_json_file
 from .utils.dict_ import get_nested_value
 from ._types import Undefined, _undefined
 
 if typing.TYPE_CHECKING:
-    from .scheme.validator import BaseValidator
+    from .model.validator import BaseValidator
 
 
 # =============================================================================
@@ -497,7 +497,7 @@ def setting_field(
 # =============================================================================
 
 if typing.TYPE_CHECKING:
-    from .scheme.main import BaseScheme
+    from .model.main import BaseScheme
 
 
 class Setting(
