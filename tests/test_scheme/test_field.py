@@ -5,12 +5,12 @@
 from blue_firmament.model.field import field
 
 
-def test_dump_flags():
-    """Test field dump flags
+def test_field_basic():
+    """Test basic field functionality
     """
-    f = field(dump_flags={"flag_a", "flag_b"})
-    assert f.dump_flags == {"flag_a", "flag_b"}
+    f = field(default=42)
+    assert f.default_value == 42
 
-    f2 = f.fork(dump_flags={"flag_c",})
-    assert f2.dump_flags == {"flag_c",}
+    f2 = f.fork(default=100)
+    assert f2.default_value == 100
     

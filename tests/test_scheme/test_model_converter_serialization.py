@@ -33,30 +33,41 @@ def test_model_converter_direct_usage():
 
 
 def test_model_converter_with_flags():
-    """Test ModelConverter handles dump_flags correctly."""
+    """Test ModelConverter handles field masks correctly."""
     
     class Post(BaseModel):
-        id: Field[int] = field(dump_flags={"read_only"})
-        title: Field[str] = field(dump_flags={"user_editable"})
-        content: Field[str] = field(dump_flags={"user_editable"})
-        internal_note: Field[str] = field(dump_flags={"admin_only"})
+        id: int
+        title: str
+        content: str
+        internal_note: str
     
     post = Post(id=1, title="Hello", content="World", internal_note="Secret")
     
     converter = ModelConverter(Post)
     
-    # Exclude read_only fields
-    result = converter.dump_to_dict(post, exclude_flags={"read_only"})
-    assert "id" not in result
-    assert "title" in result
-    assert "content" in result
-    assert "internal_note" in result
+    # Register mask presets
+    converter.register_mask_preset("public", (Post.id, Post.title, Post.content))
+    converter.register_mask_preset("user_editable", (Post.title, Post.content))
     
-    # Include only user_editable fields
-    result = converter.dump_to_dict(post, include_flags={"user_editable"})
+    # Use preset to get only public fields
+    result = converter.dump_to_dict(post, mask_preset="public")
+    assert "id" in result
+    assert "title" in result
+    assert "content" in result
+    assert "internal_note" not in result
+    
+    # Use preset to get only user_editable fields
+    result = converter.dump_to_dict(post, mask_preset="user_editable")
     assert "id" not in result
     assert "title" in result
     assert "content" in result
+    assert "internal_note" not in result
+    
+    # Use fields tuple directly
+    result = converter.dump_to_dict(post, fields=(Post.title,))
+    assert "id" not in result
+    assert "title" in result
+    assert "content" not in result
     assert "internal_note" not in result
 
 

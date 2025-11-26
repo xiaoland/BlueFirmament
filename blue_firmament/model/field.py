@@ -143,11 +143,10 @@ class Field(typing.Generic[FieldValueTV]):
     - Describes field metadata (name, type, default value, etc.)
     - Defines field constraints through validators and converters
     - Provides field-level value access (descriptor protocol)
-    - Stores field configuration (dump_flags, is_key, etc.)
+    - Stores field configuration (is_key, is_partial, etc.)
     
-    Note: Serialization logic has been moved to ModelConverter. Field only 
-    provides thin wrapper methods that delegate to converters for backward 
-    compatibility and convenience.
+    Note: Serialization logic is handled by ModelConverter. Field masks 
+    in ModelConverter control which fields are included in serialization.
 
     Features
     --------
@@ -177,7 +176,6 @@ class Field(typing.Generic[FieldValueTV]):
         converter: Opt[BaseConverter[FieldValueTV]] = None,
         validators: Opt[typing.Iterable["BaseValidator"]] = None,
         is_partial: bool = False,
-        dump_flags: Opt[set[str]] = None,
         init: bool = True,
     ):
         """
@@ -200,9 +198,6 @@ class Field(typing.Generic[FieldValueTV]):
         :param is_partial:
             If True, field value left undefined if not provided, and
             default value will not be applied.
-        :param dump_flags:
-            Flags control whether this field should be dumped when
-            dumping model.
         :param is_key: 
             This field is a key
         :param is_key_natural:
@@ -224,7 +219,6 @@ class Field(typing.Generic[FieldValueTV]):
         self.__converter: BaseConverter | None = converter
         self.__validators: typing.List["BaseValidator"] = list(validators or [])
         self.__is_partial = is_partial
-        self.__dump_flags = dump_flags or set()
         self.__init = init
 
     # FIXME all default must be negative, or default value will override original value even if \
@@ -243,7 +237,6 @@ class Field(typing.Generic[FieldValueTV]):
         converter: Opt[BaseConverter[FieldValueTV]] = None,
         fork_validators: bool = False,
         is_partial: Opt[bool] = None,
-        dump_flags: Opt[set[str]] = None,
         init: Opt[bool] = None,
     ) -> typing.Self:
         return self.__class__(
@@ -258,7 +251,6 @@ class Field(typing.Generic[FieldValueTV]):
             converter=converter or self.__converter,
             validators=self.__validators if fork_validators else None,
             is_partial=is_partial or self.__is_partial,
-            dump_flags=dump_flags or self.__dump_flags,
             init=init or self.__init,
             vtype=vtype if vtype is not _undefined else self.__vtype
         )
@@ -336,22 +328,6 @@ class Field(typing.Generic[FieldValueTV]):
             raise ValueError('Field model is not defined')
         return self.__model_cls
     
-    @property
-    def dump_flags(self) -> set[str]:
-        """Field dump flags - metadata controlling field inclusion in serialization.
-        
-        These flags are declarative configuration that describe in which contexts
-        this field should be included when serializing. The actual filtering logic
-        based on these flags is in ModelConverter.dump_to_dict().
-        
-        Examples: {"read_only"}, {"user_editable"}, {"admin_only"}
-        """
-        return self.__dump_flags
-
-    @dump_flags.setter
-    def dump_flags(self, value: set[str]) -> None:
-        self.__dump_flags = value
-
     def _set_model_cls(self, 
         model_cls: Opt[typing.Type["BaseModel"]],
         no_raise: bool = False,
@@ -446,28 +422,6 @@ class Field(typing.Generic[FieldValueTV]):
         else:
             return self.convert(value)
     
-    def dump_val_to_str(self, value: FieldValueTV):
-        """Dump field value to string
-        
-        Note: This is a convenience method that delegates to the field's 
-        converter. The actual serialization logic is in the converter.
-        """
-        if value is not _undefined:
-            return self.converter.dump_to_str(value)
-        else:
-            return _undefined.value
-
-    def dump_val_to_jsonable(self, value: FieldValueTV):
-        """Dump field value to jsonable types
-        
-        Note: This is a convenience method that delegates to the field's 
-        converter. The actual serialization logic is in the converter.
-        """
-        if value is not _undefined:
-            return self.converter.dump_to_jsonable(value)
-        else:
-            return _undefined.value
-
     @property
     def converter(self) -> BaseConverter:
         if self.__converter is None:
@@ -624,7 +578,6 @@ def field(
     converter: Opt[BaseConverter] = None,
     validators: Opt[typing.Iterable['BaseValidator']] = None,
     is_partial: bool = False,
-    dump_flags: Opt[set[str]] = None,
     init: bool = True
 ):
     return Field[T](
@@ -637,7 +590,6 @@ def field(
         converter=converter,
         validators=validators,
         is_partial=is_partial,
-        dump_flags=dump_flags,
         init=init
     )
 
@@ -692,9 +644,6 @@ class CompositeField(
         if no_raise:
             return None
         raise ValueError("CompositeField can't have a name")
-    
-    def dump_val_to_jsonable(self, value: ModelTV) -> typing.Dict[str, typing.Any]:
-        return value.dump_to_dict(jsonable=True)
     
     @property
     def sub_fields(self) -> typing.Iterable[Field]:

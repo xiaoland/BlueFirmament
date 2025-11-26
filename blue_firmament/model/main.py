@@ -535,76 +535,60 @@ class BaseModel(metaclass=BFModelMetaclass):
     #         return self.dump_to_dict()
 
     def __str__(self):
-        return self.dump_to_str()
-
-    def dump_to_str(
-        self,
-        use_name: bool = False
-    ) -> str:
-        """Serialize model to string
-
-        :param use_name: use field's name instead of in_model_name,
-                        defaults to False
-        :type use_name: bool, optional
+        from .converter import ModelConverter
+        converter = ModelConverter(self.__class__)
+        return converter.dump_to_str(self)
+    
+    def dump_to_str(self, use_name: bool = False) -> str:
+        """Serialize model to string.
         
-        Note: This method now delegates to ModelConverter for actual serialization logic.
+        .. deprecated::
+            Use ModelConverter directly for serialization. This method is kept for 
+            backward compatibility but may be removed in future versions.
+        
+        :param use_name: use field's name instead of in_model_name
         """
         from .converter import ModelConverter
         converter = ModelConverter(self.__class__)
         return converter.dump_to_str(self, use_name=use_name)
-
+    
     def dump_to_dict(
         self,
+        fields: Opt[typing.Tuple[Field, ...]] = None,
+        mask_preset: Opt[str] = None,
         only_dirty: bool = False,
         exclude_natural_key: bool = False,
         exclude_unset: Opt[bool] = None,
-        exclude_flags: Opt[set[str]] = None,
-        include_flags: Opt[set[str]] = None,
         only_private: bool = False,
         jsonable: bool = True
     ) -> dict:
-        """Serialize to (jsonable) dict
-
-        :param only_dirty: 
-            If True, dirty fields will be reset.
-        :param exclude_natural_key:
-            If True, exclude natural key field.
-        :param exclude_unset:
-            If True, exclude unset fields.
-            If None and is partial model, defaults to True.
-        :param exclude_flags:
-            If provided, exclude fields with all these flags.
-            If not provided, ``default_exclude_dump_flags`` configured on
-            model will be used.
-            Prior to ``include_flags`` (same for model default).
-        :param include_flags:
-            If provided, only dumps fields with all these flags.
-            If not provided, ``default_include_dump_flags`` configured on
-            model will be used.
-        :param only_private:
-            If True, only private fields will de dumped.
-        :param jsonable:
-            If True, ensure the return is jsonable.
-
-        Behaviour
-        ----------
-        - 调用每个字段的校验器来序列化字段值
+        """Serialize to (jsonable) dict.
         
-        Note: This method now delegates to ModelConverter for actual serialization logic.
+        .. deprecated::
+            Use ModelConverter directly for serialization. This method is kept for 
+            backward compatibility but may be removed in future versions.
+        
+        :param fields: Tuple of Field instances to include. If None, includes all fields.
+        :param mask_preset: Name of a registered mask preset to use.
+        :param only_dirty: If True, only include fields that have been modified.
+        :param exclude_natural_key: If True, exclude natural key field.
+        :param exclude_unset: If True, exclude unset fields.
+        :param only_private: If True, only private fields will be dumped.
+        :param jsonable: If True, ensure the return is jsonable.
         """
         from .converter import ModelConverter
         converter = ModelConverter(self.__class__)
         return converter.dump_to_dict(
             self,
+            fields=fields,
+            mask_preset=mask_preset,
             only_dirty=only_dirty,
             exclude_natural_key=exclude_natural_key,
             exclude_unset=exclude_unset,
-            exclude_flags=exclude_flags,
-            include_flags=include_flags,
             only_private=only_private,
             jsonable=jsonable
         )
-    
+
     def __getitem__(self, key: str | Field) -> typing.Any:
         """通过字段名/字段获取字段值
 
