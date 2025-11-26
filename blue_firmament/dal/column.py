@@ -67,7 +67,6 @@ class Column(Field[FieldValueTV]):
         converter: Opt[BaseConverter[FieldValueTV]] = None,
         validators: Opt[typing.Iterable] = None,
         is_partial: bool = False,
-        dump_flags: Opt[set[str]] = None,
         init: bool = True,
         # SQL-specific properties
         column_name: Opt[str] = None,
@@ -94,7 +93,6 @@ class Column(Field[FieldValueTV]):
         :param converter: Value converter.
         :param validators: Value validators.
         :param is_partial: Whether this field is partial.
-        :param dump_flags: Dump flags for serialization.
         :param init: Whether to include in __init__.
         :param column_name: SQL column name (defaults to field name).
         :param column_type: SQL data type (e.g., 'VARCHAR(255)', 'INTEGER').
@@ -128,7 +126,6 @@ class Column(Field[FieldValueTV]):
             converter=converter,
             validators=validators,
             is_partial=is_partial,
-            dump_flags=dump_flags,
             init=init,
         )
 
@@ -309,7 +306,6 @@ class Column(Field[FieldValueTV]):
         converter: Opt[BaseConverter[FieldValueTV]] = None,
         fork_validators: bool = False,
         is_partial: Opt[bool] = None,
-        dump_flags: Opt[set[str]] = None,
         init: Opt[bool] = None,
         # SQL-specific properties
         column_name: Opt[str] = None,
@@ -337,7 +333,6 @@ class Column(Field[FieldValueTV]):
             converter=converter,
             fork_validators=fork_validators,
             is_partial=is_partial,
-            dump_flags=dump_flags,
             init=init,
         )
 
@@ -355,7 +350,6 @@ class Column(Field[FieldValueTV]):
             converter=parent_fork._Field__converter,
             validators=parent_fork._Field__validators if fork_validators else None,
             is_partial=parent_fork._Field__is_partial,
-            dump_flags=parent_fork._Field__dump_flags,
             init=parent_fork._Field__init,
             column_name=column_name or self.__column_name,
             column_type=column_type or self.__column_type,
@@ -382,7 +376,6 @@ def column(
     converter: Opt[BaseConverter] = None,
     validators: Opt[typing.Iterable] = None,
     is_partial: bool = False,
-    dump_flags: Opt[set[str]] = None,
     init: bool = True,
     # SQL-specific properties
     column_name: Opt[str] = None,
@@ -416,7 +409,6 @@ def column(
         converter=converter,
         validators=validators,
         is_partial=is_partial,
-        dump_flags=dump_flags,
         init=init,
         column_name=column_name,
         column_type=column_type,
