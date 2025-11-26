@@ -234,14 +234,23 @@ class DALModel(BaseModel):
         Parameters
         ----------
         exclude_auto_increment : bool
-            Whether to exclude auto-increment fields.
+            Whether to exclude auto-increment fields (natural keys).
 
         Returns
         -------
         dict
             Dictionary suitable for INSERT operations.
         """
-        data = self.dump_to_dict(exclude_natural_key=exclude_auto_increment)
+        from ..model.converter import ModelConverter
+        converter = ModelConverter(self.__class__)
+        data = converter.dump_to_dict(self)
+        
+        # DAL-specific: exclude natural key if requested
+        if exclude_auto_increment:
+            key_field = self._try_get_key_field()
+            if key_field and key_field.is_key_natural():
+                data.pop(key_field.in_model_name, None)
+        
         return data
 
     def dump_to_update_dict(
@@ -260,7 +269,9 @@ class DALModel(BaseModel):
         dict
             Dictionary suitable for UPDATE operations.
         """
-        return self.dump_to_dict(only_dirty=only_dirty)
+        from ..model.converter import ModelConverter
+        converter = ModelConverter(self.__class__)
+        return converter.dump_to_dict(self, only_dirty=only_dirty)
 
 
 DALModelTV = typing.TypeVar('DALModelTV', bound=DALModel)

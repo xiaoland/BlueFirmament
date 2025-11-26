@@ -4,6 +4,7 @@
 import datetime
 from blue_firmament.model.main import BaseModel
 from blue_firmament.model import field, Field
+from blue_firmament.model.converter import ModelConverter
 
 
 # Using Model prefix to avoid pytest collecting this as a test class
@@ -12,11 +13,19 @@ class ExampleModel(BaseModel):
     b: str = 'b'
     c: bool = False
 
-def test_dump_to_str():
-    """Test BaseModel.dump_to_str
+def test_str_representation():
+    """Test BaseModel.__str__ via str()
     """
-    dump_res = ExampleModel().dump_to_str()
+    dump_res = str(ExampleModel())
     assert dump_res == 'a=1,b=b,c=False'
+
+
+def test_dict_representation():
+    """Test BaseModel.__dict__ via dict()
+    """
+    model = ExampleModel()
+    dump_res = dict(model)
+    assert dump_res == {'a': 1, 'b': 'b', 'c': False}
 
 def test_dump_flags():
     """Test ModelConverter field masks

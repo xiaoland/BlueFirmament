@@ -71,8 +71,8 @@ def test_model_converter_with_flags():
     assert "internal_note" not in result
 
 
-def test_backward_compatibility():
-    """Test that BaseModel.dump_to_dict still works (delegates to ModelConverter)."""
+def test_dict_and_str_conversion():
+    """Test that dict(model) and str(model) work correctly."""
     
     class Product(BaseModel):
         id: int = 1
@@ -81,11 +81,12 @@ def test_backward_compatibility():
     
     product = Product(id=100, name="Gadget", price=19.99)
     
-    # Old API should still work
-    result = product.dump_to_dict()
+    # dict(model) should work via __dict__
+    result = dict(product)
     assert result == {"id": 100, "name": "Gadget", "price": 19.99}
     
-    result_str = product.dump_to_str()
+    # str(model) should work via __str__
+    result_str = str(product)
     assert "id=100" in result_str
     assert "name=Gadget" in result_str
     assert "price=19.99" in result_str

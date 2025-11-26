@@ -17,9 +17,11 @@ class JsonEncoder(json.JSONEncoder):
     
     def default(self, o):
         if isinstance(o, BaseModel):
-            return o.dump_to_dict()
+            from ..model.converter import ModelConverter
+            converter = ModelConverter(o.__class__)
+            return converter.dump_to_dict(o)
         if isinstance(o, JsonBody):
-            return o.dump_to_dict()
+            return dict(o)
         if isinstance(o, FieldValueProxy):
             return o.obj
         if isinstance(o, set):

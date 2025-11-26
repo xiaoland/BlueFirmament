@@ -269,7 +269,6 @@ class ModelConverter(BaseConverter[ModelTV], typing.Generic[ModelTV]):
         fields: Opt[typing.Tuple['Field', ...]] = None,
         mask_preset: Opt[str] = None,
         only_dirty: bool = False,
-        exclude_natural_key: bool = False,
         exclude_unset: Opt[bool] = None,
         only_private: bool = False,
         jsonable: bool = True
@@ -284,8 +283,6 @@ class ModelConverter(BaseConverter[ModelTV], typing.Generic[ModelTV]):
         :param mask_preset: Name of a registered mask preset to use.
         :param only_dirty: 
             If True, only include fields that have been modified.
-        :param exclude_natural_key:
-            If True, exclude natural key field.
         :param exclude_unset:
             If True, exclude unset fields.
             If None and is partial model, defaults to True.
@@ -322,11 +319,6 @@ class ModelConverter(BaseConverter[ModelTV], typing.Generic[ModelTV]):
                 field_names = model_instance.__dirty_fields__
             else:
                 field_names = set(model_instance.__fields__.keys())
-
-            if exclude_natural_key:
-                key_field = model_instance._try_get_key_field()
-                if key_field and key_field.is_key_natural():
-                    field_names = field_names - {key_field.in_model_name}
 
             if exclude_unset is True or (exclude_unset is None and model_instance.__partial__):
                 field_names = field_names - model_instance.__unset_fields__

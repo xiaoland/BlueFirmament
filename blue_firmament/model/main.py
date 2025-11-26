@@ -391,17 +391,18 @@ class BaseModel(metaclass=BFModelMetaclass):
     - Manages field instances and their metadata
     - Provides convenient API for data access
     
-    Note: Serialization (dumping) logic has been moved to ModelConverter. 
-    BaseModel provides dump_to_dict/dump_to_str methods for backward 
-    compatibility that delegate to ModelConverter.
-
-    Features
-    ---------
     Serialization
-    ^^^^^^^^^^^^^
-    Model serialization is now handled by ModelConverter. The dump_to_dict() 
-    and dump_to_str() methods on BaseModel delegate to ModelConverter for 
-    the actual serialization logic.
+    -------------
+    Use ModelConverter to serialize or deserialize a model::
+    
+        from blue_firmament.model.converter import ModelConverter
+        
+        converter = ModelConverter(User)
+        result = converter.dump_to_dict(user_instance)
+        
+        # With field masks
+        converter.register_mask_preset("public", (User.id, User.name))
+        result = converter.dump_to_dict(user_instance, mask_preset="public")
 
     Partial
     ^^^^^^^
@@ -488,9 +489,11 @@ class BaseModel(metaclass=BFModelMetaclass):
         Precondition:
         - Inherited fields' name unchanged.
         """
+        from .converter import ModelConverter
         data = {}
         for parent in parents:
-            data.update(parent.dump_to_dict())
+            converter = ModelConverter(parent.__class__)
+            data.update(converter.dump_to_dict(parent))
 
         return cls(**data)
 
@@ -539,55 +542,15 @@ class BaseModel(metaclass=BFModelMetaclass):
         converter = ModelConverter(self.__class__)
         return converter.dump_to_str(self)
     
-    def dump_to_str(self, use_name: bool = False) -> str:
-        """Serialize model to string.
+    @property
+    def __dict__(self) -> dict:
+        """Return model fields as a dictionary.
         
-        .. deprecated::
-            Use ModelConverter directly for serialization. This method is kept for 
-            backward compatibility but may be removed in future versions.
-        
-        :param use_name: use field's name instead of in_model_name
+        This allows using dict(model) to get a dictionary representation.
         """
         from .converter import ModelConverter
         converter = ModelConverter(self.__class__)
-        return converter.dump_to_str(self, use_name=use_name)
-    
-    def dump_to_dict(
-        self,
-        fields: Opt[typing.Tuple[Field, ...]] = None,
-        mask_preset: Opt[str] = None,
-        only_dirty: bool = False,
-        exclude_natural_key: bool = False,
-        exclude_unset: Opt[bool] = None,
-        only_private: bool = False,
-        jsonable: bool = True
-    ) -> dict:
-        """Serialize to (jsonable) dict.
-        
-        .. deprecated::
-            Use ModelConverter directly for serialization. This method is kept for 
-            backward compatibility but may be removed in future versions.
-        
-        :param fields: Tuple of Field instances to include. If None, includes all fields.
-        :param mask_preset: Name of a registered mask preset to use.
-        :param only_dirty: If True, only include fields that have been modified.
-        :param exclude_natural_key: If True, exclude natural key field.
-        :param exclude_unset: If True, exclude unset fields.
-        :param only_private: If True, only private fields will be dumped.
-        :param jsonable: If True, ensure the return is jsonable.
-        """
-        from .converter import ModelConverter
-        converter = ModelConverter(self.__class__)
-        return converter.dump_to_dict(
-            self,
-            fields=fields,
-            mask_preset=mask_preset,
-            only_dirty=only_dirty,
-            exclude_natural_key=exclude_natural_key,
-            exclude_unset=exclude_unset,
-            only_private=only_private,
-            jsonable=jsonable
-        )
+        return converter.dump_to_dict(self, jsonable=True)
 
     def __getitem__(self, key: str | Field) -> typing.Any:
         """通过字段名/字段获取字段值
@@ -647,7 +610,9 @@ class BaseModel(metaclass=BFModelMetaclass):
         if not isinstance(model, BaseModel):
             raise TypeError(f"Expected BaseModel, got {type(model)}")
 
-        dumped = model.dump_to_dict()
+        from .converter import ModelConverter
+        converter = ModelConverter(model.__class__)
+        dumped = converter.dump_to_dict(model)
         for field_name, value in dumped.items():
             self.__fields__[field_name].__set__(self, value)
 
@@ -684,7 +649,9 @@ def merge(model1: BaseModel, model2: BaseModel) -> None:
     >>> merge(ModelA(a=1), ModelB(a=_undefined))
     ModelB: a=1
     """
-    for field_ in model2.dump_to_dict():
+    from .converter import ModelConverter
+    converter = ModelConverter(model2.__class__)
+    for field_ in converter.dump_to_dict(model2):
         try:
             model1[field_] = model2[field_]
         except KeyError:
