@@ -532,12 +532,12 @@ class BaseModel(metaclass=BFModelMetaclass):
         :param use_name: use field's name instead of in_model_name,
                         defaults to False
         :type use_name: bool, optional
+        
+        Note: This method now delegates to ModelConverter for actual serialization logic.
         """
-        return ",".join(
-            f"{in_name if not use_name else i.name}={\
-                i.dump_val_to_str(FieldValueProxy.dump(self[i]))}"
-            for in_name, i in self.__fields__.items()
-        )
+        from .converter import ModelConverter
+        converter = ModelConverter(self.__class__)
+        return converter.dump_model_to_str(self, use_name=use_name)
 
     def dump_to_dict(
         self,
@@ -575,55 +575,21 @@ class BaseModel(metaclass=BFModelMetaclass):
         Behaviour
         ----------
         - 调用每个字段的校验器来序列化字段值
+        
+        Note: This method now delegates to ModelConverter for actual serialization logic.
         """
-        data = dict()
-        field_names: typing.Set[str]
-
-        if only_private:
-            field_names = set(self.__private_fields__.keys())
-            for k in field_names:
-                data[k] = getattr(self, k)
-        else:
-            if only_dirty:
-                field_names = self.__dirty_fields__
-            else:
-                field_names = set(self.__fields__.keys())
-
-            if exclude_natural_key:
-                key_field = self._try_get_key_field()
-                if key_field and key_field.is_key_natural():
-                    field_names = field_names - {key_field.in_model_name}
-
-            if exclude_unset is True or (exclude_unset is None and self.__partial__):
-                field_names = field_names - self.__unset_fields__
-
-            if exclude_flags is None and self.__default_edflags__:
-                exclude_flags = self.__default_edflags__
-
-            if include_flags is None and self.__default_idflags__:
-                include_flags = self.__default_idflags__
-
-            for k in field_names:
-                field: Field = self.__fields__[k]
-
-                if exclude_flags:
-                    if field.dump_flags.issuperset(exclude_flags):
-                        continue
-
-                if include_flags and not exclude_flags:
-                    if not field.dump_flags.issuperset(include_flags):
-                        continue
-
-                field_v = FieldValueProxy.dump(getattr(self, k))
-                if jsonable:
-                    if isinstance(field, CompositeField):
-                        data.update(field.dump_val_to_jsonable(field_v))
-                    else:
-                        data[k] = field.dump_val_to_jsonable(field_v)
-                else:
-                    data[k] = field_v
-
-        return data
+        from .converter import ModelConverter
+        converter = ModelConverter(self.__class__)
+        return converter.dump_model_to_dict(
+            self,
+            only_dirty=only_dirty,
+            exclude_natural_key=exclude_natural_key,
+            exclude_unset=exclude_unset,
+            exclude_flags=exclude_flags,
+            include_flags=include_flags,
+            only_private=only_private,
+            jsonable=jsonable
+        )
     
     def __getitem__(self, key: str | Field) -> typing.Any:
         """通过字段名/字段获取字段值
