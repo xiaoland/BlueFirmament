@@ -1,4 +1,4 @@
-"""数据模型转换器
+"""BF Model Converter
 
 数据模型转换器尽可能地保证数据的类型安全、值安全，
 常用于数据模型字段中
@@ -18,11 +18,14 @@ from ..utils.typing_ import JsonDumpable, get_origin, is_json_dumpable, is_named
 from ..utils.main import singleton
 
 if typing.TYPE_CHECKING:
-    from . import BaseScheme
+    from . import BaseModel
 
+# Backwards compatibility
+BaseScheme = typing.TYPE_CHECKING and "BaseModel" or None
 
 T = typing.TypeVar('T')
-SchemeTV = typing.TypeVar('SchemeTV', bound='BaseScheme')
+ModelTV = typing.TypeVar('ModelTV', bound='BaseModel')
+SchemeTV = ModelTV  # Backwards compatibility
 EnumMemberTV = typing.TypeVar('EnumMemberTV', bound=enum.Enum)
 ConverterResultTV = typing.TypeVar('ConverterResultTV')
 ConverterModeT = typing.Literal['base'] | typing.Literal['strict']
@@ -36,7 +39,7 @@ class ConverterProtocol(typing.Protocol):
 
 class BaseConverter(typing.Generic[ConverterResultTV], abc.ABC):
     
-    """碧霄转换器基类
+    """BF Base Converter
 
     Features
     --------
@@ -125,15 +128,15 @@ def get_converter_from_anno(
     >>> get_converter_from_anno(typing.Union[str, int])
     UnionConverter[str, int]
     >>> get_converter_from_anno(typing.Union[str, None])
-    OptionalConveter[str]
+    OptionalConverter[str]
     >>> get_converter_from_anno(typing.Optional[str])
-    OptionalConveter[str]
+    OptionalConverter[str]
     """
-    from .main import BaseScheme
+    from .main import BaseModel
 
     ortp = get_origin(tp)
-    if safe_issubclass(ortp, BaseScheme):
-        return SchemeConverter(ortp)
+    if safe_issubclass(ortp, BaseModel):
+        return ModelConverter(ortp)
     if safe_issubclass(ortp, enum.Enum):
         return EnumConverter(ortp)
 
@@ -143,6 +146,8 @@ def get_converter_from_anno(
         return FloatConverter()
     if ortp is str:
         return StrConverter()
+    if ortp is bool:
+        return BoolConverter()
     if ortp is None:
         return NoneConverter()
     if ortp is datetime.datetime:
@@ -180,7 +185,7 @@ def get_converter_from_anno(
         if len(args) == 2 and (
             args[1] is types.NoneType or args[0] is types.NoneType
         ):
-            return OptionalConveter(args[1] if args[1] is not types.NoneType else args[0])
+            return OptionalConverter(args[1] if args[1] is not types.NoneType else args[0])
 
         return UnionConverter(*args)
     
@@ -204,41 +209,46 @@ class AnyConverter(BaseConverter[typing.Any]):
     def type(self): return typing.Type[typing.Any]
 
 
-class SchemeConverter(BaseConverter[SchemeTV], typing.Generic[SchemeTV]):
+class ModelConverter(BaseConverter[ModelTV], typing.Generic[ModelTV]):
 
-    """数据模型转换器
+    """Model Converter for converting data to model instances.
     """
 
     def __init__(self, 
-        scheme_cls: typing.Type[SchemeTV],
+        model_cls: typing.Type[ModelTV],
         mode: ConverterModeT = 'base'
     ) -> None:
         
         super().__init__(mode)
-        self.scheme_cls = scheme_cls
+        self.model_cls = model_cls
+        self.scheme_cls = model_cls  # Backwards compatibility
 
-    def __call__(self, value: dict | SchemeTV, **kwargs) -> SchemeTV:
+    def __call__(self, value: dict | ModelTV, **kwargs) -> ModelTV:
         """
         :param value: 序列化值
         :param kwargs: 额外参数
             - _task_context: 任务上下文
         """
-        from . import BaseScheme
+        from . import BaseModel
 
         if isinstance(value, dict):
-            return self.scheme_cls(**value, **kwargs)
-        elif isinstance(value, BaseScheme):
+            return self.model_cls(**value, **kwargs)
+        elif isinstance(value, BaseModel):
             for k, v in kwargs.items():
                 value[k] = v
             return value
         else:
-            raise ValueError('value should be dict or BaseScheme')
+            raise ValueError('value should be dict or BaseModel')
 
     @property
-    def type(self): return self.scheme_cls
+    def type(self): return self.model_cls
 
     def dump_to_jsonable(self, value): 
         return value.dump_to_dict(jsonable=True)
+
+
+# Backwards compatibility alias
+SchemeConverter = ModelConverter
 
 
 class EnumConverter(BaseConverter[EnumMemberTV], typing.Generic[EnumMemberTV]):
@@ -308,7 +318,7 @@ class UnionConverter(BaseConverter):
             typing.Union[*tuple(validator.type for validator in self.sub_conveters)]
         ]
 
-class OptionalConveter(BaseConverter[typing.Optional[ConverterResultTV]]):
+class OptionalConverter(BaseConverter[typing.Optional[ConverterResultTV]]):
 
     def __init__(self, 
         tp: Undefined | typing.Type[ConverterResultTV] = _undefined,
@@ -339,6 +349,29 @@ class OptionalConveter(BaseConverter[typing.Optional[ConverterResultTV]]):
             return None
         else:
             return self.sub_converter.dump_to_jsonable(value)
+
+# Backwards compatibility alias
+OptionalConveter = OptionalConverter
+
+
+class BoolConverter(BaseConverter[bool]):
+    """Boolean Converter"""
+
+    def __call__(self, value: typing.Any, **kwargs) -> bool:
+        if isinstance(value, bool):
+            return value
+        if self.is_base:
+            if isinstance(value, str):
+                if value.lower() in ('true', '1', 'yes', 'on'):
+                    return True
+                if value.lower() in ('false', '0', 'no', 'off'):
+                    return False
+            if isinstance(value, int):
+                return bool(value)
+        raise ValueError(f'Value {value} is not a boolean')
+    
+    @property
+    def type(self): return bool
 
 
 class IntConverter(BaseConverter[int]):

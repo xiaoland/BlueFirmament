@@ -1,12 +1,18 @@
-"""BlueFirmament Scheme's Validator module.
+"""BF Model Validator module.
 
-:doc:`/design/scheme/validator`
+:doc:`/design/model/validator`
 """
 
 __all__ = [
     "BaseValidator",
     "FieldValidator",
     "field_validator",
+    "field_validators",
+    "ModelValidator",
+    "model_validator",
+    # Backwards compatibility
+    "SchemeValidator",
+    "scheme_validator",
 ]
 
 import abc
@@ -19,12 +25,12 @@ from ..utils.main import call_as_sync
 
 if typing.TYPE_CHECKING:
     from .field import Field
-    from .main import BaseScheme
+    from .main import BaseModel
     from ..log.main import LoggerT
 
 
 T = typing.TypeVar("T")
-BaseSchemeTV = typing.TypeVar("BaseSchemeTV", bound="BaseScheme", contravariant=True)
+BaseModelTV = typing.TypeVar("BaseModelTV", bound="BaseModel", contravariant=True)
 class BaseValidator(abc.ABC, typing.Generic[T]):
 
     """Base class for validators.
@@ -55,8 +61,8 @@ class FieldValidator(BaseValidator[T], typing.Generic[T]):
     This validator will be added to the field once instantiated.
     """
 
-    class InstanceMethodFunc(typing.Protocol[BaseSchemeTV]):
-        def __call__(_, self: BaseSchemeTV, value: typing.Any) -> typing.Union[
+    class InstanceMethodFunc(typing.Protocol[BaseModelTV]):
+        def __call__(_, self: BaseModelTV, value: typing.Any) -> typing.Union[
             None, typing.Coroutine[None, None, None]
         ]:
             ...
@@ -78,10 +84,10 @@ class FieldValidator(BaseValidator[T], typing.Generic[T]):
         :param field: The field to validate.
         :param func: The function to call to validate the field.
         :param mode: 
-            init_assign: validate only when assigning during scheme instantiating.
+            init_assign: validate only when assigning during model instantiating.
             after: validate immediately after all fields are initialized and when assigning after
             instantiating.
-            assign: validate when field is assigned a new value (after scheme instantiating).
+            assign: validate when field is assigned a new value (after model instantiating).
         """
         
         self.__func = func
@@ -91,52 +97,52 @@ class FieldValidator(BaseValidator[T], typing.Generic[T]):
         self._field._add_validator(self)
 
     def _get_logger(self,
-        scheme_ins: "BaseScheme",
+        model_ins: "BaseModel",
     ):
         """Get validator level logger
         """
-        return scheme_ins._logger.bind(
+        return model_ins._logger.bind(
             validator_func=self.__func.__qualname__,
         )
 
     def __call__(self, 
         value: typing.Any,
-        scheme_ins: "Undefined | BaseScheme" = _undefined,
+        model_ins: "Undefined | BaseModel" = _undefined,
         force: bool = False,
         **kwargs
     ) -> None:
         """
-        :param scheme_ins: If func is instance method, provide the instance.
+        :param model_ins: If func is instance method, provide the instance.
         :param force:
             If True, bypass mode check
         """
-        if scheme_ins is _undefined:
+        if model_ins is _undefined:
             raise ValueError(
-                "using instance method, but no scheme instance provided"
+                "using instance method, but no model instance provided"
             )
         if not force:
             if self.__mode == "after":
-                if not scheme_ins.__instantiated__:
-                    scheme_ins.__after_field_validators__.append(self)
+                if not model_ins.__instantiated__:
+                    model_ins.__after_field_validators__.append(self)
                     return None
             if self.__mode == "init_assign":
-                if scheme_ins.__instantiated__:
+                if model_ins.__instantiated__:
                     return None
             if self.__mode == "assign":
-                if not scheme_ins.__instantiated__:
+                if not model_ins.__instantiated__:
                     return None
         
-        logger = self._get_logger(scheme_ins=scheme_ins)
+        logger = self._get_logger(model_ins=model_ins)
 
         # log extrance
         logger.debug(
             "Enter field validator",
-            field_name=self._field.in_scheme_name, value=value
+            field_name=self._field.in_model_name, value=value
         )
         
-        scheme_ins_copy = copy.copy(scheme_ins)
-        scheme_ins_copy._set_logger(logger)
-        call_as_sync(self.__func, scheme_ins_copy, value)
+        model_ins_copy = copy.copy(model_ins)
+        model_ins_copy._set_logger(logger)
+        call_as_sync(self.__func, model_ins_copy, value)
         return None
 
 
@@ -153,19 +159,19 @@ def field_validator(
     --------
     .. code-block:: python
         
-        from blue_firmament.scheme import field_validator
-        from blue_firmament.scheme import BaseScheme
+        from blue_firmament.model import field_validator
+        from blue_firmament.model import BaseModel
 
-        class Post(BaseScheme):
+        class Post(BaseModel):
             __dal_path__ = ("post",)
             
             _id: int
-            status: FieldT(str) = Field("open")
+            status: Field[str] = Field("open")
 
-        class Comment(BaseScheme):
+        class Comment(BaseModel):
             __dal_path__ = ("comment",)
             
-            post: FieldT[int] = Field()
+            post: Field[int] = Field()
             ...
 
             @field_validator(post)
@@ -183,8 +189,8 @@ def field_validator(
             Supports:
             - ``def func(value: Any) -> None``
             - ``async def func(value: Any) -> None``
-            - ``def func(self: BaseScheme, value: Any) -> None``
-            - ``async def func(self: BaseScheme, value: Any) -> None``
+            - ``def func(self: BaseModel, value: Any) -> None``
+            - ``async def func(self: BaseModel, value: Any) -> None``
         """
         return FieldValidator(field=field, func=func, mode=mode)
 
@@ -202,8 +208,8 @@ def field_validators(
             Supports:
             - ``def func(value: Any) -> None``
             - ``async def func(value: Any) -> None``
-            - ``def func(self: BaseScheme, value: Any) -> None``
-            - ``async def func(self: BaseScheme, value: Any) -> None``
+            - ``def func(self: BaseModel, value: Any) -> None``
+            - ``async def func(self: BaseModel, value: Any) -> None``
         """
         res = []
         for field in fields:
@@ -213,15 +219,15 @@ def field_validators(
     return wrapper
 
 
-class SchemeValidator(BaseValidator):
+class ModelValidator(BaseValidator):
 
-    """Validator for a scheme.
+    """Validator for a model.
 
-    This validator will be added to the scheme when creating class.
+    This validator will be added to the model when creating class.
     """
 
-    class InstanceMethodFunc(typing.Protocol[BaseSchemeTV]):
-        def __call__(_, self: BaseSchemeTV) -> typing.Union[
+    class InstanceMethodFunc(typing.Protocol[BaseModelTV]):
+        def __call__(_, self: BaseModelTV) -> typing.Union[
             None, typing.Coroutine[None, None, None]
         ]:
             ...
@@ -229,7 +235,7 @@ class SchemeValidator(BaseValidator):
     FuncT = typing.Union[
         InstanceMethodFunc
     ]
-    """Function types that SchemeValidator can accept.
+    """Function types that ModelValidator can accept.
     """
 
     def __init__(self, 
@@ -237,45 +243,50 @@ class SchemeValidator(BaseValidator):
     ) -> None:
         
         """
-        :param func: The function to call to validate the scheme.
+        :param func: The function to call to validate the model.
         """
         self.__func = func
 
     def _get_logger(self,
-        scheme_ins: "BaseScheme",
+        model_ins: "BaseModel",
     ):
-        return scheme_ins._logger.bind(
+        return model_ins._logger.bind(
             validator_func=self.__func.__qualname__,
         )
 
     def __call__(self, 
-        scheme_ins: "BaseScheme",
+        model_ins: "BaseModel",
         **kwargs
     ) -> None:
         
         """
-        :param scheme_ins: The scheme instance to validate.
+        :param model_ins: The model instance to validate.
         """
-        logger = self._get_logger(scheme_ins=scheme_ins)
+        logger = self._get_logger(model_ins=model_ins)
 
         # log extrance
-        logger.info("Enter scheme validator", 
-            scheme_name=scheme_ins.__class__.__name__, value=scheme_ins.dump_to_dict()
+        logger.info("Enter model validator", 
+            model_name=model_ins.__class__.__name__, value=model_ins.dump_to_dict()
         )
 
-        scheme_ins_copy = copy.copy(scheme_ins)
-        scheme_ins_copy._set_logger(logger)
-        call_as_sync(self.__func, scheme_ins_copy)
+        model_ins_copy = copy.copy(model_ins)
+        model_ins_copy._set_logger(logger)
+        call_as_sync(self.__func, model_ins_copy)
 
 
-def scheme_validator(func: SchemeValidator.FuncT) -> SchemeValidator:
-    """Decorator to create a scheme validator.
+def model_validator(func: ModelValidator.FuncT) -> ModelValidator:
+    """Decorator to create a model validator.
 
-    :param func: The function to call to validate the scheme.
+    :param func: The function to call to validate the model.
 
         Supports:
-        - ``def func(self: BaseScheme) -> None``
-        - ``async def func(self: BaseScheme) -> None``
+        - ``def func(self: BaseModel) -> None``
+        - ``async def func(self: BaseModel) -> None``
 
     """
-    return SchemeValidator(func)
+    return ModelValidator(func)
+
+
+# Backwards compatibility aliases
+SchemeValidator = ModelValidator
+scheme_validator = model_validator

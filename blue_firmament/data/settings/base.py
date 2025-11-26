@@ -1,6 +1,6 @@
 
 from ...setting import Setting, make_setting_singleton
-from ...scheme import private_field, FieldT
+from ...model import private_field, FieldT
 
 class BaseSetting(Setting):
 

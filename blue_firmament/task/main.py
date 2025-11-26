@@ -20,10 +20,10 @@ from typing import Optional as Opt
 
 from ..utils.enum_ import dump_enum, load_enum
 from .._types import PathParamsT, Undefined, _undefined
-from ..scheme.converter import AnyConverter, get_converter_from_anno
+from ..model.converter import AnyConverter, get_converter_from_anno
 
 if typing.TYPE_CHECKING:
-    from ..scheme.converter import BaseConverter
+    from ..model.converter import BaseConverter
 
 
 class Method(enum.Enum):

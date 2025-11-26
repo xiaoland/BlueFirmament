@@ -25,8 +25,8 @@ def dump_query_coms_like(
     """
     res = []
 
-    from ..scheme import BaseScheme
-    from ..scheme.field import Field
+    from ..model import BaseScheme
+    from ..model.field import Field
     for item in values:
         if item is None:
             continue
@@ -61,5 +61,5 @@ def dump_field_like(value: FieldLikeType) -> str:
         the `dal_path` is different from the scheme's dal_path.
         (for resolving reference)
     """
-    from ..scheme.field import dump_field_name
+    from ..model.field import dump_field_name
     return dump_field_name(dump_enum(value))

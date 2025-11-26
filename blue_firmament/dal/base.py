@@ -22,7 +22,7 @@ from ..utils.enum_ import dump_enum
 
 if typing.TYPE_CHECKING:
     from ..auth import AuthSession
-    from ..scheme.field import Field, FieldValueProxy
+    from ..model.field import Field, FieldValueProxy
     from blue_firmament.task.context import ExtendedTaskContext
 
 

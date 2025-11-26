@@ -9,7 +9,7 @@ if typing.TYPE_CHECKING:
     from ..task.result import JsonBody
 
 if typing.TYPE_CHECKING:
-    from ..scheme import BaseScheme
+    from ..model import BaseModel
 
 def is_annotated(tp: typing.Type) -> typing.TypeGuard[typing.Annotated]:
 
@@ -138,12 +138,12 @@ type JsonDumpable = typing.Union[
     typing.Tuple['JsonDumpable', ...],
     typing.Dict[str, 'JsonDumpable'],
     typing.Set['JsonDumpable'],
-    "BaseScheme",
+    "BaseModel",
     "JsonBody",
 ]
 '''可以序列化为JSON的类型
 
-其中BaseScheme实际上不能被json.dumps处理， 
+其中BaseModel实际上不能被json.dumps处理， 
 需要通过我们自定义的json_dumps来处理，调用 :func:`utils.json.dumps_to_json`
 '''
 def is_json_dumpable(val: typing.Any) -> typing.TypeGuard[JsonDumpable]:
@@ -157,13 +157,13 @@ def is_json_dumpable(val: typing.Any) -> typing.TypeGuard[JsonDumpable]:
     if val is None:
         return True
 
-    from ..scheme import BaseScheme
+    from ..model import BaseModel
     from ..task.result import JsonBody
     if isinstance(val, (
         str, int, float, bool,
         list, tuple, dict, set,
         datetime.datetime,
-        BaseScheme, JsonBody
+        BaseModel, JsonBody
     )):
         return True
     

@@ -1,4 +1,4 @@
-"""枚举数据模型"""
+"""BF Model Enum Utilities"""
 
 import enum
 import typing
@@ -10,7 +10,7 @@ from ...exceptions import InvalidStatusTransition
 EnumClassTV = typing.TypeVar("EnumClassTV", bound=typing.Type[enum.Enum])
 """TypeVar of Enum class"""
 EnumMemberTV = typing.TypeVar("EnumMemberTV", bound=enum.Enum)
-"""TypeVar of Enum memebr(instance)
+"""TypeVar of Enum member (instance)
 """
 
 
@@ -20,7 +20,7 @@ class Status(enum.Enum):
     Examples
     --------
     .. code-block:: python
-        from blue_firmament.scheme.enum import Status
+        from blue_firmament.model.utils import Status
 
         class MyStatus(Status):
 

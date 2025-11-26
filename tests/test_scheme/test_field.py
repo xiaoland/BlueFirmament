@@ -1,8 +1,8 @@
-"""Tests of scheme.field module
+"""Tests of model.field module
 """
 
 
-from blue_firmament.scheme.field import field
+from blue_firmament.model.field import field
 
 
 def test_dump_flags():

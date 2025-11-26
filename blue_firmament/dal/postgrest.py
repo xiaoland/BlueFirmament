@@ -6,12 +6,12 @@ import postgrest
 import enum
 from ..task.context import ExtendedTaskContext
 from .._types import _undefined
-from ..scheme.converter import SchemeConverter
+from ..model.converter import SchemeConverter
 from .utils import dump_query_coms_like
 from ..exceptions import Unauthorized
 from ..utils.typing_ import safe_issubclass
 from ..exceptions import NotFound
-from ..scheme.field import Field, FieldValueProxy, FieldValueTV
+from ..model.field import Field, FieldValueProxy, FieldValueTV
 from .query_components.filters import *
 from .base import TableLikeDataAccessLayer, DataAccessLayerWithAuth
 from .. import __version__, __name__ as __package_name__
@@ -20,7 +20,7 @@ from .types import (
 )
 from .query_components import DALQueryComponent
 from ..utils.enum_ import dump_enum
-from ..scheme import BaseScheme, SchemeTV
+from ..model import BaseScheme, SchemeTV
 
 
 class PostgrestDAL(TableLikeDataAccessLayer, DataAccessLayerWithAuth):

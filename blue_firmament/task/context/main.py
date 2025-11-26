@@ -11,8 +11,8 @@ import contextvars
 import typing
 from typing import Optional as Opt
 from ...session import SessionTV
-from ...scheme.main import SchemeTV
-from ...scheme import BaseScheme, private_field, FieldT
+from ...model.main import SchemeTV
+from ...model import BaseScheme, private_field, FieldT
 
 if typing.TYPE_CHECKING:
     from ...log import LoggerT

@@ -10,24 +10,23 @@ from dataclasses import dataclass
 import typing
 from typing import Literal as Lit, Optional as Opt, Annotated as Anno
 
-from ..scheme import EditableScheme
 from .. import event
 from ..utils.exec_ import build_func_sig
 from ..task.registry import TaskRegistry
 from ..task.context.common import CommonTaskContext
 from ..dal import KeyableType, DataAccessObject
-from ..scheme.field import CompositeField, FieldValueProxy
+from ..model.field import CompositeField, FieldValueProxy
 from ..log.main import get_logger
 # from .base import BaseFieldManager, 
 from .base import BaseManager, SchemeTV
 from ..utils.typing_ import safe_issubclass
 from ..task.main import Method
-from ..scheme import BaseScheme
+from ..model import BaseModel, BaseScheme
 from ..task import TaskID, TaskMetadata
 
 if typing.TYPE_CHECKING:
     from ..core.app import BlueFirmamentApp
-    from ..scheme.field import Field
+    from ..model.field import Field
 
 
 logger = get_logger(__name__)
@@ -306,15 +305,15 @@ class CommonManager(
         )
         return self._scheme
 
-    async def patch(self, editable: EditableScheme, _id: Opt[KeyTV] = None) -> SchemeTV:
-        """Patch managing scheme to DAO.
+    async def patch(self, editable: BaseModel, _id: Opt[KeyTV] = None) -> SchemeTV:
+        """Patch managing model to DAO.
 
-        :param editable: Editable version of managing scheme.
-        :param _id: which scheme to put, if not provided, use current managing scheme.
+        :param editable: Editable version of managing model.
+        :param _id: which model to put, if not provided, use current managing model.
         :return:
         """
         self._scheme = await self._get_scheme(_id=_id)
-        self._scheme._merge(scheme=editable)
+        self._scheme._merge(model=editable)
         return await self._update_scheme(self._scheme)
     
     async def _update_scheme(

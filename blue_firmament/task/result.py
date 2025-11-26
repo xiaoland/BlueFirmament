@@ -17,7 +17,7 @@ from typing import Annotated as Anno, Optional as Opt, Literal as Lit
 import enum
 
 from . import TaskMetadata
-from ..scheme import BaseScheme
+from ..model import BaseModel
 from ..utils.main import singleton
 from ..utils.typing_ import JsonDumpable
 
