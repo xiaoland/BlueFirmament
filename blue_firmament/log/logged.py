@@ -10,10 +10,10 @@ __all__ = [
 import typing
 from typing import Optional as Opt
 
-from .main import BaseModel, BFModelMetaclass
+from ..model.main import BaseModel, BFModelMetaclass
 
 if typing.TYPE_CHECKING:
-    from ..log import LoggerT
+    from . import LoggerT
 
 
 class LoggedModelMetaclass(BFModelMetaclass):
@@ -94,7 +94,7 @@ class LoggedModel(BaseModel, metaclass=LoggedModelMetaclass):
         - model_id: id(self)
         """
         if not self.__logger__:
-            from ..log import get_logger
+            from . import get_logger
             logger = get_logger(self.__class__.__name__)
             logger = logger.bind(
                 model_id=id(self),

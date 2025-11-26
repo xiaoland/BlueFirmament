@@ -1,7 +1,7 @@
 """Tests for LoggedModel
 """
 
-from blue_firmament.model import LoggedModel, field
+from blue_firmament.log import LoggedModel
 
 
 def test_logged_model_basic():
