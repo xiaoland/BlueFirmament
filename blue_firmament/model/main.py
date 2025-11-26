@@ -8,12 +8,6 @@ __all__ = [
     'NoProxyModel',
     'BaseRootModel',
     'merge',
-    # Backwards compatibility aliases
-    'SchemeMetaclass',
-    'BaseScheme',
-    'SchemeTV',
-    'NoProxyScheme',
-    'BaseRootScheme',
 ]
 
 import abc
@@ -26,8 +20,6 @@ from typing import Optional as Opt
 from ..utils.typing_ import safe_issubclass
 from .._types import Undefined, _undefined
 from .validator import ModelValidator, FieldValidator
-# Backwards compatibility
-SchemeValidator = ModelValidator
 from .field import (
     CompositeField, PrivateField, Field, 
     field, dump_field_name
@@ -394,9 +386,6 @@ class BFModelMetaclass(abc.ABCMeta):
 
 
 TV = typing.TypeVar("TV")
-
-# Backwards compatibility alias
-SchemeMetaclass = BFModelMetaclass
 
 
 class BaseModel(metaclass=BFModelMetaclass):
@@ -771,11 +760,4 @@ def merge(model1: BaseModel, model2: BaseModel) -> None:
             model1[field_] = model2[field_]
         except KeyError:
             continue
-
-
-# Backwards compatibility aliases
-BaseScheme = BaseModel
-SchemeTV = ModelTV
-NoProxyScheme = NoProxyModel
-BaseRootScheme = BaseRootModel
 

@@ -8,7 +8,7 @@ __all__ = [
 
 import typing
 from ... import event
-from ...model import FieldT, private_field
+from ...model import Field, private_field
 from ..context import SoBaseTC, ExtendedTaskContext
 from ...session.common import CommonSession
 if typing.TYPE_CHECKING:
@@ -41,7 +41,7 @@ class CommonTaskContext(
 class SoCommonTC(SoBaseTC):
     """Scheme of CommonTaskContext"""
 
-    _task_context: FieldT[CommonTaskContext] = private_field(
+    _task_context: Field[CommonTaskContext] = private_field(
         default_factory=CommonTaskContext.from_contextvar
     )
 

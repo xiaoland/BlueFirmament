@@ -20,12 +20,8 @@ from ..utils.main import singleton
 if typing.TYPE_CHECKING:
     from . import BaseModel
 
-# Backwards compatibility
-BaseScheme = typing.TYPE_CHECKING and "BaseModel" or None
-
 T = typing.TypeVar('T')
 ModelTV = typing.TypeVar('ModelTV', bound='BaseModel')
-SchemeTV = ModelTV  # Backwards compatibility
 EnumMemberTV = typing.TypeVar('EnumMemberTV', bound=enum.Enum)
 ConverterResultTV = typing.TypeVar('ConverterResultTV')
 ConverterModeT = typing.Literal['base'] | typing.Literal['strict']
@@ -221,7 +217,6 @@ class ModelConverter(BaseConverter[ModelTV], typing.Generic[ModelTV]):
         
         super().__init__(mode)
         self.model_cls = model_cls
-        self.scheme_cls = model_cls  # Backwards compatibility
 
     def __call__(self, value: dict | ModelTV, **kwargs) -> ModelTV:
         """
@@ -245,10 +240,6 @@ class ModelConverter(BaseConverter[ModelTV], typing.Generic[ModelTV]):
 
     def dump_to_jsonable(self, value): 
         return value.dump_to_dict(jsonable=True)
-
-
-# Backwards compatibility alias
-SchemeConverter = ModelConverter
 
 
 class EnumConverter(BaseConverter[EnumMemberTV], typing.Generic[EnumMemberTV]):
@@ -349,9 +340,6 @@ class OptionalConverter(BaseConverter[typing.Optional[ConverterResultTV]]):
             return None
         else:
             return self.sub_converter.dump_to_jsonable(value)
-
-# Backwards compatibility alias
-OptionalConveter = OptionalConverter
 
 
 class BoolConverter(BaseConverter[bool]):

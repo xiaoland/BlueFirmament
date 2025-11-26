@@ -18,10 +18,10 @@ from ..dal import KeyableType, DataAccessObject
 from ..model.field import CompositeField, FieldValueProxy
 from ..log.main import get_logger
 # from .base import BaseFieldManager, 
-from .base import BaseManager, SchemeTV
+from .base import BaseManager, ModelTV
 from ..utils.typing_ import safe_issubclass
 from ..task.main import Method
-from ..model import BaseModel, BaseScheme
+from ..model import BaseModel
 from ..task import TaskID, TaskMetadata
 
 if typing.TYPE_CHECKING:
@@ -43,7 +43,7 @@ class PresetHandlerConfig:
 
     """
 
-    editable: Opt[typing.Type[BaseScheme]] = None
+    editable: Opt[typing.Type[BaseModel]] = None
     """Editable ver of managing scheme.
 
     This scheme is used to control which fields are editable
@@ -101,8 +101,8 @@ class PresetHandlerConfig:
 TV = typing.TypeVar('TV')
 KeyTV = typing.TypeVar('KeyTV', bound=KeyableType)
 class CommonManager(
-    typing.Generic[SchemeTV, KeyTV],
-    BaseManager[SchemeTV],
+    typing.Generic[ModelTV, KeyTV],
+    BaseManager[ModelTV],
     CommonTaskContext,
 ):
     """
@@ -226,7 +226,7 @@ class CommonManager(
                 )
 
     @property
-    def _dao(self) -> DataAccessObject[SchemeTV]:
+    def _dao(self) -> DataAccessObject[ModelTV]:
         """DAO of managing scheme.
         """
         return self._daos(self._scheme_cls)
@@ -252,7 +252,7 @@ class CommonManager(
             metadata=metadata or self._task.metadata
         )
 
-    async def _get_scheme(self, _id: Opt[KeyTV] = None) -> SchemeTV:
+    async def _get_scheme(self, _id: Opt[KeyTV] = None) -> ModelTV:
         """Get managing scheme.
 
         :param _id: Key value
@@ -282,7 +282,7 @@ class CommonManager(
                 return await self.get(_id=_id)
             raise e
 
-    async def get(self, _id: KeyTV) -> SchemeTV:
+    async def get(self, _id: KeyTV) -> ModelTV:
         """Get scheme
 
         If success, set as managing scheme.
@@ -292,7 +292,7 @@ class CommonManager(
         )
         return self._scheme
 
-    async def insert(self, scheme: Opt[SchemeTV] = None) -> SchemeTV:
+    async def insert(self, scheme: Opt[ModelTV] = None) -> ModelTV:
         """插入数据模型实例到 DAO
 
         - 插入成功则设置为当前实例
@@ -305,7 +305,7 @@ class CommonManager(
         )
         return self._scheme
 
-    async def patch(self, editable: BaseModel, _id: Opt[KeyTV] = None) -> SchemeTV:
+    async def patch(self, editable: BaseModel, _id: Opt[KeyTV] = None) -> ModelTV:
         """Patch managing model to DAO.
 
         :param editable: Editable version of managing model.
@@ -318,8 +318,8 @@ class CommonManager(
     
     async def _update_scheme(
         self,
-        scheme: Opt[SchemeTV] = None,
-    ) -> SchemeTV:
+        scheme: Opt[ModelTV] = None,
+    ) -> ModelTV:
         """Update dirty fields to dal.
 
         If success, set update result to manager scheme.
@@ -626,7 +626,7 @@ def common_handler_adder(
         else:
             register = None
 
-        if safe_issubclass(manager_cls.__scheme_cls__, BaseScheme):
+        if safe_issubclass(manager_cls.__scheme_cls__, BaseModel):
             primary_key_field = manager_cls.__scheme_cls__._get_key_field()
         else:
             primary_key_field = None

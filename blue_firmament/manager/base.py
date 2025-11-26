@@ -13,7 +13,7 @@ from ..task.registry import TaskRegistry, TaskEntry
 from ..task.context import BaseTaskContext
 from ..exceptions import BFExceptionTV
 from ..model.field import Field
-from ..model import SchemeTV
+from ..model import ModelTV
 from ..log import log_manager_handler
 
 
@@ -103,7 +103,7 @@ T = typing.TypeVar("T")
 
 
 class BaseManager(
-    typing.Generic[SchemeTV],
+    typing.Generic[ModelTV],
     BaseTaskContext,
     metaclass=ManagerMetaclass,
 ):
@@ -114,7 +114,7 @@ class BaseManager(
     Config through bases parameters.
     """
 
-    __scheme_cls__: type[SchemeTV]
+    __scheme_cls__: type[ModelTV]
     """Scheme class this manager is managing
     """
     __task_registries__: TaskRegistriesT
@@ -129,13 +129,13 @@ class BaseManager(
     __path_prefix__: str
 
     class ManagingScheme:
-        def __init__(self, scheme: Opt[SchemeTV] = None):
-            self.__scheme: Opt[SchemeTV] = scheme
+        def __init__(self, scheme: Opt[ModelTV] = None):
+            self.__scheme: Opt[ModelTV] = scheme
 
-        def set(self, scheme: SchemeTV):
+        def set(self, scheme: ModelTV):
             self.__scheme = scheme
 
-        def get(self) -> SchemeTV:
+        def get(self) -> ModelTV:
             return self.__scheme
 
         def __bool__(self):
@@ -143,7 +143,7 @@ class BaseManager(
 
     def __init_subclass__(
         cls,
-        scheme_cls: Opt[type[SchemeTV]] = None,
+        scheme_cls: Opt[type[ModelTV]] = None,
         manager_name: Opt[str] = None,
         **kwargs,
     ):
@@ -169,7 +169,7 @@ class BaseManager(
         ...
 
     @property
-    def _scheme_cls(self) -> typing.Type[SchemeTV]:
+    def _scheme_cls(self) -> typing.Type[ModelTV]:
         """Managing scheme class"""
         return self.__scheme_cls__
 
@@ -184,7 +184,7 @@ class BaseManager(
         return self._scheme_cls._get_key_field()
 
     @property
-    def _scheme(self) -> SchemeTV:
+    def _scheme(self) -> ModelTV:
         """Managing scheme
 
         :raise ValueError: scheme not set
@@ -194,11 +194,11 @@ class BaseManager(
         return self.__scheme.get()
 
     @_scheme.setter
-    def _scheme(self, scheme: SchemeTV):
+    def _scheme(self, scheme: ModelTV):
         """Set managing scheme"""
         self.__scheme.set(scheme)
 
-    def _try_get_scheme(self) -> Opt[SchemeTV]:
+    def _try_get_scheme(self) -> Opt[ModelTV]:
         """Get scheme without exception"""
         try:
             return self._scheme

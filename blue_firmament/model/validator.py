@@ -10,9 +10,6 @@ __all__ = [
     "field_validators",
     "ModelValidator",
     "model_validator",
-    # Backwards compatibility
-    "SchemeValidator",
-    "scheme_validator",
 ]
 
 import abc
@@ -285,8 +282,3 @@ def model_validator(func: ModelValidator.FuncT) -> ModelValidator:
 
     """
     return ModelValidator(func)
-
-
-# Backwards compatibility aliases
-SchemeValidator = ModelValidator
-scheme_validator = model_validator
