@@ -10,7 +10,7 @@ from typing import Optional as Opt, Annotated as Anno
 from ..data.settings.log import get_setting as get_log_setting
 
 if typing.TYPE_CHECKING:
-    from . import LoggerT
+    from .types import LoggerT
 
 
 logging.basicConfig(level=get_log_setting().log_level)

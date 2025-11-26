@@ -17,13 +17,19 @@ def test_logged_model_basic():
     assert user.email == "john@example.com"
     
     # Should have logger
-    assert user._logger is not None
+    assert user.__logger__ is not None
 
 
-def test_logged_model_disable_log():
-    """Test LoggedModel with disable_log"""
+def test_logged_model_custom_logger_factory():
+    """Test LoggedModel with custom logger factory"""
     
-    class Admin(LoggedModel, disable_log=True):
+    # Create a custom logger factory
+    def custom_factory(name):
+        from blue_firmament.log import get_logger
+        logger = get_logger(name)
+        return logger.bind(custom_field="test_value")
+    
+    class Admin(LoggedModel, logger_factory=custom_factory):
         username: str = "admin"
         role: str = "administrator"
     
@@ -31,5 +37,5 @@ def test_logged_model_disable_log():
     assert admin.username == "root"
     assert admin.role == "superadmin"
     
-    # Should still have logger even if disabled
-    assert admin._logger is not None
+    # Should have logger
+    assert admin.__logger__ is not None

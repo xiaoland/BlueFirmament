@@ -8,19 +8,16 @@ __all__ = [
 ]
 
 import typing
-from typing import Optional as Opt
+from typing import Optional as Opt, Callable
 
 from ..model.main import BaseModel, BFModelMetaclass
 
 if typing.TYPE_CHECKING:
-    from . import LoggerT
+    from .types import LoggerT
 
 
 class LoggedModelMetaclass(BFModelMetaclass):
     """Metaclass for LoggedModel that adds logging to initialization."""
-    
-    __builtin_cvars__ = BFModelMetaclass.__builtin_cvars__.copy()
-    __builtin_cvars__['__disable_log__'] = False
     
     __builtin_ivars__ = BFModelMetaclass.__builtin_ivars__.copy()
     __builtin_ivars__['__logger__'] = None
@@ -29,16 +26,16 @@ class LoggedModelMetaclass(BFModelMetaclass):
         cls, name: str,
         bases: typing.Tuple[type[typing.Any], ...],
         attrs: typing.Dict[str, typing.Any],
-        disable_log: Opt[bool] = None,
+        logger_factory: Opt[Callable[[str], "LoggerT"]] = None,
         **kwargs
     ):
         # Exclude base LoggedModel class
         if name == "LoggedModel":
             return super().__new__(cls, name, bases, attrs, **kwargs)
             
-        # Set up class vars for logging
-        if disable_log is not None:
-            attrs["__disable_log__"] = disable_log
+        # Store logger_factory in class if provided
+        if logger_factory is not None:
+            attrs["__logger_factory__"] = logger_factory
             
         return super().__new__(cls, name, bases, attrs, **kwargs)
 
@@ -48,30 +45,33 @@ class LoggedModel(BaseModel, metaclass=LoggedModelMetaclass):
     
     Extends BaseModel with logging functionality. Use this when you want
     your model to automatically log instantiation and other events.
-    
-    Class Variables
-    ---------------
-    __disable_log__: bool
-        If True, disables all logging for this model.
         
     Instance Variables  
     ------------------
     __logger__: Optional[LoggerT]
         Model-level logger instance.
     
+    Class Variables
+    ---------------
+    __logger_factory__: Optional[Callable[[str], LoggerT]]
+        Factory function to create logger instances. If not provided,
+        uses the default logger factory from the log module.
+    
     Examples
     --------
+    >>> from blue_firmament.log import LoggedModel
+    >>> 
     >>> class User(LoggedModel):
     ...     name: str
     ...     email: str
     >>> 
     >>> user = User(name="John", email="john@example.com")
     # This will log: "Model instantiated" with model_data
-    """
     
-    # Class variable
-    __disable_log__: typing.ClassVar[bool] = False
-    """Disable model internal logs"""
+    >>> # With custom logger factory
+    >>> class CustomLoggedUser(LoggedModel, logger_factory=my_custom_factory):
+    ...     name: str
+    """
     
     # Instance variable - note: Not using ClassVar as this should be per-instance
     __logger__: Opt["LoggerT"] = None
@@ -80,28 +80,23 @@ class LoggedModel(BaseModel, metaclass=LoggedModelMetaclass):
     - Instance variable
     """
     
+    # Class variable for logger factory
+    __logger_factory__: typing.ClassVar[Opt[Callable[[str], "LoggerT"]]] = None
+    """Logger factory function"""
+    
     def __post_init__(self) -> None:
         """Log model instantiation after init."""
         super().__post_init__()
-        if not self.__disable_log__:
-            self._logger.info("Model instantiated", model_data=self.dump_to_dict())
-    
-    @property
-    def _logger(self) -> "LoggerT":
-        """Model level logger
-
-        Context:
-        - model_id: id(self)
-        """
-        if not self.__logger__:
+        
+        # Initialize logger using factory
+        factory = self.__class__.__logger_factory__
+        if factory is not None:
+            self.__logger__ = factory(self.__class__.__name__)
+        else:
+            # Default logger factory logic
             from . import get_logger
             logger = get_logger(self.__class__.__name__)
-            logger = logger.bind(
-                model_id=id(self),
-            )
-            self.__logger__ = logger
-        return self.__logger__
-    
-    def _set_logger(self, logger: "LoggerT") -> None:
-        """Set model level logger"""
-        self.__logger__ = logger
+            self.__logger__ = logger.bind(model_id=id(self))
+        
+        # Log instantiation
+        self.__logger__.info("Model instantiated", model_data=self.dump_to_dict())
