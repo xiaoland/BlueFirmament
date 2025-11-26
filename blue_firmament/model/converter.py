@@ -319,10 +319,13 @@ class ModelConverter(BaseConverter[ModelTV], typing.Generic[ModelTV]):
             for k in field_names:
                 field: Field = model_instance.__fields__[k]
 
+                # Apply exclude_flags filter
                 if exclude_flags:
                     if field.dump_flags.issuperset(exclude_flags):
                         continue
 
+                # Apply include_flags filter (only if exclude_flags is not provided or empty)
+                # This ensures exclude_flags has priority over include_flags
                 if include_flags and not exclude_flags:
                     if not field.dump_flags.issuperset(include_flags):
                         continue
@@ -351,11 +354,14 @@ class ModelConverter(BaseConverter[ModelTV], typing.Generic[ModelTV]):
         """
         from .field import FieldValueProxy
         
-        return ",".join(
-            f"{in_name if not use_name else i.name}={\
-                i.dump_val_to_str(FieldValueProxy.dump(model_instance[i]))}"
-            for in_name, i in model_instance.__fields__.items()
-        )
+        parts = []
+        for in_name, field in model_instance.__fields__.items():
+            field_name = field.name if use_name else in_name
+            field_value = FieldValueProxy.dump(model_instance[field])
+            dumped_value = field.dump_val_to_str(field_value)
+            parts.append(f"{field_name}={dumped_value}")
+        
+        return ",".join(parts)
 
     def dump_to_jsonable(self, value): 
         """Serialize model instance to jsonable dict.
