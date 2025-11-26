@@ -73,8 +73,8 @@ class LoggedModel(BaseModel, metaclass=LoggedModelMetaclass):
     __disable_log__: typing.ClassVar[bool] = False
     """Disable model internal logs"""
     
-    # Instance variable
-    __logger__: typing.ClassVar[Opt["LoggerT"]] = None
+    # Instance variable - note: Not using ClassVar as this should be per-instance
+    __logger__: Opt["LoggerT"] = None
     """Model level logger
     
     - Instance variable

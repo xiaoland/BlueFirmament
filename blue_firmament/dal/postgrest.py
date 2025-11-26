@@ -6,7 +6,7 @@ import postgrest
 import enum
 from ..task.context import ExtendedTaskContext
 from .._types import _undefined
-from ..model.converter import SchemeConverter
+from ..model.converter import ModelConverter
 from .utils import dump_query_coms_like
 from ..exceptions import Unauthorized
 from ..utils.typing_ import safe_issubclass
@@ -164,7 +164,7 @@ class PostgrestDAL(TableLikeDataAccessLayer, DataAccessLayerWithAuth):
         res = await self.__execute_query(query)
         
         if isinstance(to_insert, BaseModel):
-            sc = SchemeConverter(scheme_cls=to_insert.__class__)
+            sc = ModelConverter(model_cls=to_insert.__class__)
             return sc(
                 res.data[0],
                 **to_insert.dump_to_dict(only_private=True)
@@ -238,7 +238,7 @@ class PostgrestDAL(TableLikeDataAccessLayer, DataAccessLayerWithAuth):
             if isinstance(to_select, type) and safe_issubclass(to_select, BaseModel):
                 path = to_select.dal_path()
             elif isinstance(to_select, Field):
-                path = to_select.scheme_cls.dal_path()
+                path = to_select.model_cls.dal_path()
 
         # process query components
         prcesd_query_coms: typing.Iterable[DALQueryComponent] = dump_query_coms_like(
@@ -271,7 +271,7 @@ class PostgrestDAL(TableLikeDataAccessLayer, DataAccessLayerWithAuth):
                 for i in res.data
             )
         elif safe_issubclass(to_select, BaseModel): 
-            sc = SchemeConverter(scheme_cls=to_select)
+            sc = ModelConverter(model_cls=to_select)
             return tuple(
                 sc(
                     instance_dict, 
@@ -369,7 +369,7 @@ class PostgrestDAL(TableLikeDataAccessLayer, DataAccessLayerWithAuth):
             if isinstance(to_update, BaseModel):
                 path = to_update.dal_path()
             elif isinstance(to_update, FieldValueProxy):
-                path = to_update.scheme.dal_path()
+                path = to_update.model.dal_path()
 
         # preprocess filters
         if not query_coms:
@@ -413,7 +413,7 @@ class PostgrestDAL(TableLikeDataAccessLayer, DataAccessLayerWithAuth):
         
         # parse res to the same as to_update
         if isinstance(to_update, BaseModel):
-            sc = SchemeConverter(scheme_cls=to_update.__class__)
+            sc = ModelConverter(model_cls=to_update.__class__)
             return sc(
                 value=res.data[0],
                 **to_update.dump_to_dict(only_private=True)
