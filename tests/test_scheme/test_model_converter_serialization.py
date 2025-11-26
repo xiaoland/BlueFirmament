@@ -21,12 +21,12 @@ def test_model_converter_direct_usage():
     # Create a converter and use it directly
     converter = ModelConverter(User)
     
-    # Test dump_model_to_dict
-    result = converter.dump_model_to_dict(user)
+    # Test dump_to_dict
+    result = converter.dump_to_dict(user)
     assert result == {"id": 42, "name": "Bob", "email": "bob@example.com"}
     
-    # Test dump_model_to_str
-    result_str = converter.dump_model_to_str(user)
+    # Test dump_to_str
+    result_str = converter.dump_to_str(user)
     assert "id=42" in result_str
     assert "name=Bob" in result_str
     assert "email=bob@example.com" in result_str
@@ -46,14 +46,14 @@ def test_model_converter_with_flags():
     converter = ModelConverter(Post)
     
     # Exclude read_only fields
-    result = converter.dump_model_to_dict(post, exclude_flags={"read_only"})
+    result = converter.dump_to_dict(post, exclude_flags={"read_only"})
     assert "id" not in result
     assert "title" in result
     assert "content" in result
     assert "internal_note" in result
     
     # Include only user_editable fields
-    result = converter.dump_model_to_dict(post, include_flags={"user_editable"})
+    result = converter.dump_to_dict(post, include_flags={"user_editable"})
     assert "id" not in result
     assert "title" in result
     assert "content" in result
@@ -94,13 +94,13 @@ def test_model_converter_exclude_unset():
     converter = ModelConverter(PartialData)
     
     # By default, partial models exclude unset fields
-    result = converter.dump_model_to_dict(data)
+    result = converter.dump_to_dict(data)
     assert "field_a" in result
     assert "field_b" in result
     assert "field_c" not in result  # unset field excluded
     
     # Can explicitly include unset fields
-    result = converter.dump_model_to_dict(data, exclude_unset=False)
+    result = converter.dump_to_dict(data, exclude_unset=False)
     assert "field_a" in result
     assert "field_b" in result
     assert "field_c" in result  # unset field included

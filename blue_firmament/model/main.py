@@ -551,7 +551,7 @@ class BaseModel(metaclass=BFModelMetaclass):
         """
         from .converter import ModelConverter
         converter = ModelConverter(self.__class__)
-        return converter.dump_model_to_str(self, use_name=use_name)
+        return converter.dump_to_str(self, use_name=use_name)
 
     def dump_to_dict(
         self,
@@ -594,7 +594,7 @@ class BaseModel(metaclass=BFModelMetaclass):
         """
         from .converter import ModelConverter
         converter = ModelConverter(self.__class__)
-        return converter.dump_model_to_dict(
+        return converter.dump_to_dict(
             self,
             only_dirty=only_dirty,
             exclude_natural_key=exclude_natural_key,

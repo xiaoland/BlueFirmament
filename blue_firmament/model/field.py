@@ -342,7 +342,7 @@ class Field(typing.Generic[FieldValueTV]):
         
         These flags are declarative configuration that describe in which contexts
         this field should be included when serializing. The actual filtering logic
-        based on these flags is in ModelConverter.dump_model_to_dict().
+        based on these flags is in ModelConverter.dump_to_dict().
         
         Examples: {"read_only"}, {"user_editable"}, {"admin_only"}
         """

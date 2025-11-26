@@ -245,7 +245,7 @@ class ModelConverter(BaseConverter[ModelTV], typing.Generic[ModelTV]):
     @property
     def type(self): return self.model_cls
 
-    def dump_model_to_dict(
+    def dump_to_dict(
         self,
         model_instance: ModelTV,
         only_dirty: bool = False,
@@ -341,7 +341,7 @@ class ModelConverter(BaseConverter[ModelTV], typing.Generic[ModelTV]):
 
         return data
     
-    def dump_model_to_str(
+    def dump_to_str(
         self,
         model_instance: ModelTV,
         use_name: bool = False
@@ -367,9 +367,9 @@ class ModelConverter(BaseConverter[ModelTV], typing.Generic[ModelTV]):
         """Serialize model instance to jsonable dict.
         
         This is the method called by BaseConverter for standard serialization.
-        It delegates to dump_model_to_dict with jsonable=True.
+        It delegates to dump_to_dict with jsonable=True.
         """
-        return self.dump_model_to_dict(value, jsonable=True)
+        return self.dump_to_dict(value, jsonable=True)
 
 
 class EnumConverter(BaseConverter[EnumMemberTV], typing.Generic[EnumMemberTV]):
