@@ -384,10 +384,25 @@ TV = typing.TypeVar("TV")
 class BaseModel(metaclass=BFModelMetaclass):
     """BF Base Model - Base data model class
 
-    Features
-    ---------
+    Responsibilities
+    ----------------
+    - Describes the structure and constraints of data
+    - Provides data validation through validators
+    - Manages field instances and their metadata
+    - Provides convenient API for data access
+    
     Serialization
-    ^^^^^^^^^^^^^
+    -------------
+    Use ModelConverter to serialize or deserialize a model::
+    
+        from blue_firmament.model.converter import ModelConverter
+        
+        converter = ModelConverter(User)
+        result = converter.dump_to_dict(user_instance)
+        
+        # With field masks
+        converter.register_mask_preset("public", (User.id, User.name))
+        result = converter.dump_to_dict(user_instance, mask_preset="public")
 
     Partial
     ^^^^^^^
@@ -474,9 +489,11 @@ class BaseModel(metaclass=BFModelMetaclass):
         Precondition:
         - Inherited fields' name unchanged.
         """
+        from .converter import ModelConverter
         data = {}
         for parent in parents:
-            data.update(parent.dump_to_dict())
+            converter = ModelConverter(parent.__class__)
+            data.update(converter.dump_to_dict(parent))
 
         return cls(**data)
 
@@ -521,110 +538,22 @@ class BaseModel(metaclass=BFModelMetaclass):
     #         return self.dump_to_dict()
 
     def __str__(self):
-        return self.dump_to_str()
-
-    def dump_to_str(
-        self,
-        use_name: bool = False
-    ) -> str:
-        """Serialize model to string
-
-        :param use_name: use field's name instead of in_model_name,
-                        defaults to False
-        :type use_name: bool, optional
-        """
-        return ",".join(
-            f"{in_name if not use_name else i.name}={\
-                i.dump_val_to_str(FieldValueProxy.dump(self[i]))}"
-            for in_name, i in self.__fields__.items()
-        )
-
-    def dump_to_dict(
-        self,
-        only_dirty: bool = False,
-        exclude_natural_key: bool = False,
-        exclude_unset: Opt[bool] = None,
-        exclude_flags: Opt[set[str]] = None,
-        include_flags: Opt[set[str]] = None,
-        only_private: bool = False,
-        jsonable: bool = True
-    ) -> dict:
-        """Serialize to (jsonable) dict
-
-        :param only_dirty: 
-            If True, dirty fields will be reset.
-        :param exclude_natural_key:
-            If True, exclude natural key field.
-        :param exclude_unset:
-            If True, exclude unset fields.
-            If None and is partial model, defaults to True.
-        :param exclude_flags:
-            If provided, exclude fields with all these flags.
-            If not provided, ``default_exclude_dump_flags`` configured on
-            model will be used.
-            Prior to ``include_flags`` (same for model default).
-        :param include_flags:
-            If provided, only dumps fields with all these flags.
-            If not provided, ``default_include_dump_flags`` configured on
-            model will be used.
-        :param only_private:
-            If True, only private fields will de dumped.
-        :param jsonable:
-            If True, ensure the return is jsonable.
-
-        Behaviour
-        ----------
-        - 调用每个字段的校验器来序列化字段值
-        """
-        data = dict()
-        field_names: typing.Set[str]
-
-        if only_private:
-            field_names = set(self.__private_fields__.keys())
-            for k in field_names:
-                data[k] = getattr(self, k)
-        else:
-            if only_dirty:
-                field_names = self.__dirty_fields__
-            else:
-                field_names = set(self.__fields__.keys())
-
-            if exclude_natural_key:
-                key_field = self._try_get_key_field()
-                if key_field and key_field.is_key_natural():
-                    field_names = field_names - {key_field.in_model_name}
-
-            if exclude_unset is True or (exclude_unset is None and self.__partial__):
-                field_names = field_names - self.__unset_fields__
-
-            if exclude_flags is None and self.__default_edflags__:
-                exclude_flags = self.__default_edflags__
-
-            if include_flags is None and self.__default_idflags__:
-                include_flags = self.__default_idflags__
-
-            for k in field_names:
-                field: Field = self.__fields__[k]
-
-                if exclude_flags:
-                    if field.dump_flags.issuperset(exclude_flags):
-                        continue
-
-                if include_flags and not exclude_flags:
-                    if not field.dump_flags.issuperset(include_flags):
-                        continue
-
-                field_v = FieldValueProxy.dump(getattr(self, k))
-                if jsonable:
-                    if isinstance(field, CompositeField):
-                        data.update(field.dump_val_to_jsonable(field_v))
-                    else:
-                        data[k] = field.dump_val_to_jsonable(field_v)
-                else:
-                    data[k] = field_v
-
-        return data
+        from .converter import ModelConverter
+        converter = ModelConverter(self.__class__)
+        return converter.dump_to_str(self)
     
+    def keys(self):
+        """Return field names, enabling dict(model) conversion."""
+        return self.__fields__.keys()
+    
+    def __iter__(self):
+        """Iterate over field names, enabling dict(model) conversion."""
+        return iter(self.__fields__.keys())
+    
+    def __len__(self):
+        """Return number of fields."""
+        return len(self.__fields__)
+
     def __getitem__(self, key: str | Field) -> typing.Any:
         """通过字段名/字段获取字段值
 
@@ -683,7 +612,9 @@ class BaseModel(metaclass=BFModelMetaclass):
         if not isinstance(model, BaseModel):
             raise TypeError(f"Expected BaseModel, got {type(model)}")
 
-        dumped = model.dump_to_dict()
+        from .converter import ModelConverter
+        converter = ModelConverter(model.__class__)
+        dumped = converter.dump_to_dict(model)
         for field_name, value in dumped.items():
             self.__fields__[field_name].__set__(self, value)
 
@@ -720,7 +651,9 @@ def merge(model1: BaseModel, model2: BaseModel) -> None:
     >>> merge(ModelA(a=1), ModelB(a=_undefined))
     ModelB: a=1
     """
-    for field_ in model2.dump_to_dict():
+    from .converter import ModelConverter
+    converter = ModelConverter(model2.__class__)
+    for field_ in converter.dump_to_dict(model2):
         try:
             model1[field_] = model2[field_]
         except KeyError:

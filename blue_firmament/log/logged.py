@@ -98,5 +98,7 @@ class LoggedModel(BaseModel, metaclass=LoggedModelMetaclass):
             logger = get_logger(self.__class__.__name__)
             self.__logger__ = logger.bind(model_id=id(self))
         
-        # Log instantiation
-        self.__logger__.info("Model instantiated", model_data=self.dump_to_dict())
+        # Log instantiation using ModelConverter
+        from ..model.converter import ModelConverter
+        converter = ModelConverter(self.__class__)
+        self.__logger__.info("Model instantiated", model_data=converter.dump_to_dict(self))

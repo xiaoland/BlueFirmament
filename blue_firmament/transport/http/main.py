@@ -300,7 +300,7 @@ class HTTPTransporter(BaseTransporter):
                 res_body = task_result.body
                 if isinstance(res_body, StreamingBody):
                     async for chunk in res_body:
-                        body_ = f"data: {chunk.dump_to_str()}\n\n".encode("utf-8")
+                        body_ = f"data: {str(chunk)}\n\n".encode("utf-8")
                         await send(http_types.HTTPResponseBodyEvent(
                             type="http.response.body",
                             body=body_,

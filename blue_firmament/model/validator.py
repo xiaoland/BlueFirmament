@@ -262,8 +262,10 @@ class ModelValidator(BaseValidator):
         logger = self._get_logger(model_ins=model_ins)
 
         # log extrance
+        from .converter import ModelConverter
+        converter = ModelConverter(model_ins.__class__)
         logger.info("Enter model validator", 
-            model_name=model_ins.__class__.__name__, value=model_ins.dump_to_dict()
+            model_name=model_ins.__class__.__name__, value=converter.dump_to_dict(model_ins)
         )
 
         model_ins_copy = copy.copy(model_ins)

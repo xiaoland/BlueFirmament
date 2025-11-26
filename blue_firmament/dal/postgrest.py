@@ -151,9 +151,13 @@ class PostgrestDAL(TableLikeDataAccessLayer, DataAccessLayerWithAuth):
         
         processed_to_insert: dict
         if isinstance(to_insert, BaseModel):
-            processed_to_insert = to_insert.dump_to_dict(
-                exclude_natural_key=exclude_natural_key
-            )
+            converter = ModelConverter(model_cls=to_insert.__class__)
+            processed_to_insert = converter.dump_to_dict(to_insert)
+            # DAL-specific: exclude natural key if requested
+            if exclude_natural_key:
+                key_field = to_insert._try_get_key_field()
+                if key_field and key_field.is_key_natural():
+                    processed_to_insert.pop(key_field.in_model_name, None)
         else:
             processed_to_insert = to_insert
         
@@ -167,7 +171,7 @@ class PostgrestDAL(TableLikeDataAccessLayer, DataAccessLayerWithAuth):
             sc = ModelConverter(model_cls=to_insert.__class__)
             return sc(
                 res.data[0],
-                **to_insert.dump_to_dict(only_private=True)
+                **sc.dump_to_dict(to_insert, only_private=True)
             )
         elif isinstance(to_insert, dict):
             return res.data[0]
@@ -385,10 +389,13 @@ class PostgrestDAL(TableLikeDataAccessLayer, DataAccessLayerWithAuth):
         # process to_update
         processed_to_update: typing.Dict[str, typing.Any]
         if isinstance(to_update, BaseModel):
-            processed_to_update = to_update.dump_to_dict(
-                only_dirty=only_dirty,
-                exclude_natural_key=exclude_natural_key
-            )
+            converter = ModelConverter(model_cls=to_update.__class__)
+            processed_to_update = converter.dump_to_dict(to_update, only_dirty=only_dirty)
+            # DAL-specific: exclude natural key if requested
+            if exclude_natural_key:
+                key_field = to_update._try_get_key_field()
+                if key_field and key_field.is_key_natural():
+                    processed_to_update.pop(key_field.in_model_name, None)
         elif isinstance(to_update, FieldValueProxy):
             processed_to_update = {to_update.field.name: to_update.obj}
         elif isinstance(to_update, tuple):
@@ -416,7 +423,7 @@ class PostgrestDAL(TableLikeDataAccessLayer, DataAccessLayerWithAuth):
             sc = ModelConverter(model_cls=to_update.__class__)
             return sc(
                 value=res.data[0],
-                **to_update.dump_to_dict(only_private=True)
+                **sc.dump_to_dict(to_update, only_private=True)
             )
         elif isinstance(to_update, FieldValueProxy):
             return to_update.field.load_val(res.data[0][to_update.field.name])

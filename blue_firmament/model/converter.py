@@ -208,18 +208,43 @@ class AnyConverter(BaseConverter[typing.Any]):
 class ModelConverter(BaseConverter[ModelTV], typing.Generic[ModelTV]):
 
     """Model Converter for converting data to model instances.
+    
+    Features
+    --------
+    Handles serialization (dumping) and deserialization (loading) of model instances.
+    Encapsulates all model-level serialization logic including field filtering 
+    and format conversion using field masks.
+    
+    Field Masks
+    -----------
+    Instead of using flags, ModelConverter uses field masks (tuples of Field instances)
+    to control which fields are included in serialization. This provides more explicit
+    control and avoids the complexity of flag-based filtering.
+    
+    Presets can be registered to reuse common field masks.
     """
 
     def __init__(self, 
         model_cls: typing.Type[ModelTV],
-        mode: ConverterModeT = 'base'
+        mode: ConverterModeT = 'base',
+        mask_presets: Opt[typing.Dict[str, typing.Tuple['Field', ...]]] = None
     ) -> None:
         
         super().__init__(mode)
         self.model_cls = model_cls
+        self.mask_presets = mask_presets or {}
+
+    def register_mask_preset(self, name: str, fields: typing.Tuple['Field', ...]) -> None:
+        """Register a named field mask preset.
+        
+        :param name: Name of the preset
+        :param fields: Tuple of Field instances to include when using this preset
+        """
+        self.mask_presets[name] = fields
 
     def __call__(self, value: dict | ModelTV, **kwargs) -> ModelTV:
-        """
+        """Load/deserialize value into a model instance.
+        
         :param value: 序列化值
         :param kwargs: 额外参数
             - _task_context: 任务上下文
@@ -238,8 +263,123 @@ class ModelConverter(BaseConverter[ModelTV], typing.Generic[ModelTV]):
     @property
     def type(self): return self.model_cls
 
+    def dump_to_dict(
+        self,
+        model_instance: ModelTV,
+        fields: Opt[typing.Tuple['Field', ...]] = None,
+        mask_preset: Opt[str] = None,
+        only_dirty: bool = False,
+        exclude_unset: Opt[bool] = None,
+        only_private: bool = False,
+        jsonable: bool = True
+    ) -> dict:
+        """Serialize model instance to (jsonable) dict.
+        
+        This method encapsulates all model-level serialization logic,
+        handling field filtering via field masks and format conversion.
+
+        :param model_instance: The model instance to serialize
+        :param fields: Tuple of Field instances to include. If None, includes all fields.
+        :param mask_preset: Name of a registered mask preset to use.
+        :param only_dirty: 
+            If True, only include fields that have been modified.
+        :param exclude_unset:
+            If True, exclude unset fields.
+            If None and is partial model, defaults to True.
+        :param only_private:
+            If True, only private fields will be dumped.
+        :param jsonable:
+            If True, ensure the return is jsonable.
+
+        Behaviour
+        ----------
+        - Calls each field's converter to serialize field values
+        - Field masks (fields parameter or mask_preset) control which fields are included
+        """
+        from .field import Field, CompositeField, FieldValueProxy
+        
+        data = dict()
+        field_names: typing.Set[str]
+
+        # Determine field mask to use
+        field_mask: Opt[typing.Set['Field']] = None
+        if mask_preset:
+            if mask_preset not in self.mask_presets:
+                raise ValueError(f"Unknown mask preset: {mask_preset}")
+            field_mask = set(self.mask_presets[mask_preset])
+        elif fields is not None:
+            field_mask = set(fields)
+
+        if only_private:
+            field_names = set(model_instance.__private_fields__.keys())
+            for k in field_names:
+                data[k] = getattr(model_instance, k)
+        else:
+            if only_dirty:
+                field_names = model_instance.__dirty_fields__
+            else:
+                field_names = set(model_instance.__fields__.keys())
+
+            if exclude_unset is True or (exclude_unset is None and model_instance.__partial__):
+                field_names = field_names - model_instance.__unset_fields__
+
+            for k in field_names:
+                field: Field = model_instance.__fields__[k]
+
+                # Apply field mask if provided
+                if field_mask is not None and field not in field_mask:
+                    continue
+
+                field_v = FieldValueProxy.dump(getattr(model_instance, k))
+                if jsonable:
+                    if isinstance(field, CompositeField):
+                        # For composite fields, recursively dump the nested model
+                        nested_converter = ModelConverter(field.vtype)
+                        data.update(nested_converter.dump_to_dict(field_v, jsonable=True))
+                    else:
+                        # Use field's converter to dump to jsonable
+                        if field_v is not _undefined:
+                            data[k] = field.converter.dump_to_jsonable(field_v)
+                        else:
+                            data[k] = _undefined.value
+                else:
+                    data[k] = field_v
+
+        return data
+    
+    def dump_to_str(
+        self,
+        model_instance: ModelTV,
+        use_name: bool = False
+    ) -> str:
+        """Serialize model instance to string.
+        
+        :param model_instance: The model instance to serialize
+        :param use_name: use field's name instead of in_model_name,
+                        defaults to False
+        """
+        from .field import FieldValueProxy
+        
+        parts = []
+        for in_name, field in model_instance.__fields__.items():
+            field_name = field.name if use_name else in_name
+            field_value = FieldValueProxy.dump(model_instance[field])
+            # Use field's converter to dump to string
+            if field_value is not _undefined:
+                dumped_value = field.converter.dump_to_str(field_value)
+            else:
+                dumped_value = _undefined.value
+            parts.append(f"{field_name}={dumped_value}")
+        
+        return ",".join(parts)
+
     def dump_to_jsonable(self, value): 
-        return value.dump_to_dict(jsonable=True)
+        """Serialize model instance to jsonable dict.
+        
+        This is the method called by BaseConverter for standard serialization.
+        It delegates to dump_to_dict with jsonable=True.
+        """
+        return self.dump_to_dict(value, jsonable=True)
 
 
 class EnumConverter(BaseConverter[EnumMemberTV], typing.Generic[EnumMemberTV]):
