@@ -21,7 +21,7 @@ class JsonEncoder(json.JSONEncoder):
             converter = ModelConverter(o.__class__)
             return converter.dump_to_dict(o)
         if isinstance(o, JsonBody):
-            return dict(o)
+            return o.dump_to_dict()
         if isinstance(o, FieldValueProxy):
             return o.obj
         if isinstance(o, set):

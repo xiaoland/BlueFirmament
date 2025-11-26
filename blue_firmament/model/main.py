@@ -542,15 +542,17 @@ class BaseModel(metaclass=BFModelMetaclass):
         converter = ModelConverter(self.__class__)
         return converter.dump_to_str(self)
     
-    @property
-    def __dict__(self) -> dict:
-        """Return model fields as a dictionary.
-        
-        This allows using dict(model) to get a dictionary representation.
-        """
-        from .converter import ModelConverter
-        converter = ModelConverter(self.__class__)
-        return converter.dump_to_dict(self, jsonable=True)
+    def keys(self):
+        """Return field names, enabling dict(model) conversion."""
+        return self.__fields__.keys()
+    
+    def __iter__(self):
+        """Iterate over field names, enabling dict(model) conversion."""
+        return iter(self.__fields__.keys())
+    
+    def __len__(self):
+        """Return number of fields."""
+        return len(self.__fields__)
 
     def __getitem__(self, key: str | Field) -> typing.Any:
         """通过字段名/字段获取字段值
