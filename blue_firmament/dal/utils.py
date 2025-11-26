@@ -16,7 +16,7 @@ def dump_query_coms_like(
 
     """Convert list of FilterLikeType to DALFilter list
 
-    :param scheme_like: BaseScheme 类, BlueFirmamentField 实例
+    :param scheme_like: BaseModel 类, BlueFirmamentField 实例
 
     Behavior
     --------
@@ -25,7 +25,7 @@ def dump_query_coms_like(
     """
     res = []
 
-    from ..model import BaseScheme
+    from ..model import BaseModel
     from ..model.field import Field
     for item in values:
         if item is None:
@@ -34,8 +34,8 @@ def dump_query_coms_like(
             try:
                 if scheme_like:
                     if isinstance(scheme_like, Field):
-                        scheme_like = scheme_like.scheme_cls
-                    if issubclass(scheme_like, BaseScheme) or isinstance(scheme_like, BaseScheme):
+                        scheme_like = scheme_like.model_cls
+                    if issubclass(scheme_like, BaseModel) or isinstance(scheme_like, BaseModel):
                         res.append(scheme_like._get_key_field().equals(item))
                         continue
 
@@ -44,7 +44,7 @@ def dump_query_coms_like(
                 raise ValueError(
                     "Cannot dump filter-like value that is not a DALQueryComponent without scheme"
                 )
-        elif isinstance(item, BaseScheme):
+        elif isinstance(item, BaseModel):
             res.extend(item.equals())
         else:
             res.append(item)

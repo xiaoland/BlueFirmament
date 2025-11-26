@@ -6,7 +6,7 @@ import postgrest
 import enum
 from ..task.context import ExtendedTaskContext
 from .._types import _undefined
-from ..model.converter import SchemeConverter
+from ..model.converter import ModelConverter
 from .utils import dump_query_coms_like
 from ..exceptions import Unauthorized
 from ..utils.typing_ import safe_issubclass
@@ -20,7 +20,7 @@ from .types import (
 )
 from .query_components import DALQueryComponent
 from ..utils.enum_ import dump_enum
-from ..model import BaseScheme, SchemeTV
+from ..model import BaseModel, ModelTV
 
 
 class PostgrestDAL(TableLikeDataAccessLayer, DataAccessLayerWithAuth):
@@ -135,22 +135,22 @@ class PostgrestDAL(TableLikeDataAccessLayer, DataAccessLayerWithAuth):
         ...
     @typing.overload
     async def insert(self,
-        to_insert: SchemeTV,
+        to_insert: ModelTV,
         path: typing.Optional[DALPath] = None,
         exclude_key: bool = True,
-    ) -> SchemeTV:
+    ) -> ModelTV:
         ...
     async def insert(
         self,
-        to_insert: dict | SchemeTV,
+        to_insert: dict | ModelTV,
         path = None,
         exclude_natural_key: bool = True,
-    ) -> dict | SchemeTV:
-        if isinstance(to_insert, BaseScheme) and path is None:
+    ) -> dict | ModelTV:
+        if isinstance(to_insert, BaseModel) and path is None:
             path = to_insert.dal_path()
         
         processed_to_insert: dict
-        if isinstance(to_insert, BaseScheme):
+        if isinstance(to_insert, BaseModel):
             processed_to_insert = to_insert.dump_to_dict(
                 exclude_natural_key=exclude_natural_key
             )
@@ -163,8 +163,8 @@ class PostgrestDAL(TableLikeDataAccessLayer, DataAccessLayerWithAuth):
         )
         res = await self.__execute_query(query)
         
-        if isinstance(to_insert, BaseScheme):
-            sc = SchemeConverter(scheme_cls=to_insert.__class__)
+        if isinstance(to_insert, BaseModel):
+            sc = ModelConverter(model_cls=to_insert.__class__)
             return sc(
                 res.data[0],
                 **to_insert.dump_to_dict(only_private=True)
@@ -179,11 +179,11 @@ class PostgrestDAL(TableLikeDataAccessLayer, DataAccessLayerWithAuth):
     @typing.overload
     async def select(
         self,
-        to_select: typing.Type[SchemeTV],
+        to_select: typing.Type[ModelTV],
         *filters: QueryComLikeType,
         path: typing.Optional[DALPath] = None,
         task_context: Opt[ExtendedTaskContext] = None,
-    ) -> typing.Tuple[SchemeTV, ...]:
+    ) -> typing.Tuple[ModelTV, ...]:
         ...
     @typing.overload
     async def select(
@@ -206,7 +206,7 @@ class PostgrestDAL(TableLikeDataAccessLayer, DataAccessLayerWithAuth):
     async def select(
         self,
         to_select: typing.Union[
-            typing.Type[SchemeTV], 
+            typing.Type[ModelTV], 
             "Field[FieldValueTV]",
             typing.Iterable[FieldLikeType],
             None
@@ -215,7 +215,7 @@ class PostgrestDAL(TableLikeDataAccessLayer, DataAccessLayerWithAuth):
         path: typing.Optional[DALPath] = None,
         task_context: Opt[ExtendedTaskContext] = None,
     ) -> typing.Union[
-        typing.Tuple[SchemeTV, ...],
+        typing.Tuple[ModelTV, ...],
         typing.Tuple[FieldValueTV, ...],
         typing.Tuple[dict, ...]
     ]:
@@ -228,17 +228,17 @@ class PostgrestDAL(TableLikeDataAccessLayer, DataAccessLayerWithAuth):
             fields = tuple(
                 dump_field_like(i) for i in to_select
             )
-        elif issubclass(to_select, BaseScheme):
+        elif issubclass(to_select, BaseModel):
             fields = ("*",)
         else:
             raise ValueError(f"Invalid type for to_select, {type(to_select)}")
 
         # preprocess path
         if path is None:
-            if isinstance(to_select, type) and safe_issubclass(to_select, BaseScheme):
+            if isinstance(to_select, type) and safe_issubclass(to_select, BaseModel):
                 path = to_select.dal_path()
             elif isinstance(to_select, Field):
-                path = to_select.scheme_cls.dal_path()
+                path = to_select.model_cls.dal_path()
 
         # process query components
         prcesd_query_coms: typing.Iterable[DALQueryComponent] = dump_query_coms_like(
@@ -270,8 +270,8 @@ class PostgrestDAL(TableLikeDataAccessLayer, DataAccessLayerWithAuth):
                 to_select.load_val(i[to_select.name])
                 for i in res.data
             )
-        elif safe_issubclass(to_select, BaseScheme): 
-            sc = SchemeConverter(scheme_cls=to_select)
+        elif safe_issubclass(to_select, BaseModel): 
+            sc = ModelConverter(model_cls=to_select)
             return tuple(
                 sc(
                     instance_dict, 
@@ -284,17 +284,17 @@ class PostgrestDAL(TableLikeDataAccessLayer, DataAccessLayerWithAuth):
     
     async def delete(
         self,
-        to_delete: SchemeTV | typing.Type[SchemeTV],
+        to_delete: ModelTV | typing.Type[ModelTV],
         *query_coms: QueryComLikeType,
         path: Opt[DALPath] = None,
      ) -> None:
         
         if path is None:
-            if isinstance(to_delete, BaseScheme) or issubclass(to_delete, BaseScheme):
+            if isinstance(to_delete, BaseModel) or issubclass(to_delete, BaseModel):
                 path = to_delete.dal_path()
         
         if not query_coms:
-            if isinstance(to_delete, BaseScheme):
+            if isinstance(to_delete, BaseModel):
                 query_coms += (to_delete.key_eqf,)
         
         base_query = self.__get_base_query_from_path(path)
@@ -310,12 +310,12 @@ class PostgrestDAL(TableLikeDataAccessLayer, DataAccessLayerWithAuth):
     @typing.overload
     async def update(
         self,
-        to_update: SchemeTV,
+        to_update: ModelTV,
         *filters: DALQueryComponent,
         path: Opt[DALPath] = None,
         only_dirty: bool = True,
         exclude_natural_key: bool = True,
-    ) -> SchemeTV:
+    ) -> ModelTV:
         ...
     @typing.overload
     async def update(
@@ -350,7 +350,7 @@ class PostgrestDAL(TableLikeDataAccessLayer, DataAccessLayerWithAuth):
     async def update(
         self,
         to_update: typing.Union[
-            dict, SchemeTV,
+            dict, ModelTV,
             "FieldValueProxy[FieldValueTV]",
             FieldValueTV,
             typing.Tuple[Field[FieldValueTV], FieldValueTV]
@@ -361,19 +361,19 @@ class PostgrestDAL(TableLikeDataAccessLayer, DataAccessLayerWithAuth):
         exclude_natural_key: bool = True,
     ) -> typing.Union[
         dict,
-        SchemeTV,
+        ModelTV,
         FieldValueTV,
     ]:
         # preprocess path
         if path is None: 
-            if isinstance(to_update, BaseScheme):
+            if isinstance(to_update, BaseModel):
                 path = to_update.dal_path()
             elif isinstance(to_update, FieldValueProxy):
-                path = to_update.scheme.dal_path()
+                path = to_update.model.dal_path()
 
         # preprocess filters
         if not query_coms:
-            if isinstance(to_update, BaseScheme):
+            if isinstance(to_update, BaseModel):
                 query_coms += (
                     to_update.key_eqf,
                 )
@@ -384,7 +384,7 @@ class PostgrestDAL(TableLikeDataAccessLayer, DataAccessLayerWithAuth):
         
         # process to_update
         processed_to_update: typing.Dict[str, typing.Any]
-        if isinstance(to_update, BaseScheme):
+        if isinstance(to_update, BaseModel):
             processed_to_update = to_update.dump_to_dict(
                 only_dirty=only_dirty,
                 exclude_natural_key=exclude_natural_key
@@ -412,8 +412,8 @@ class PostgrestDAL(TableLikeDataAccessLayer, DataAccessLayerWithAuth):
             raise UpdateFailure(path, self)  # TODO add NoEffect (checkout filters, RLS)
         
         # parse res to the same as to_update
-        if isinstance(to_update, BaseScheme):
-            sc = SchemeConverter(scheme_cls=to_update.__class__)
+        if isinstance(to_update, BaseModel):
+            sc = ModelConverter(model_cls=to_update.__class__)
             return sc(
                 value=res.data[0],
                 **to_update.dump_to_dict(only_private=True)

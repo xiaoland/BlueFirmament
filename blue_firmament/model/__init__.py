@@ -33,17 +33,7 @@ __all__ = [
     "TimeConverter",
     "BoolConverter",
     "EnumConverter",
-    "SchemeConverter",
     "ModelConverter",
-    # Backwards compatibility aliases
-    "BaseScheme",
-    "NoProxyScheme",
-    "SchemeTV",
-    "merge_scheme",
-    "FieldT",
-    "PFieldT",
-    "OptionalConveter",  # typo in original, kept for compatibility
-    "scheme_validator",
 ]
 
 from .main import (
@@ -52,11 +42,6 @@ from .main import (
     NoProxyModel,
     ModelTV,
     merge as merge_model,
-    # Backwards compatibility
-    BaseScheme,
-    NoProxyScheme,
-    SchemeTV,
-    merge as merge_scheme,
 )
 from .field import (
     Field,
@@ -64,15 +49,12 @@ from .field import (
     CompositeField,
     field,
     private_field,
-    Field as FieldT,
-    PrivateField as PFieldT,
 )
 from .converter import (
     BaseConverter,
     AnyConverter,
     UnionConverter,
     OptionalConverter,
-    OptionalConverter as OptionalConveter,  # typo in original, kept for compatibility
     StrConverter,
     IntConverter,
     FloatConverter,
@@ -85,11 +67,9 @@ from .converter import (
     BoolConverter,
     EnumConverter,
     ModelConverter,
-    ModelConverter as SchemeConverter,  # Backwards compatibility
 )
 from .validator import (
     field_validator,
     field_validators,
     model_validator,
-    model_validator as scheme_validator,  # Backwards compatibility
 )

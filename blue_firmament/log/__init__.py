@@ -3,10 +3,9 @@ __all__ = [
     "get_logger", 
     "bind_logger_contextvars", "clear_logger_contextvars",
     "LoggerT",
-    "log_manager_handler"
+    "log_manager_handler",
+    "LoggedModel",
 ]
-
-import structlog
 
 from .main import (
     get_logger,
@@ -15,5 +14,9 @@ from .main import (
 from .decorators import (
     log_manager_handler
 )
-
-LoggerT = structlog.stdlib.BoundLogger
+from .logged import (
+    LoggedModel,
+)
+from .types import (
+    LoggerT,
+)

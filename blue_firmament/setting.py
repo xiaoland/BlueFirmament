@@ -62,7 +62,7 @@ from pathlib import Path
 from typing import Optional as Opt
 
 from .model.field import Field, get_default, private_field, FieldValueTV
-from .model import FieldT, field, private_field, BaseScheme
+from .model import field, private_field, BaseModel
 from .model.converter import BaseConverter, get_converter_from_anno
 from .utils.file import load_json_file
 from .utils.dict_ import get_nested_value
@@ -416,7 +416,7 @@ class SettingField(Field[FieldValueTV]):
         vtype: Undefined | typing.Type[FieldValueTV] = _undefined,
         name: Opt[str] = None,
         in_scheme_name: Opt[str] = None,
-        scheme_cls: Opt[typing.Type["BaseScheme"]] = None,
+        scheme_cls: Opt[typing.Type["BaseModel"]] = None,
         converter: Opt[BaseConverter[FieldValueTV]] = None,
         fork_validators: bool = False,
         description: Opt[str] = None,
@@ -497,14 +497,13 @@ def setting_field(
 # =============================================================================
 
 if typing.TYPE_CHECKING:
-    from .model.main import BaseScheme
+    from .model.main import BaseModel
 
 
 class Setting(
-    BaseScheme,
+    BaseModel,
     proxy=False,
     partial=True,
-    disable_log=True,
 ):
     """Setting base class.
 
@@ -618,19 +617,19 @@ import pkg_resources
 from . import __name__ as PACKAGE_NAME
 
 
-class _LegacySetting(BaseScheme, proxy=False, disable_log=True):
+class _LegacySetting(BaseModel, proxy=False):
     """Legacy Setting base class (deprecated).
 
     Use the new Setting class with SettingField and SettingSource instead.
     """
 
-    _setting_name: FieldT[str] = private_field()
+    _setting_name: Field[str] = private_field()
     """配置名称"""
-    _setting_path: FieldT[str | None] = private_field(default=None)
+    _setting_path: Field[str | None] = private_field(default=None)
     """配置文件路径"""
-    _is_packaged: FieldT[bool] = private_field(default=True)
+    _is_packaged: Field[bool] = private_field(default=True)
     """是否打包在包内"""
-    _package_name: FieldT[str] = private_field(default=PACKAGE_NAME)
+    _package_name: Field[str] = private_field(default=PACKAGE_NAME)
     """所属包的包名"""
 
     @property
@@ -673,7 +672,7 @@ class EnvSetting(_LegacySetting, partial=True):
             cls.__env_cls__ = []
         cls.__env_cls__.append(cls)
 
-    _env: FieldT[str] = private_field()
+    _env: Field[str] = private_field()
 
     @classmethod
     def __find_env_cls(cls, env_name: str) -> typing.Type["EnvSetting"]:
@@ -724,7 +723,7 @@ class EnvJsonSetting(_LegacySetting, partial=True):
     Use the new Setting class with JsonFileSource and EnvVarSource instead.
     """
 
-    _setting_env: FieldT[str] = private_field(
+    _setting_env: Field[str] = private_field(
         default_factory=lambda: os.environ.get("ENV", "production")
     )
 

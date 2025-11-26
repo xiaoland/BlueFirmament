@@ -11,8 +11,8 @@ import contextvars
 import typing
 from typing import Optional as Opt
 from ...session import SessionTV
-from ...model.main import SchemeTV
-from ...model import BaseScheme, private_field, FieldT
+from ...model.main import ModelTV
+from ...model import BaseModel, private_field, Field
 
 if typing.TYPE_CHECKING:
     from ...log import LoggerT
@@ -121,7 +121,7 @@ class ExtendedTaskContext(
         return self.__session
 
 
-class SoBaseTC(BaseScheme):
+class SoBaseTC(BaseModel):
     """Scheme attached BaseTaskContext.
 
     By inheriting this class, your class can access
@@ -135,7 +135,7 @@ class SoBaseTC(BaseScheme):
         rename to ``SoBTC`` from ``SchemeHasRequestContext``
     """
 
-    _task_context: FieldT[BaseTaskContext] = private_field(
+    _task_context: Field[BaseTaskContext] = private_field(
         default_factory=BaseTaskContext.from_contextvar
     )
 

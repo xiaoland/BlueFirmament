@@ -55,10 +55,6 @@ class FieldValueProxy(typing.Generic[FieldValueTV]):
 
     @property
     def model(self): return self._model
-
-    # Backwards compatibility
-    @property
-    def scheme(self): return self._model
     
     @property
     def field(self): return self._field
@@ -285,11 +281,6 @@ class Field(typing.Generic[FieldValueTV]):
         if self.__in_model_name is None:
             raise ValueError('Field in_model_name is not defined')
         return self.__in_model_name
-
-    # Backwards compatibility
-    @property
-    def in_scheme_name(self) -> str:
-        return self.in_model_name
     
     def is_key(self) -> bool: 
         return self.__is_key
@@ -318,10 +309,6 @@ class Field(typing.Generic[FieldValueTV]):
             raise ValueError('Field in_model_name is immutable')
         self.__in_model_name = value
 
-    # Backwards compatibility
-    def _set_in_scheme_name(self, value: str, no_raise: bool = False) -> None:
-        return self._set_in_model_name(value, no_raise)
-
     @property
     def vtype(self) -> typing.Type[FieldValueTV]:
         if self.__vtype is _undefined:
@@ -337,11 +324,6 @@ class Field(typing.Generic[FieldValueTV]):
         if self.__model_cls is None:
             raise ValueError('Field model is not defined')
         return self.__model_cls
-
-    # Backwards compatibility
-    @property
-    def scheme_cls(self) -> typing.Type["BaseModel"]:
-        return self.model_cls
     
     @property
     def dump_flags(self) -> set[str]:
@@ -367,14 +349,6 @@ class Field(typing.Generic[FieldValueTV]):
             if no_raise: return None
             raise ValueError('Field model is immutable')
         self.__model_cls = model_cls
-
-    # Backwards compatibility
-    def _set_scheme_cls(self, 
-        scheme_cls: Opt[typing.Type["BaseModel"]],
-        no_raise: bool = False,
-        force: bool = False
-    ) -> None:
-        return self._set_model_cls(scheme_cls, no_raise, force)
 
     @property
     def init(self) -> bool: return self.__init
@@ -612,10 +586,6 @@ class Field(typing.Generic[FieldValueTV]):
 
         exec(class_sig + class_body, exec_namespace, exec_result)
         return exec_result["AnonymousModel"]
-
-    # Backwards compatibility
-    def dump_to_scheme(self) -> typing.Type["BaseModel"]:
-        return self.dump_to_model()
 
 
 T = typing.TypeVar('T')
