@@ -8,8 +8,6 @@ from ...model import private_field
 
 class LogSetting(Setting):
 
-    __disable_log__ = True
-
     _setting_name = private_field("log")
     
     log_level: int = logging.INFO

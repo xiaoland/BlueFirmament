@@ -504,7 +504,6 @@ class Setting(
     BaseModel,
     proxy=False,
     partial=True,
-    disable_log=True,
 ):
     """Setting base class.
 
@@ -618,7 +617,7 @@ import pkg_resources
 from . import __name__ as PACKAGE_NAME
 
 
-class _LegacySetting(BaseModel, proxy=False, disable_log=True):
+class _LegacySetting(BaseModel, proxy=False):
     """Legacy Setting base class (deprecated).
 
     Use the new Setting class with SettingField and SettingSource instead.

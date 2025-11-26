@@ -91,7 +91,6 @@ class BFModelMetaclass(abc.ABCMeta):
 
     __builtin_cvars__: typing.Dict[str, typing.Any] = {
         '__proxy__': False,
-        '__disable_log__': False,
         '__key__': None,
         '__fields__': dict,
         '__partial__': False,
@@ -107,7 +106,6 @@ class BFModelMetaclass(abc.ABCMeta):
     values are the default value (callable for mutable values).
     """
     __builtin_ivars__: typing.Dict[str, typing.Any] = {
-        '__logger__': None,
         '__instantiated__': False,
         '__unset_fields__': set,
         '__dirty_fields__': set,
@@ -123,7 +121,6 @@ class BFModelMetaclass(abc.ABCMeta):
         bases: typing.Tuple[type[typing.Any], ...], 
         attrs: typing.Dict[str, typing.Any],
         proxy: Opt[bool] = None,
-        disable_log: Opt[bool] = None,
         partial: Opt[bool] = None,
         inherit_validators: Opt[bool] = None,
         default_exclude_dump_flags: Opt[set[str]] = None,
@@ -138,8 +135,6 @@ class BFModelMetaclass(abc.ABCMeta):
         # Set up class vars
         if proxy:
             attrs["__proxy__"] = proxy
-        if disable_log:
-            attrs["__disable_log__"] = disable_log
         if partial:
             attrs["__partial__"] = partial
         if inherit_validators:
@@ -333,8 +328,6 @@ class BFModelMetaclass(abc.ABCMeta):
         init_body += '\n    BFModelMetaclass.run_model_validators(self)\n'
         init_body += '    self.__instantiated__ = True\n'
         init_body += '    BFModelMetaclass.run_after_field_validators(self)\n'
-        init_body += '    if not self.__disable_log__:\n'
-        init_body += '        self._logger.info("Model instantiated", model_data=self.dump_to_dict())\n'
         init_body += '    self.__post_init__()\n'
 
         init_method = init_sig + init_body
@@ -411,9 +404,6 @@ class BaseModel(metaclass=BFModelMetaclass):
 
     Includes primary key, composite key.
     """
-    __disable_log__: typing.ClassVar[bool]
-    """Disable model internal logs
-    """
     __proxy__: typing.ClassVar[bool]
     """Proxy field value or not
 
@@ -457,11 +447,6 @@ class BaseModel(metaclass=BFModelMetaclass):
     """Fields that are not provided during instantiation
 
     - Exclude private fields
-    - Instance variable
-    """
-    __logger__: typing.ClassVar[Opt["LoggerT"]]
-    """Model level logger
-
     - Instance variable
     """
     __instantiated__: typing.ClassVar[bool]
@@ -701,26 +686,6 @@ class BaseModel(metaclass=BFModelMetaclass):
         dumped = model.dump_to_dict()
         for field_name, value in dumped.items():
             self.__fields__[field_name].__set__(self, value)
-
-    @property
-    def _logger(self):
-        """Model level logger
-
-        Context:
-        - model_id: id(self)
-        """
-        if not self.__logger__:
-            from ..log import get_logger
-            logger = get_logger(self.__class__.__name__)
-            logger = logger.bind(
-                model_id=id(self),
-            )
-            self.__logger__ = logger
-        return self.__logger__
-    
-    def _set_logger(self, logger: "LoggerT") -> None:
-        """Set model level logger"""
-        self.__logger__ = logger
 
 
 # Aliases for new naming

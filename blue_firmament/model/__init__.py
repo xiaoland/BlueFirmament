@@ -7,6 +7,7 @@ __all__ = [
     "NoProxyModel",
     "ModelTV",
     "merge_model",
+    "LoggedModel",
     # Field classes
     "Field",
     "PrivateField",
@@ -42,6 +43,9 @@ from .main import (
     NoProxyModel,
     ModelTV,
     merge as merge_model,
+)
+from .logged import (
+    LoggedModel,
 )
 from .field import (
     Field,
