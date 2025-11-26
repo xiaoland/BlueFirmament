@@ -384,10 +384,24 @@ TV = typing.TypeVar("TV")
 class BaseModel(metaclass=BFModelMetaclass):
     """BF Base Model - Base data model class
 
+    Responsibilities
+    ----------------
+    - Describes the structure and constraints of data
+    - Provides data validation through validators
+    - Manages field instances and their metadata
+    - Provides convenient API for data access
+    
+    Note: Serialization (dumping) logic has been moved to ModelConverter. 
+    BaseModel provides dump_to_dict/dump_to_str methods for backward 
+    compatibility that delegate to ModelConverter.
+
     Features
     ---------
     Serialization
     ^^^^^^^^^^^^^
+    Model serialization is now handled by ModelConverter. The dump_to_dict() 
+    and dump_to_str() methods on BaseModel delegate to ModelConverter for 
+    the actual serialization logic.
 
     Partial
     ^^^^^^^

@@ -138,6 +138,17 @@ class Field(typing.Generic[FieldValueTV]):
 
     """BF Model Field.
 
+    Responsibilities
+    ----------------
+    - Describes field metadata (name, type, default value, etc.)
+    - Defines field constraints through validators and converters
+    - Provides field-level value access (descriptor protocol)
+    - Stores field configuration (dump_flags, is_key, etc.)
+    
+    Note: Serialization logic has been moved to ModelConverter. Field only 
+    provides thin wrapper methods that delegate to converters for backward 
+    compatibility and convenience.
+
     Features
     --------
     Validator
@@ -327,6 +338,14 @@ class Field(typing.Generic[FieldValueTV]):
     
     @property
     def dump_flags(self) -> set[str]:
+        """Field dump flags - metadata controlling field inclusion in serialization.
+        
+        These flags are declarative configuration that describe in which contexts
+        this field should be included when serializing. The actual filtering logic
+        based on these flags is in ModelConverter.dump_model_to_dict().
+        
+        Examples: {"read_only"}, {"user_editable"}, {"admin_only"}
+        """
         return self.__dump_flags
 
     @dump_flags.setter
@@ -429,6 +448,9 @@ class Field(typing.Generic[FieldValueTV]):
     
     def dump_val_to_str(self, value: FieldValueTV):
         """Dump field value to string
+        
+        Note: This is a convenience method that delegates to the field's 
+        converter. The actual serialization logic is in the converter.
         """
         if value is not _undefined:
             return self.converter.dump_to_str(value)
@@ -437,6 +459,9 @@ class Field(typing.Generic[FieldValueTV]):
 
     def dump_val_to_jsonable(self, value: FieldValueTV):
         """Dump field value to jsonable types
+        
+        Note: This is a convenience method that delegates to the field's 
+        converter. The actual serialization logic is in the converter.
         """
         if value is not _undefined:
             return self.converter.dump_to_jsonable(value)
