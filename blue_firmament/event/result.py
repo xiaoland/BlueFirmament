@@ -91,9 +91,9 @@ class JsonBody(Body[JsonDumpable]):
         super().__init__(data)
 
     def dump_to_dict(self) -> dict:
-        if not isinstance(self._data, (dict, BaseScheme)):
+        if not isinstance(self._data, (dict, BaseModel)):
             raise TypeError(f'cannot dump {type(self._data)} to dict')
-        if isinstance(self._data, BaseScheme):
+        if isinstance(self._data, BaseModel):
             from ..model.converter import ModelConverter
             converter = ModelConverter(self._data.__class__)
             return converter.dump_to_dict(self._data)
