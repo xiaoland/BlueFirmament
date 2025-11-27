@@ -18,7 +18,7 @@ from .._types import PathParamsT, CallableTV
 from ..transport.base import BaseTransporter
 from .result import Body, JsonBody
 from ..task.context import BaseTaskContext
-from ..core.middleware import BaseMiddleware
+from ..core.middleware import BaseTaskMiddleware
 from .main import TaskID, Method
 from . import TaskHandler
 from ..utils.inspect_ import get_param_types
@@ -27,7 +27,7 @@ if typing.TYPE_CHECKING:
     from ..manager import BaseManager
 
 
-class TaskEntry(BaseMiddleware):
+class TaskEntry(BaseTaskMiddleware):
     """BlueFirmament TaskEntry
 
     A mapping from TaskID to a couple of TaskHandler(s).

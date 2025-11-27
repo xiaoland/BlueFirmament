@@ -1,9 +1,11 @@
-"""Core Module of BlueFirmament
-"""
+"""Core Module of BlueFirmament"""
 
 __all__ = [
-    "BlueFirmamentApp"
+    "BlueFirmamentApp",
+    "BaseTaskMiddleware",
+    "BaseMiddleware",  # Backward compatibility
 ]
 
 
 from .app import BlueFirmamentApp
+from .middleware import BaseTaskMiddleware, BaseMiddleware
