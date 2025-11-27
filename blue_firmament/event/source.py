@@ -118,14 +118,16 @@ class EventSource:
         Args:
             event: The event to emit
             context: Optional context for middlewares/handlers
-        """
-        # Update metadata with source info
-        event.metadata["source"] = self._name
 
+        Note:
+            Source info is logged but not added to event metadata
+            to avoid mutating the original event.
+        """
         self._logger.info(
             "Emitting event",
             event_id=str(event.id),
             trace_id=event.trace_id,
+            source=self._name,
         )
 
         await self._event_bus.emit(event, context=context)
