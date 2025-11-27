@@ -2,16 +2,16 @@ import asyncio
 import typing
 from typing import Optional as Opt
 
-from .._types import TaskRegistriesT
-from ..event.context import CommonTaskContext
-from ..event.context import ExtendedTaskContext, BaseTaskContext
+from .._types import EventRegistriesT
+from ..event.context import CommonEventContext
+from ..event.context import ExtendedEventContext, BaseEventContext
 from ..log.main import get_logger
-from ..event.result import TaskResult
+from ..event.result import EventResult
 from ..event.source.base import (
-    BaseEventSource, BaseTransporter
+    BaseEventSource, BaseEventSource
 )
-from ..event import Task
-from ..event.registry import TaskRegistry
+from ..event import Event
+from ..event.registry import EventRegistry
 from .middleware import BaseMiddleware, MiddlewaresT
 from blue_firmament.dal.query_components.filters import *
 
@@ -25,21 +25,21 @@ class BlueFirmamentApp:
     def __init__(
         self,
         name: str = "",
-        registries: Opt[TaskRegistriesT] = None,
-        transporters: Opt[typing.Iterable[BaseEventSource]] = None,
+        registries: Opt[EventRegistriesT] = None,
+        event_sources: Opt[typing.Iterable[BaseEventSource]] = None,
         middlewares: Opt[MiddlewaresT] = None,
-        task_context_cls: type[ExtendedTaskContext] = CommonTaskContext,
+        event_context_cls: type[ExtendedEventContext] = CommonEventContext,
     ):
         """
         :param registries:
             If None, will create an empty registry for each event source.
         """
-        self.__transporters: set[BaseEventSource] = set(transporters or ())
-        self.__task_registries: TaskRegistriesT = registries or {
-            transporter: TaskRegistry(name=str(transporter))
-            for transporter in self.__transporters
+        self.__event_sources: set[BaseEventSource] = set(event_sources or ())
+        self.__event_registries: EventRegistriesT = registries or {
+            event_source: EventRegistry(name=str(event_source))
+            for event_source in self.__event_sources
         }
-        self.__task_context_cls: type[ExtendedTaskContext] = task_context_cls
+        self.__event_context_cls: type[ExtendedEventContext] = event_context_cls
         self.__middlewares: MiddlewaresT = middlewares or []
         self.__logger = get_logger(f"BFApp[{name}]").bind(
             app_name=name
@@ -49,26 +49,26 @@ class BlueFirmamentApp:
     def _logger(self) -> "BoundLogger":
         return self.__logger
 
-    def add_transporter(
+    def add_event_source(
         self,
-        transporter: BaseEventSource,
-        registry: Opt[TaskRegistry] = None
+        event_source: BaseEventSource,
+        registry: Opt[EventRegistry] = None
     ):
-        """Add an event source and its TaskRegistry.
+        """Add an event source and its EventRegistry.
         """
-        self.__transporters.add(transporter)
-        self.__task_registries[transporter] = registry or TaskRegistry(
-            name=transporter.name
+        self.__event_sources.add(event_source)
+        self.__event_registries[event_source] = registry or EventRegistry(
+            name=event_source.name
         )
 
     # Alias for backward compatibility
-    add_event_source = add_transporter
+    
 
     def add_manager(self, manager: type["BaseManager"]):
         """Merge the manager's task registries.
         """
-        for transporter, task_entry in manager.__task_registries__.items():
-            self.__task_registries[transporter].merge(task_entry)
+        for event_source, event_entry in manager.__event_registries__.items():
+            self.__event_registries[event_source].merge(event_entry)
 
     def add_managers(self, *managers: type["BaseManager"]):
         for manager in managers:
@@ -81,7 +81,7 @@ class BlueFirmamentApp:
         try:
             asyncio.set_event_loop(event_loop)
 
-            for transport in self.__transporters:
+            for transport in self.__event_sources:
                 event_loop.create_task(transport.start())
             
             event_loop.run_forever()
@@ -91,18 +91,18 @@ class BlueFirmamentApp:
             event_loop.stop()
             event_loop.close()
 
-    async def handle_task(
+    async def handle_event(
         self,
-        transporter: BaseEventSource | str,
-        task: Task,
-        task_result: TaskResult
+        event_source: BaseEventSource | str,
+        event: Event,
+        event_result: EventResult
     ):
-        task_entry = self.__task_registries[transporter].lookup(task.id)
-        middlewares: MiddlewaresT = self.__middlewares + [task_entry]
-        task_context = self.__task_context_cls(BaseTaskContext(
+        event_entry = self.__event_registries[event_source].lookup(task.id)
+        middlewares: MiddlewaresT = self.__middlewares + [event_entry]
+        event_context = self.__event_context_cls(BaseEventContext(
             task=task,
-            task_result=task_result,
+            event_result=event_result,
             base_logger=self._logger
         ))
-        BaseTaskContext.set_contextvar(task_context)
-        await BaseMiddleware.run_middlewares(middlewares, task_context)
+        BaseEventContext.set_contextvar(event_context)
+        await BaseMiddleware.run_middlewares(middlewares, event_context)

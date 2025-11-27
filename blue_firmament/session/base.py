@@ -7,7 +7,7 @@ from ..utils.datetime_ import get_datetimez
 from ..data.settings.base import get_setting as get_base_setting
 
 if typing.TYPE_CHECKING:
-    from blue_firmament.event import Task
+    from blue_firmament.event import Event
 
 
 SFValueTV = typing.TypeVar("SFValueTV")
@@ -63,8 +63,8 @@ class SessionField(typing.Generic[SFValueTV], abc.ABC):
         pass
 
     @classmethod
-    def from_task(cls, task: 'Task') -> typing.Self:
-        raise NotImplementedError("this field not support from_task method")
+    def from_event(cls, event: 'Event') -> typing.Self:
+        raise NotImplementedError("this field not support from_event method")
 
     
 class Session(abc.ABC):
@@ -171,7 +171,7 @@ class Session(abc.ABC):
     
     @classmethod
     @abc.abstractmethod
-    def from_task(cls, task: 'Task') -> typing.Self:
+    def from_event(cls, event: 'Event') -> typing.Self:
         """Create a session from a task
         """
         ...

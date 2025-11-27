@@ -2,8 +2,8 @@
 """
 
 __all__ = [
-    'TaskRegistry',
-    'TaskEntry',
+    'EventRegistry',
+    'EventEntry',
     'listen_to'
 ]
 
@@ -13,49 +13,49 @@ import inspect
 import typing
 from typing import Optional as Opt, Annotated as Anno, Literal as Lit
 
-from ..exceptions import TaskHandlerNotFound
+from ..exceptions import EventHandlerNotFound
 from .._types import PathParamsT, CallableTV
-from .source.base import BaseEventSource, BaseTransporter
+from .source.base import BaseEventSource, BaseEventSource
 from .result import Body, JsonBody
-from .context import BaseTaskContext
+from .context import BaseEventContext
 from ..core.middleware import BaseMiddleware
-from .main import TaskID, Method
-from . import TaskHandler
+from .main import EventID, Method
+from . import EventHandler
 from ..utils.inspect_ import get_param_types
 
 if typing.TYPE_CHECKING:
     from ..manager import BaseManager
 
 
-class TaskEntry(BaseMiddleware):
-    """BlueFirmament TaskEntry
+class EventEntry(BaseMiddleware):
+    """BlueFirmament EventEntry
 
-    A mapping from TaskID to a couple of TaskHandler(s).
+    A mapping from EventID to a couple of EventHandler(s).
 
     Work as a middleware, run this middleware will concurrently
     run all handlers in this entry.
 
     Can be stored as key in dict or element in set.
 
-    :ivar path_params: Path parameters resolved from the looked up TaskID.
+    :ivar path_params: Path parameters resolved from the looked up EventID.
         Will be set on the copy of this entry.
     """
 
     def __init__(
         self,
-        task_id: TaskID,
-        *handlers: TaskHandler | typing.Callable
+        event_id: EventID,
+        *handlers: EventHandler | typing.Callable
     ) -> None:
-        self.__task_id = task_id
-        self.__handlers: typing.List[TaskHandler] = list(
-            handler if isinstance(handler, TaskHandler) else TaskHandler(function=handler)
+        self.__event_id = event_id
+        self.__handlers: typing.List[EventHandler] = list(
+            handler if isinstance(handler, EventHandler) else EventHandler(function=handler)
             for handler in handlers
         )
         self.path_params: dict[str, PathParamsT] = {}
 
     @property
     def id(self):
-        return self.__task_id
+        return self.__event_id
 
     @property
     def handlers(self):
@@ -65,29 +65,29 @@ class TaskEntry(BaseMiddleware):
         self,
         path_prefix: str = ""
     ) -> typing.Self:
-        """Fork this entry with a new TaskID
+        """Fork this entry with a new EventID
 
         :param path_prefix:
-            Prefix task_id path with this.
-        :return: Forked TaskEntry
+            Prefix event_id path with this.
+        :return: Forked EventEntry
         """
-        return TaskEntry(
-            self.__task_id.fork(
+        return EventEntry(
+            self.__event_id.fork(
                 path_prefix=path_prefix
             ),
             *self.__handlers
         )
 
     def is_dynamic(self) -> bool:
-        return self.__task_id.is_dynamic()
+        return self.__event_id.is_dynamic()
 
-    def is_match(self, task_id: TaskID) -> Opt[dict]:
-        """Whether a task_id match this entry's task_id
+    def is_match(self, event_id: EventID) -> Opt[dict]:
+        """Whether a event_id match this entry's event_id
         """
-        return self.__task_id.is_match(task_id)
+        return self.__event_id.is_match(event_id)
 
-    def add_handler(self, task_handler: TaskHandler):
-        """Add a TaskHandler
+    def add_handler(self, task_handler: EventHandler):
+        """Add a EventHandler
         """
         self.__handlers.append(task_handler)
 
@@ -97,25 +97,25 @@ class TaskEntry(BaseMiddleware):
         for handler in self.__handlers:
             handler.set_manager_cls(manager_cls)
 
-    async def __call__(self, *, next_, task_context: 'BaseTaskContext'):
+    async def __call__(self, *, next_, event_context: 'BaseEventContext'):
         """Run all handlers in this entry concurrently.
 
-        If multiple results, set task result body to a JsonBody which is a list
+        If multiple results, set event result body to a JsonBody which is a list
         wrapped those results.
-        If only one result (where when one handler), set task result body to it.
+        If only one result (where when one handler), set event result body to it.
         """
         coros: list[typing.Awaitable[Body]] = []
         for handler in self.__handlers:
             coros.append(handler(
-                task_context=task_context, path_params=self.path_params
+                event_context=event_context, path_params=self.path_params
             ))
 
         results = await asyncio.gather(*coros)
 
         if len(results) == 1:
-            task_context._task_result.body = results[0]
+            event_context._event_result.body = results[0]
         else:
-            task_context._task_result.body = JsonBody([
+            event_context._event_result.body = JsonBody([
                 result
                 for result in results
             ])
@@ -123,10 +123,10 @@ class TaskEntry(BaseMiddleware):
         await next_()
 
 
-class TaskRegistry:
-    """BlueFirmament Task Registry
+class EventRegistry:
+    """BlueFirmament Event Registry
 
-    A bunch of task entries that you can look up by TaskID.
+    A bunch of task entries that you can look up by EventID.
     """
 
     def __init__(self, 
@@ -141,8 +141,8 @@ class TaskRegistry:
             Can be ``/abc/{var}`` or ``abc/{var}``, but don't
             end with a slash.
         """
-        self.__static_entries: dict[TaskID, TaskEntry] = dict()
-        self.__dynamic_entries: list[TaskEntry] = list()
+        self.__static_entries: dict[EventID, EventEntry] = dict()
+        self.__dynamic_entries: list[EventEntry] = list()
         self.__path_prefix = path_prefix
         self.__name = name
 
@@ -153,14 +153,14 @@ class TaskRegistry:
     @property
     def dynamic_entries(self): return self.__dynamic_entries
 
-    def add_entry(self, entry: TaskEntry):
+    def add_entry(self, entry: EventEntry):
         entry = entry.fork(path_prefix=self.__path_prefix)
         if not entry.is_dynamic():
             self.__static_entries[entry.id] = entry
         else:
             self.__dynamic_entries.append(entry)
 
-    def add_entries(self, entries: typing.Iterable[TaskEntry]):
+    def add_entries(self, entries: typing.Iterable[EventEntry]):
         for entry in entries:
             self.add_entry(entry)
         
@@ -168,59 +168,59 @@ class TaskRegistry:
         self,
         method: Opt[Method] = None,
         path: Opt[str] = None,
-        task_id: Opt[TaskID] = None,
-        handler: Opt[TaskHandler] = None,
+        event_id: Opt[EventID] = None,
+        handler: Opt[EventHandler] = None,
         function: Opt[typing.Callable] = None,
         handler_manager_cls: Opt[typing.Type["BaseManager"]] = None,
     ):
-        """Bind a task handler to Task(ID).
+        """Bind a event handler to Event(ID).
 
         :param method:
         :param path: 
             Must start with a slash and ends with no slash.
-        :param task_id:
+        :param event_id:
             Replace method and path and path_prefix won't be applied.
-        :param handler: A task handler.
+        :param handler: A event handler.
         """
         if handler is None:
             if not (function is None or handler_manager_cls is None):
-                handler = TaskHandler(
+                handler = EventHandler(
                     function=function,
                     manager_cls=handler_manager_cls
                 )
             else:
                 raise ValueError("provide handler or inner_handler and handler_manager")
         
-        if task_id is None:
+        if event_id is None:
             if not (method is None or path is None):
-                task_id = TaskID(
+                event_id = EventID(
                     method, self.__path_prefix + path,
                )
             else:
-                raise ValueError("provide task_id or method and path")
+                raise ValueError("provide event_id or method and path")
 
         try:
-            if not task_id.is_dynamic():
-                entry = self.lookup(task_id)
+            if not event_id.is_dynamic():
+                entry = self.lookup(event_id)
             else:
                 # lookup in dynamic entries
                 entry = next(
-                    (e for e in self.__dynamic_entries if e.is_match(task_id)),
+                    (e for e in self.__dynamic_entries if e.is_match(event_id)),
                     None
                 )
             if entry is None:
                 raise KeyError
         except KeyError:
             # no such entry, create one
-            entry = TaskEntry(task_id, handler)
+            entry = EventEntry(event_id, handler)
 
-        if not task_id.is_dynamic():
+        if not event_id.is_dynamic():
             self.__static_entries[entry.id] = entry
         else:
             self.__dynamic_entries.append(entry)
 
-    def merge(self, to_merge: "TaskRegistry"):
-        """Merge another task registry's entries.
+    def merge(self, to_merge: "EventRegistry"):
+        """Merge another event registry's entries.
 
         Every entry to be merged will be prefixed with the path_prefix.
         (Of course on the forked entry)
@@ -234,27 +234,27 @@ class TaskRegistry:
 
     def lookup(
         self,
-        task_id: TaskID,
-    ) -> TaskEntry:
-        """Lookup a task entry by task_id.
+        event_id: EventID,
+    ) -> EventEntry:
+        """Lookup a task entry by event_id.
 
-        :param task_id: The task ID to lookup, must be static.
+        :param event_id: The task ID to lookup, must be static.
         :raise NotFound: If no task entry matched.
-        :raise TypeError: If task_id is dynamic.
+        :raise TypeError: If event_id is dynamic.
         :returns:
-            The (shallow) copy of the matched TaskEntry
+            The (shallow) copy of the matched EventEntry
             with path_params set.
         """
-        if task_id.is_dynamic(allow_method_dynamic=True):
-            raise TypeError("Cannot lookup a dynamic task_id")
+        if event_id.is_dynamic(allow_method_dynamic=True):
+            raise TypeError("Cannot lookup a dynamic event_id")
 
-        entry = self.__static_entries.get(task_id, None)
+        entry = self.__static_entries.get(event_id, None)
         if entry is not None:
             return entry
         else:
             # lookup in dynamic entries
             for entry in self.__dynamic_entries:
-                match_res = entry.is_match(task_id)
+                match_res = entry.is_match(event_id)
                 if match_res is not None:
                     entry = copy.copy(entry)
                     entry.path_params = match_res
@@ -262,8 +262,8 @@ class TaskRegistry:
                 else:
                     continue
 
-        raise TaskHandlerNotFound(
-            task_id=task_id,
+        raise EventHandlerNotFound(
+            event_id=event_id,
         )
 
 
@@ -271,27 +271,27 @@ def listen_to(
     method: Opt[Method | str],
     path: str,
     separator: str = "/",
-    transporters: Opt[typing.Iterable[str | BaseEventSource]] = None,
+    event_sources: Opt[typing.Iterable[str | BaseEventSource]] = None,
 ):
     """Make the function a handler to an event.
 
-    :param transporters:
+    :param event_sources:
         Only events from these event sources will be handled by this handler.
         None for default event source (you must have an event source named "default").
 
-    Will wrap decorated function to a TaskEntry.
+    Will wrap decorated function to a EventEntry.
     With support of :meth:`blue_firmament.manager.ManagerMetaclass`,
-    this entry will be added to manager task registry.
-    Finally, with :meth:`blue_firmament.event.TaskRegistry.merge` or
+    this entry will be added to manager event registry.
+    Finally, with :meth:`blue_firmament.event.EventRegistry.merge` or
     :meth:`blue_firmament.core.BlueFirmamentApp.add_manager`,
-    manager task registry's entries will be merged into application
-    task registry.
+    manager event registry's entries will be merged into application
+    event registry.
     """
     def wrapper(handler: CallableTV) -> CallableTV:
         return typing.cast(CallableTV, (
-            tuple(transporters or ("default",)),
-            TaskEntry(
-                TaskID(
+            tuple(event_sources or ("default",)),
+            EventEntry(
+                EventID(
                     method=method, path=path,
                     separator=separator,
                     param_types=get_param_types(handler),

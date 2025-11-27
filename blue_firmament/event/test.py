@@ -1,3 +1,3 @@
-"""Test utils of Task module
+"""Test utils of Event module
 """
 

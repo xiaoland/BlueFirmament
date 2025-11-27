@@ -6,7 +6,7 @@ __all__ = [
     'Undefined', '_undefined',
     "NamedTupleTV",
     "PathParamsT",
-    "TaskRegistriesT",
+    "EventRegistriesT",
     "CallableTV",
 ]
 
@@ -15,9 +15,9 @@ import typing
 
 if typing.TYPE_CHECKING:
     from .event.source.base import BaseEventSource
-    from .event import TaskRegistry
+    from .event import EventRegistry
     # Backward compatibility alias
-    BaseTransporter = BaseEventSource
+    BaseEventSource = BaseEventSource
 
 
 class AnnotatedDirective(enum.Enum):
@@ -37,11 +37,11 @@ NamedTupleTV = typing.TypeVar("NamedTupleTV", bound=typing.NamedTuple)
 type PathParamsT = typing.Dict[str, typing.Any]
 """Path parameters type.
 
-Path parameters is the parameters resolved from TaskID path.
+Path parameters is the parameters resolved from EventID path.
 """
 
-type TaskRegistriesT = dict["BaseEventSource" | str, "TaskRegistry"]
-"""A dict, records which task registry serves which event source.
+type EventRegistriesT = dict["BaseEventSource" | str, "EventRegistry"]
+"""A dict, records which event registry serves which event source.
 """
 
 CallableTV = typing.TypeVar("CallableTV", bound=typing.Callable)

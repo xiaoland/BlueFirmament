@@ -3,7 +3,7 @@
 
 __all__ = [
     "HTTPEventSource",
-    "HTTPTransporter"  # backward compatibility
+    "HTTPEventSource"  # backward compatibility
 ]
 
 import datetime
@@ -14,7 +14,7 @@ from dataclasses import dataclass
 from .main import HTTPEventSource
 
 # Backward compatibility alias
-HTTPTransporter = HTTPEventSource
+HTTPEventSource = HTTPEventSource
 
 
 @dataclass

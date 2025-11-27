@@ -5,14 +5,14 @@ TODO better logging
 
 __all__ = [
     "PubSubEventSource",
-    "PubSubTransporter"  # backward compatibility
+    "PubSubEventSource"  # backward compatibility
 ]
 
 import typing
 
-from ...exceptions import TaskHandlerNotFound
+from ...exceptions import EventHandlerNotFound
 from .base import BaseEventSource
-from .. import Task, TaskResult
+from .. import Event, EventResult
 from ...dal.base import PubSubLikeDataAccessLayer, PubSubMessage
 
 if typing.TYPE_CHECKING:
@@ -44,7 +44,7 @@ class PubSubEventSource(BaseEventSource):
         async for message in self.__pubsub_dal.listen():
             try:
                 await self(message)
-            except TaskHandlerNotFound as e:
+            except EventHandlerNotFound as e:
                 self._logger.warning("No handler found for the task", task=e.task_id)
             except Exception as e:
                 self._logger.exception(
@@ -60,12 +60,12 @@ class PubSubEventSource(BaseEventSource):
 
     async def __call__(self, message: PubSubMessage):
         await self._app.handle_task(
-            task=Task.load_from_bytes(message["data"]),
-            task_result=TaskResult(),
-            transporter=self
+            task=Event.load_from_bytes(message["data"]),
+            task_result=EventResult(),
+            event_source=self
         )
 
 
 # Backward compatibility alias
-PubSubTransporter = PubSubEventSource
+PubSubEventSource = PubSubEventSource
 

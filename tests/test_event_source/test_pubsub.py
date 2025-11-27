@@ -6,7 +6,7 @@ from unittest.mock import AsyncMock
 
 from tests.test_dal.test_redis import TestRedisDAL
 import pytest
-from blue_firmament.event import Task, TaskID, TaskResult
+from blue_firmament.event import Event, EventID, EventResult
 from blue_firmament.event.source.pubsub import PubSubEventSource
 
 
@@ -37,8 +37,8 @@ async def test_pubsub_event_source(redis_dal: TestRedisDAL):
     await asyncio.sleep(0.1) # Give it a moment to subscribe
 
     # 3. Publish a message
-    test_task = Task(
-        task_id=TaskID(
+    test_task = Event(
+        event_id=EventID(
             method="POST",
             path="/test/path",
         ),
@@ -56,13 +56,13 @@ async def test_pubsub_event_source(redis_dal: TestRedisDAL):
     
     # Check the 'task' keyword argument
     called_task = call_args.kwargs['task']
-    assert isinstance(called_task, Task)
-    assert called_task.id == TaskID(method="POST", path="/test/path")
+    assert isinstance(called_task, Event)
+    assert called_task.id == EventID(method="POST", path="/test/path")
     assert called_task.parameters["param1"] == "value1"
     assert called_task.metadata.client_id == '1'
 
     # Check the 'task_result' keyword argument
-    assert isinstance(call_args.kwargs['task_result'], TaskResult)
+    assert isinstance(call_args.kwargs['task_result'], EventResult)
 
     # 6. Teardown
     await event_source.stop()

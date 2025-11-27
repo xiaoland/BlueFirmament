@@ -2,9 +2,9 @@
 """
 
 __all__ = [
-    "BaseTaskContext", 
-    "ExtendedTaskContext",
-    "SoBaseTC",
+    "BaseEventContext", 
+    "ExtendedEventContext",
+    "SoBaseEC",
 ]
 
 import contextvars
@@ -16,49 +16,49 @@ from ...model import BaseModel, private_field, Field
 
 if typing.TYPE_CHECKING:
     from ...log import LoggerT
-    from ..main import Task
-    from ..result import TaskResult
+    from ..main import Event
+    from ..result import EventResult
 
 
-class BaseTaskContextFields(typing.TypedDict):
-    task: typing.NotRequired["Task"]
-    task_result: typing.NotRequired["TaskResult"]
+class BaseEventContextFields(typing.TypedDict):
+    event: typing.NotRequired["Event"]
+    event_result: typing.NotRequired["EventResult"]
     base_logger: typing.NotRequired["LoggerT"]
     """Bind task context based on this logger.
     """
 
 
-class BaseTaskContext:
-    """Base class of TaskContext (Event Context).
+class BaseEventContext:
+    """Base class of EventContext (Event Context).
 
     .. versionchanged:: 0.1.2
-        rename to BaseTaskContext from RequestContext and
+        rename to BaseEventContext from RequestContext and
         removed fields from session.
     """
 
     def __init__(
         self,
-        btc: Opt["BaseTaskContext"] = None,
-        **kwargs: typing.Unpack[BaseTaskContextFields]
+        btc: Opt["BaseEventContext"] = None,
+        **kwargs: typing.Unpack[BaseEventContextFields]
     ):
         """
-        :param btc: another BaseTaskContext instance to copy from
+        :param btc: another BaseEventContext instance to copy from
         """
         if btc:
-            self.__task = btc._task
-            self.__task_result = btc._task_result
+            self.__event = btc._event
+            self.__event_result = btc._event_result
             self.__logger = btc._logger
         else:
-            self.__task = kwargs["task"]
-            self.__task_result = kwargs["task_result"]
+            self.__event = kwargs["task"]
+            self.__event_result = kwargs["event_result"]
             self.__logger = kwargs["base_logger"].bind(
-                trace_id=self.__task.trace_id,
+                trace_id=self.__event.trace_id,
             )
 
     @property
-    def _task(self) -> "Task": return self.__task
+    def _event(self) -> "Event": return self.__event
     @property
-    def _task_result(self) -> 'TaskResult': return self.__task_result
+    def _event_result(self) -> 'EventResult': return self.__event_result
     @property
     def _logger(self) -> "LoggerT": return self.__logger
     @_logger.setter
@@ -76,11 +76,11 @@ class BaseTaskContext:
         return cls.CONTEXTVAR.get()
 
 
-class ExtendedTaskContext(
+class ExtendedEventContext(
     typing.Generic[SessionTV],
-    BaseTaskContext, 
+    BaseEventContext, 
 ):
-    """Extend BaseTaskContext with session.
+    """Extend BaseEventContext with session.
     """
 
     def __init_subclass__(
@@ -93,21 +93,21 @@ class ExtendedTaskContext(
 
     def __init__(
         self,
-        tc: BaseTaskContext | typing.Self,
+        tc: BaseEventContext | typing.Self,
         skip_btc_init: bool = False
     ):
         """
-        :param tc: BaseTaskContext or ExtendedTaskContext instance.
+        :param tc: BaseEventContext or ExtendedEventContext instance.
         :param skip_btc_init: For manager's sake!
         """
         if not skip_btc_init:
             super().__init__(btc=tc)
-        if tc.__class__ is BaseTaskContext:
-            self.__session: SessionTV = self.__session_cls.from_task(tc._task)
-        elif isinstance(tc, ExtendedTaskContext):
+        if tc.__class__ is BaseEventContext:
+            self.__session: SessionTV = self.__session_cls.from_event(tc._event)
+        elif isinstance(tc, ExtendedEventContext):
             self.__session: SessionTV = tc._session
         else:
-            raise TypeError("tc must be either BaseTaskContext or subclass of ExtendedTaskContext")
+            raise TypeError("tc must be either BaseEventContext or subclass of ExtendedEventContext")
         self.__init_fields__()
 
     def __init_fields__(self):
@@ -121,33 +121,33 @@ class ExtendedTaskContext(
         return self.__session
 
 
-class SoBaseTC(BaseModel):
-    """Scheme attached BaseTaskContext.
+class SoBaseEC(BaseModel):
+    """Scheme attached BaseEventContext.
 
     By inheriting this class, your class can access
     task context and its properties with ease.
 
-    Or by inheriting this class then override ``_task_context``'s
-    type to your customized TaskContext and add fields, enables
+    Or by inheriting this class then override ``_event_context``'s
+    type to your customized EventContext and add fields, enables
     your scheme accessing your customized task context.
 
     .. versionchanged:: 0.1.2
         rename to ``SoBTC`` from ``SchemeHasRequestContext``
     """
 
-    _task_context: Field[BaseTaskContext] = private_field(
-        default_factory=BaseTaskContext.from_contextvar
+    _event_context: Field[BaseEventContext] = private_field(
+        default_factory=BaseEventContext.from_contextvar
     )
 
     def __post_init__(self) -> None:
         # update scheme logger context
         self._set_logger(self._logger.bind(
-            **self._task_context._logger._context
+            **self._event_context._logger._context
         ))
 
     @property
-    def _task(self):
-        return self._task_context._task
+    def _event(self):
+        return self._event_context._event
     @property
-    def _task_result(self):
-        return self._task_context._task_result
+    def _event_result(self):
+        return self._event_context._event_result

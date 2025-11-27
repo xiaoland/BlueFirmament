@@ -4,7 +4,7 @@
 import typing
 import postgrest
 import enum
-from ..event.context import ExtendedTaskContext
+from ..event.context import ExtendedEventContext
 from .._types import _undefined
 from ..model.converter import ModelConverter
 from .utils import dump_query_coms_like
@@ -186,7 +186,7 @@ class PostgrestDAL(TableLikeDataAccessLayer, DataAccessLayerWithAuth):
         to_select: typing.Type[ModelTV],
         *filters: QueryComLikeType,
         path: typing.Optional[DALPath] = None,
-        task_context: Opt[ExtendedTaskContext] = None,
+        event_context: Opt[ExtendedEventContext] = None,
     ) -> typing.Tuple[ModelTV, ...]:
         ...
     @typing.overload
@@ -195,7 +195,7 @@ class PostgrestDAL(TableLikeDataAccessLayer, DataAccessLayerWithAuth):
         to_select: "Field[FieldValueTV]",
         *filters: QueryComLikeType,
         path: typing.Optional[DALPath] = None,
-        task_context: Opt[ExtendedTaskContext] = None,
+        event_context: Opt[ExtendedEventContext] = None,
     ) -> typing.Tuple[FieldValueTV, ...]:
         ...
     @typing.overload
@@ -204,7 +204,7 @@ class PostgrestDAL(TableLikeDataAccessLayer, DataAccessLayerWithAuth):
         to_select: typing.Iterable[FieldLikeType] | None,
         *filters: QueryComLikeType,
         path: typing.Optional[DALPath] = None,
-        task_context: Opt[ExtendedTaskContext] = None,
+        event_context: Opt[ExtendedEventContext] = None,
     ) -> typing.Tuple[dict, ...]:
         ...
     async def select(
@@ -217,7 +217,7 @@ class PostgrestDAL(TableLikeDataAccessLayer, DataAccessLayerWithAuth):
         ],
         *query_coms: QueryComLikeType,
         path: typing.Optional[DALPath] = None,
-        task_context: Opt[ExtendedTaskContext] = None,
+        event_context: Opt[ExtendedEventContext] = None,
     ) -> typing.Union[
         typing.Tuple[ModelTV, ...],
         typing.Tuple[FieldValueTV, ...],
@@ -279,7 +279,7 @@ class PostgrestDAL(TableLikeDataAccessLayer, DataAccessLayerWithAuth):
             return tuple(
                 sc(
                     instance_dict, 
-                    _task_context=task_context or _undefined
+                    _event_context=event_context or _undefined
                 )
                 for instance_dict in res.data
             )  # type: ignore

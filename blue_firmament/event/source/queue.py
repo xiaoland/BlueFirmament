@@ -2,7 +2,7 @@
 """
 import typing
 from .base import BaseEventSource
-from .. import Task, TaskResult
+from .. import Event, EventResult
 
 if typing.TYPE_CHECKING:
     from ...dal.base import QueueLikeDataAccessLayer
@@ -37,11 +37,11 @@ class QueueEventSource(BaseEventSource):
 
     async def __call__(self, raw: bytes):
         await self._app.handle_task(
-            task=Task.load_from_bytes(raw),
-            task_result=TaskResult(),
-            transporter=self
+            task=Event.load_from_bytes(raw),
+            task_result=EventResult(),
+            event_source=self
         )
 
 
 # Backward compatibility alias
-QueueTransporter = QueueEventSource
+QueueEventSource = QueueEventSource

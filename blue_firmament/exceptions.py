@@ -16,7 +16,7 @@ __all__ = [
     "AtLeastOne",
     "NotImplemented",
     "NotFound",
-    "TaskHandlerNotFound",
+    "EventHandlerNotFound",
     "DuplicateOrConflict",
     "Duplicate",
     "Conflict",
@@ -31,7 +31,7 @@ import abc
 import typing
 from typing import Optional as Opt
 from .utils.typing_ import JsonDumpable
-from .event import TaskStatus, TaskID
+from .event import EventStatus, EventID
 from .log.main import get_logger
 
 LOGGER = get_logger(__name__)
@@ -76,7 +76,7 @@ class BlueFirmamentException(Exception, abc.ABC):
 
     @property
     @abc.abstractmethod
-    def task_status(self) -> TaskStatus: ...
+    def event_status(self) -> EventStatus: ...
 
     @classmethod
     def from_python_exception(cls, exception: Exception) -> "BlueFirmamentException":
@@ -110,16 +110,16 @@ class InternalError(BlueFirmamentException):
     """Exception raised cause of server's fault."""
 
     @property
-    def task_status(self) -> TaskStatus:
-        return TaskStatus.INTERNAL_SERVER_ERROR
+    def event_status(self) -> EventStatus:
+        return EventStatus.INTERNAL_SERVER_ERROR
 
 
 class ClientError(BlueFirmamentException):
     """Exception raised cause of client's fault"""
 
     @property
-    def task_status(self) -> TaskStatus:
-        return TaskStatus.BAD_REQUEST
+    def event_status(self) -> EventStatus:
+        return EventStatus.BAD_REQUEST
 
 
 class RequestFailed(InternalError):
@@ -158,8 +158,8 @@ class ExternalError(BlueFirmamentException):
         return self.errmsg[key]
 
     @property
-    def task_status(self):
-        return TaskStatus.SERVICE_UNAVAILABLE
+    def event_status(self):
+        return EventStatus.SERVICE_UNAVAILABLE
 
 
 class Retryable(BlueFirmamentException):
@@ -177,8 +177,8 @@ class Retryable(BlueFirmamentException):
         return self.__delay
 
     @property
-    def task_status(self):
-        return TaskStatus.SERVICE_UNAVAILABLE
+    def event_status(self):
+        return EventStatus.SERVICE_UNAVAILABLE
 
 
 class MaxRetriesExceeded(BlueFirmamentException):
@@ -186,8 +186,8 @@ class MaxRetriesExceeded(BlueFirmamentException):
         super().__init__("max retries exceeded")
 
     @property
-    def task_status(self) -> TaskStatus:
-        return TaskStatus.SERVICE_UNAVAILABLE
+    def event_status(self) -> EventStatus:
+        return EventStatus.SERVICE_UNAVAILABLE
 
 
 class ParamsInvalid(ClientError, ValueError):
@@ -207,8 +207,8 @@ class ParamsInvalid(ClientError, ValueError):
         )
 
     @property
-    def task_status(self):
-        return TaskStatus.UNPROCESSABLE_ENTITY
+    def event_status(self):
+        return EventStatus.UNPROCESSABLE_ENTITY
 
 
 class ParamRequired(ClientError, ValueError):
@@ -249,27 +249,27 @@ class NotImplemented(InternalError, NotImplementedError):
         super().__init__(errmsg, *args, **kwargs)
 
     @property
-    def task_status(self) -> TaskStatus:
-        return TaskStatus.NOT_IMPLEMENTED
+    def event_status(self) -> EventStatus:
+        return EventStatus.NOT_IMPLEMENTED
 
 
 class NotFound(ClientError, KeyError):
     """未找到"""
 
     @property
-    def task_status(self) -> TaskStatus:
-        return TaskStatus.NOT_FOUND
+    def event_status(self) -> EventStatus:
+        return EventStatus.NOT_FOUND
 
 
-class TaskHandlerNotFound(NotFound):
+class EventHandlerNotFound(NotFound):
     """没有该任务的处理器"""
 
-    def __init__(self, task_id: TaskID):
-        super().__init__("task handler not found", task_id=task_id)
+    def __init__(self, event_id: EventID):
+        super().__init__("task handler not found", event_id=event_id)
 
     @property
-    def task_id(self):
-        return self.errmsg.get("task_id", None)
+    def event_id(self):
+        return self.errmsg.get("event_id", None)
 
 
 class DuplicateOrConflict(InternalError):
@@ -307,8 +307,8 @@ class DuplicateOrConflict(InternalError):
         )
 
     @property
-    def task_status(self) -> TaskStatus:
-        return TaskStatus.CONFLICT
+    def event_status(self) -> EventStatus:
+        return EventStatus.CONFLICT
 
 
 class Duplicate(DuplicateOrConflict):
@@ -360,8 +360,8 @@ class Unauthorized(InternalError):
         super().__init__("you are using identity (token): \n%s" % identity)
 
     @property
-    def task_status(self) -> TaskStatus:
-        return TaskStatus.UNAUTHORIZED
+    def event_status(self) -> EventStatus:
+        return EventStatus.UNAUTHORIZED
 
 
 class Forbidden(InternalError):
@@ -374,8 +374,8 @@ class Forbidden(InternalError):
         super().__init__(msg)
 
     @property
-    def task_status(self):
-        return TaskStatus.FORBIDDEN
+    def event_status(self):
+        return EventStatus.FORBIDDEN
 
 
 class TooManyRequests(InternalError):

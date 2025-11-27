@@ -12,8 +12,8 @@ from typing import Literal as Lit, Optional as Opt, Annotated as Anno
 
 from .. import event
 from ..utils.exec_ import build_func_sig
-from ..event.registry import TaskRegistry
-from ..event.context.common import CommonTaskContext
+from ..event.registry import EventRegistry
+from ..event.context.common import CommonEventContext
 from ..dal import KeyableType, DataAccessObject
 from ..model.field import CompositeField, FieldValueProxy
 from ..log.main import get_logger
@@ -22,7 +22,7 @@ from .base import BaseManager, ModelTV
 from ..utils.typing_ import safe_issubclass
 from ..event.main import Method
 from ..model import BaseModel
-from ..event import TaskID, TaskMetadata
+from ..event import EventID, EventMetadata
 
 if typing.TYPE_CHECKING:
     from ..core.app import BlueFirmamentApp
@@ -68,13 +68,13 @@ class PresetHandlerConfig:
     """Add handler getting managing scheme.
 
     - Name: ``get_<manager_name>``
-    - TaskID: ``GET /{<manager_name>_id}``
+    - EventID: ``GET /{<manager_name>_id}``
     """
     get_a_field: typing.Iterable["Field"] = ()
     """Add field getter handler for these fields.
 
     - Name: `get_<manager_name>_<field.name>`
-    - TaskID: ``GET /{<manager_name>_id}/<field.name>``
+    - EventID: ``GET /{<manager_name>_id}/<field.name>``
     """
     create: bool = False
     """Add create handler.
@@ -103,7 +103,7 @@ KeyTV = typing.TypeVar('KeyTV', bound=KeyableType)
 class CommonManager(
     typing.Generic[ModelTV, KeyTV],
     BaseManager[ModelTV],
-    CommonTaskContext,
+    CommonEventContext,
 ):
     """
     Configuration
@@ -115,9 +115,9 @@ class CommonManager(
     - preset_handler_config:
     """
 
-    def __init__(self, task_context: CommonTaskContext):
-        BaseManager.__init__(self, task_context)
-        CommonTaskContext.__init__(self, tc=task_context, skip_btc_init=True)
+    def __init__(self, event_context: CommonEventContext):
+        BaseManager.__init__(self, event_context)
+        CommonEventContext.__init__(self, tc=event_context, skip_btc_init=True)
 
     def __init_subclass__(
         cls,
@@ -147,7 +147,7 @@ class CommonManager(
             
             key_aliases: typing.Sequence[str]
             if preset_handler_config.sup_path and preset_handler_config.key_fields:
-                key_aliases = TaskID.resolve_dynamic_indices(
+                key_aliases = EventID.resolve_dynamic_indices(
                     cls.__path_prefix__ + preset_handler_config.sup_path
                 )
                 sup_path = preset_handler_config.sup_path
@@ -184,7 +184,7 @@ class CommonManager(
                 exec(func_sig + func_body, exec_namespaces, handlers)
                 setattr(cls, handler_name, handlers[handler_name])
 
-                cls.__task_registries__.setdefault("default", TaskRegistry(
+                cls.__event_registries__.setdefault("default", EventRegistry(
                     name="default", path_prefix=cls.__path_prefix__
                 )).add_handler(
                     method=Method.GET, path=sup_path,
@@ -217,7 +217,7 @@ class CommonManager(
                 exec(func_sig + func_body, exec_namespaces, handlers)
                 setattr(cls, handler_name, handlers[handler_name])
 
-                cls.__task_registries__.setdefault("default", TaskRegistry(
+                cls.__event_registries__.setdefault("default", EventRegistry(
                     name="default", path_prefix=cls.__path_prefix__
                 )).add_handler(
                     method=Method.PUT, path=sup_path,
@@ -235,13 +235,13 @@ class CommonManager(
         self,
         name: str,
         parameters: Opt[dict] = None,
-        metadata: Opt[dict | TaskMetadata] = None,
+        metadata: Opt[dict | EventMetadata] = None,
         without_prefix: bool = False
     ):
         """:meth:`event.simple_emit` but prefix name with manager path prefix.
 
         :param name: Name of event. Starts with dot.
-        :param metadata: TaskMetadata.
+        :param metadata: EventMetadata.
             If not provided, use current task's metadata.
         :param without_prefix:
             If True, do not prefix name with manager path prefix.
@@ -288,7 +288,7 @@ class CommonManager(
         If success, set as managing scheme.
         """
         self._scheme = await self._dao.select_one(
-            _id, task_context=self
+            _id, event_context=self
         )
         return self._scheme
 
@@ -344,7 +344,7 @@ class CommonManager(
             return await self._dao.select_a_field(
                 field,
                 self._scheme_cls._get_key_field().equals(_id),
-                task_context=self
+                event_context=self
             )
         else:
             return FieldValueProxy.dump(scheme._get_value(field))

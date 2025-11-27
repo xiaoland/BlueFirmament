@@ -1,6 +1,6 @@
 import typing
 import abc
-from .. import TaskMetadata
+from .. import EventMetadata
 
 if typing.TYPE_CHECKING:
     from structlog.stdlib import BoundLogger
@@ -8,7 +8,7 @@ if typing.TYPE_CHECKING:
 
 
 class BaseEventSource(abc.ABC):
-    """The base class of the event source module (formerly transport module).
+    """The base class of the event source module (formerly event source module).
     """
 
     def __init__(self, app: "BlueFirmamentApp", name: str = "default") -> None:
@@ -49,14 +49,14 @@ class BaseEventSource(abc.ABC):
         """
 
     @staticmethod
-    def _parse_task_metadata(raw: typing.Any) -> TaskMetadata:
+    def _parse_event_metadata(raw: typing.Any) -> EventMetadata:
         if raw is None:
-            return TaskMetadata()
+            return EventMetadata()
         if isinstance(raw, dict):
-            return TaskMetadata(**raw)
+            return EventMetadata(**raw)
         raise NotImplementedError(f"Unsupported metadata parsing input type {type(raw)}")
 
 
 # Backward compatibility alias
-BaseTransporter = BaseEventSource
+BaseEventSource = BaseEventSource
 

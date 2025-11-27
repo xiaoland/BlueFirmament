@@ -2,17 +2,17 @@
 """
 
 __all__ = [
-    "BaseTaskContext",
-    "SoBaseTC",
-    "ExtendedTaskContext",
-    "CommonTaskContext",
-    "SoCommonTC"
+    "BaseEventContext",
+    "SoBaseEC",
+    "ExtendedEventContext",
+    "CommonEventContext",
+    "SoCommonEC"
 ]
 
 
 from .main import (
-    BaseTaskContext, SoBaseTC, ExtendedTaskContext
+    BaseEventContext, SoBaseEC, ExtendedEventContext
 )
 from .common import (
-    CommonTaskContext, SoCommonTC
+    CommonEventContext, SoCommonEC
 )

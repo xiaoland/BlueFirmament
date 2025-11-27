@@ -6,21 +6,18 @@ Design doc: :doc:`design/event`
 """
 
 __all__ = [
-    # Task-related exports (renamed from task module)
-    'TaskID',
-    'Task',
-    'TaskStatus',
-    'TaskMetadata',
-    'TaskResult',
-    'TaskHandler',
-    'TaskRegistry',
-    'TaskEntry',
+    'EventID',
+    'Event',
+    'EventStatus',
+    'EventMetadata',
+    'EventResult',
+    'EventHandler',
+    'EventRegistry',
+    'EventEntry',
     'listen_to',
     'Method',
     'LazyParameter',
-    # Event-specific exports
     'set_event_broker',
-    'Event',
     'emit',
     'simple_emit'
 ]
@@ -29,14 +26,14 @@ import typing
 from typing import Optional as Opt
 
 from .main import (
-    TaskID, Task, TaskMetadata, Method, LazyParameter
+    EventID, Event, EventMetadata, Method, LazyParameter
 )
 from .result import (
-    TaskStatus, TaskResult
+    EventStatus, EventResult
 )
-from .handler import TaskHandler
+from .handler import EventHandler
 from .registry import (
-    TaskRegistry, TaskEntry, listen_to
+    EventRegistry, EventEntry, listen_to
 )
 from ..log import get_logger
 from ..dal.base import PubSubLikeDataAccessLayer
@@ -57,11 +54,6 @@ def set_event_broker(event_broker: PubSubLikeDataAccessLayer):
     EVENT_BROKER = event_broker
 
 
-class Event(Task):
-    """Event is a specialized Task.
-    """
-
-
 async def emit(event: Event) -> None:
     """Emit an event to the event broker.
     """
@@ -79,10 +71,10 @@ def simple_emit(
         e.g. "user.created", "order.completed"
     :param parameters: Parameters of the event.
     :param metadata: Metadata of the event.
-        Fields must be defined in :meth:`blue_firmament.event.TaskMetadata`
+        Fields must be defined in :meth:`blue_firmament.event.EventMetadata`
     """
     event = Event(
-        task_id=TaskID(method=None, path=name, separator='.'),
+        event_id=EventID(method=None, path=name, separator='.'),
         parameters=parameters,
         metadata=metadata
     )
