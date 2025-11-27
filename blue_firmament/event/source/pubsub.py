@@ -1,24 +1,25 @@
-"""Transporter listening to a Pub/Sub model channel.
+"""Event source listening to a Pub/Sub model channel.
 
 TODO better logging
 """
 
 __all__ = [
-    "PubSubTransporter"
+    "PubSubEventSource",
+    "PubSubEventSource"  # backward compatibility
 ]
 
 import typing
 
-from ..exceptions import TaskHandlerNotFound
-from ..transport.base import BaseTransporter
-from ..task import Task, TaskResult
-from ..dal.base import PubSubLikeDataAccessLayer, PubSubMessage
+from ...exceptions import EventHandlerNotFound
+from .base import BaseEventSource
+from .. import Event, EventResult
+from ...dal.base import PubSubLikeDataAccessLayer, PubSubMessage
 
 if typing.TYPE_CHECKING:
-    from ..core import BlueFirmamentApp
+    from ...core import BlueFirmamentApp
 
 
-class PubSubTransporter(BaseTransporter):
+class PubSubEventSource(BaseEventSource):
 
     def __init__(
         self,
@@ -43,11 +44,11 @@ class PubSubTransporter(BaseTransporter):
         async for message in self.__pubsub_dal.listen():
             try:
                 await self(message)
-            except TaskHandlerNotFound as e:
+            except EventHandlerNotFound as e:
                 self._logger.warning("No handler found for the task", task=e.task_id)
             except Exception as e:
                 self._logger.exception(
-                    f"Unknown error occured when handling task from Pub/Sub {self.name}"
+                    f"Unknown error occured when handling event from Pub/Sub {self.name}"
                 )
             if self.__stop:
                 break
@@ -59,8 +60,12 @@ class PubSubTransporter(BaseTransporter):
 
     async def __call__(self, message: PubSubMessage):
         await self._app.handle_task(
-            task=Task.load_from_bytes(message["data"]),
-            task_result=TaskResult(),
-            transporter=self
+            task=Event.load_from_bytes(message["data"]),
+            task_result=EventResult(),
+            event_source=self
         )
+
+
+# Backward compatibility alias
+PubSubEventSource = PubSubEventSource
 

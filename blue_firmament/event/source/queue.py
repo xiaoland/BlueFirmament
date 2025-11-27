@@ -1,0 +1,47 @@
+"""Event source listening to a Queue.
+"""
+import typing
+from .base import BaseEventSource
+from .. import Event, EventResult
+
+if typing.TYPE_CHECKING:
+    from ...dal.base import QueueLikeDataAccessLayer
+    from ...core.app import BlueFirmamentApp
+
+
+class QueueEventSource(BaseEventSource):
+    """
+
+    :ivar __dal: Listening this queue dal for events.
+    :ivar __handling_dal: The queue storing handling events.
+    """
+
+    def __init__(
+        self,
+        app: "BlueFirmamentApp",
+        queue_dal: "QueueLikeDataAccessLayer",
+        handling_queue_dal: "QueueLikeDataAccessLayer",
+        name: str = "default"
+    ):
+        super().__init__(app=app, name=name)
+        self.__dal = queue_dal
+        self.__handling_dal = handling_queue_dal
+        self.__stop = False
+
+    async def start(self):
+        while not self.__stop:
+            await self(await self.__dal.pop())
+
+    async def stop(self):
+        self.__stop = True
+
+    async def __call__(self, raw: bytes):
+        await self._app.handle_task(
+            task=Event.load_from_bytes(raw),
+            task_result=EventResult(),
+            event_source=self
+        )
+
+
+# Backward compatibility alias
+QueueEventSource = QueueEventSource

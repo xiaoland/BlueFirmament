@@ -1,4 +1,4 @@
-"""Task handler module.
+"""Event handler module (formerly Task handler).
 """
 
 import inspect
@@ -9,27 +9,27 @@ from .._types import PathParamsT, _undefined
 from ..exceptions import InternalError
 from ..model import BaseConverter
 from ..model.converter import get_converter_from_anno
-from . import Task
-from .result import TaskResult, Body, EmptyBody, JsonBody
+from .main import Event
+from .result import EventResult, Body, EmptyBody, JsonBody
 from ..utils.main import call_as_async
 from ..utils.typing_ import get_origin, safe_issubclass, is_json_dumpable
 
 if typing.TYPE_CHECKING:
-    from .main import BaseTaskContext
+    from .context import BaseEventContext
     from ..manager import BaseManager
 
 
-class TaskHandler:
-    """BlueFirmament TaskHandler
+class EventHandler:
+    """BlueFirmament EventHandler
 
     Automatically resolve parameters that inner handler (function) needed from
-    TaskContext.
+    EventContext.
     """
 
     type FunctionKwargsT = typing.Dict[
         str,
         typing.Callable[
-            ["BaseTaskContext", PathParamsT], typing.Coroutine,
+            ["BaseEventContext", PathParamsT], typing.Coroutine,
         ]
     ]
     """Inner handler parameters"""
@@ -53,7 +53,7 @@ class TaskHandler:
         self.__method_manager_cls = manager_cls
 
         # parse handler kwargs
-        self.__handler_kwargs: TaskHandler.FunctionKwargsT =\
+        self.__handler_kwargs: EventHandler.FunctionKwargsT =\
             self._parse_handler_kwargs(self.__function)
 
     @property
@@ -63,26 +63,26 @@ class TaskHandler:
     def set_manager_cls(self, manager_cls: typing.Type["BaseManager"]):
         """Set inner handler's manager class if it's a manager method.
 
-        Useful for manager class created after task handler created.
-        E.g. use :meth:`blue_firmament.task.task` to decorate a manager method.
+        Useful for manager class created after event handler created.
+        E.g. use :meth:`blue_firmament.event.listen_to` to decorate a manager method.
         """
         self.__method_manager_cls = manager_cls
 
     @staticmethod
     def get_param_getter(name: str, converter: BaseConverter, safe: bool = True):
         """Get a getter resolves parameter from
-        task parameters or path parameters.
+        event parameters or path parameters.
         """
-        async def getter(tc: "BaseTaskContext", path_params: PathParamsT):
+        async def getter(tc: "BaseEventContext", path_params: PathParamsT):
             val = path_params.get(name, _undefined)
             if val is _undefined:
-                val = await tc._task.parameters.get(name, _undefined)
+                val = await tc._event.parameters.get(name, _undefined)
                 if val is _undefined:
                     if not safe:
-                        raise ValueError(f'{name} not found in task parameters or path parameters')
+                        raise ValueError(f'{name} not found in event parameters or path parameters')
                     else:
                         return _undefined
-            return converter(val, _task_context=tc)
+            return converter(val, _event_context=tc)
 
         return getter
 
@@ -116,10 +116,10 @@ class TaskHandler:
         -------
         返回一个字典，键为处理器的参数名称，值为该参数的获取器。
 
-        参数获取器接收 :class:`blue_firmament.transport.context.RequestContext` 作为参数，从中解析出本参数需要的值。
+        参数获取器接收 :class:`blue_firmament.event.context.BaseEventContext` 作为参数，从中解析出本参数需要的值。
         """
         handler_params_sig = inspect.signature(handler).parameters
-        kwargs: TaskHandler.FunctionKwargsT = {}
+        kwargs: EventHandler.FunctionKwargsT = {}
 
         for name, param_sig in handler_params_sig.items():
             if name in ('self', 'cls'):
@@ -128,11 +128,11 @@ class TaskHandler:
             anno = get_origin(param_sig.annotation)
             converter = get_converter_from_anno(param_sig.annotation)
 
-            if safe_issubclass(anno, Task):
-                kwargs[name] = lambda tc, _: tc._task
+            if safe_issubclass(anno, Event):
+                kwargs[name] = lambda tc, _: tc._event
                 continue
-            elif safe_issubclass(anno, TaskResult):
-                kwargs[name] = lambda tc, _: tc._task_result
+            elif safe_issubclass(anno, EventResult):
+                kwargs[name] = lambda tc, _: tc._event_result
                 continue
 
             kwargs[name] = cls.get_param_getter(name, converter)
@@ -141,7 +141,7 @@ class TaskHandler:
 
     async def __call__(
         self, *,
-        task_context: 'BaseTaskContext',
+        event_context: 'BaseEventContext',
         path_params: PathParamsT,
     ) -> Body:
         """Run the inner handler.
@@ -155,7 +155,7 @@ class TaskHandler:
         # get kwargs
         kwargs = {}
         for name, getter in self.__handler_kwargs.items():
-            value = await getter(task_context, path_params)
+            value = await getter(event_context, path_params)
             if value is not _undefined:
                 kwargs[name] = value
 
@@ -163,7 +163,7 @@ class TaskHandler:
         args = []
         # [self] don't add other arg parser before this one
         if self.__method_manager_cls:
-            manager = self.__method_manager_cls(task_context=task_context)
+            manager = self.__method_manager_cls(event_context=event_context)
             args.append(manager)
 
         # call handler

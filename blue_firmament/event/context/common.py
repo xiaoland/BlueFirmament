@@ -1,25 +1,25 @@
-"""Common Task Context
+"""Common Event Context (formerly Common Task Context)
 """
 
 __all__ = [
-    "CommonTaskContext",
-    "SoCommonTC"
+    "CommonEventContext",
+    "SoCommonEC"
 ]
 
 import typing
 from ... import event
 from ...model import Field, private_field
-from ..context import SoBaseTC, ExtendedTaskContext
+from . import SoBaseEC, ExtendedEventContext
 from ...session.common import CommonSession
 if typing.TYPE_CHECKING:
     from ...dal import DataAccessObjects
 
 
-class CommonTaskContext(
-    ExtendedTaskContext[CommonSession],
+class CommonEventContext(
+    ExtendedEventContext[CommonSession],
     session_cls=CommonSession
 ):
-    """Task context extended with common session.
+    """Event context extended with common session.
 
     .. versionadded:: 0.1.2
     """
@@ -38,11 +38,11 @@ class CommonTaskContext(
         return self._session.operator
 
 
-class SoCommonTC(SoBaseTC):
-    """Scheme of CommonTaskContext"""
+class SoCommonEC(SoBaseEC):
+    """Scheme of CommonEventContext"""
 
-    _task_context: Field[CommonTaskContext] = private_field(
-        default_factory=CommonTaskContext.from_contextvar
+    _task_context: Field[CommonEventContext] = private_field(
+        default_factory=CommonEventContext.from_contextvar
     )
 
     @property

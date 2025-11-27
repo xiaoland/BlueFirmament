@@ -7,10 +7,10 @@ import abc
 import typing
 from typing import Optional as Opt
 
-from .._types import TaskRegistriesT
-from ..transport.base import BaseTransporter
-from ..task.registry import TaskRegistry, TaskEntry
-from ..task.context import BaseTaskContext
+from .._types import EventRegistriesT
+from ..event.source.base import BaseEventSource, BaseEventSource
+from ..event.registry import EventRegistry, EventEntry
+from ..event.context import BaseEventContext
 from ..exceptions import BFExceptionTV
 from ..model.field import Field
 from ..model import ModelTV
@@ -32,9 +32,9 @@ class ManagerMetaclass(abc.ABCMeta):
     Use :func:`blue_firmament.log.decorators.log_manager_handler` to decorate all handlers.
     A decorated handler will be skipped.
 
-    Task registry
+    Event registry
     ^^^^^^^^^^^^^
-    Handlers decorated with :meth:`blue_firmament.task.task` will be
+    Handlers decorated with :meth:`blue_firmament.event.listen_to` will be
     automatically added to manager task registry.
 
     """
@@ -52,25 +52,25 @@ class ManagerMetaclass(abc.ABCMeta):
             return super().__new__(cls, name, bases, attrs, **kwargs)
 
         attrs["__path_prefix__"] = path_prefix
-        attrs["__task_registries__"]: dict[BaseTransporter | str, TaskRegistry] = {}
-        task_entries: list[tuple[tuple[BaseTransporter | str], TaskEntry]] = []
+        attrs["__event_registries__"]: dict[BaseEventSource | str, EventRegistry] = {}
+        event_entries: list[tuple[tuple[BaseEventSource | str], EventEntry]] = []
 
         for attr_name, attr_value in attrs.items():
-            # resolve task_entries
+            # resolve event_entries
             if (
                 isinstance(attr_value, tuple)
                 and len(attr_value) == 2
                 and isinstance(attr_value[0], tuple)
-                and isinstance(attr_value[1], TaskEntry)
+                and isinstance(attr_value[1], EventEntry)
             ):
-                task_entry = attr_value[1]
-                entry_handlers = task_entry.handlers
+                event_entry = attr_value[1]
+                entry_handlers = event_entry.handlers
                 # unwrap handler
                 if len(entry_handlers) != 1:
                     raise ValueError("Must have exactly one handler")
                 attrs[attr_name] = entry_handlers[0].function
                 # add to entries
-                task_entries.append(attr_value)
+                event_entries.append(attr_value)
                 # make later resolution works
                 attr_value = attrs[attr_name]
 
@@ -87,13 +87,13 @@ class ManagerMetaclass(abc.ABCMeta):
         if not issubclass(new_cls, BaseManager):
             raise TypeError(f"{name} should not directly use the ManagerMetaclass")
 
-        # set task handlers' manager class
-        for i in task_entries:
+        # set event handlers' manager class
+        for i in event_entries:
             i[1].set_manager_cls(new_cls)
-            for transporter in i[0]:
-                attrs["__task_registries__"].setdefault(
-                    transporter,
-                    TaskRegistry(name=str(transporter), path_prefix=path_prefix),
+            for event_source in i[0]:
+                attrs["__event_registries__"].setdefault(
+                    event_source,
+                    EventRegistry(name=str(event_source), path_prefix=path_prefix),
                 ).add_entry(i[1])
 
         return new_cls
@@ -104,7 +104,7 @@ T = typing.TypeVar("T")
 
 class BaseManager(
     typing.Generic[ModelTV],
-    BaseTaskContext,
+    BaseEventContext,
     metaclass=ManagerMetaclass,
 ):
     """Base class of manager.
@@ -117,8 +117,8 @@ class BaseManager(
     __scheme_cls__: type[ModelTV]
     """Scheme class this manager is managing
     """
-    __task_registries__: TaskRegistriesT
-    """Task entries of this manager
+    __event_registries__: EventRegistriesT
+    """Event entries of this manager
     """
     __manager_name__: str
     """Friendly name of this manager.
@@ -154,8 +154,8 @@ class BaseManager(
 
         super().__init_subclass__(**kwargs)
 
-    def __init__(self, task_context: BaseTaskContext) -> None:
-        BaseTaskContext.__init__(self, task_context)
+    def __init__(self, event_context: BaseEventContext) -> None:
+        BaseEventContext.__init__(self, event_context)
 
         self.__scheme = self.ManagingScheme(None)
         self._logger = self._logger.bind(manager_name=self.__manager_name__)
@@ -267,7 +267,7 @@ class BaseManager(
 #         BaseManagerTV,
 #         SessionTV
 #     ],
-#     BaseTaskContext[SessionTV],
+#     BaseEventContext[SessionTV],
 #     metaclass=ManagerMetaclass,
 # ):
 #     """字段管理器基类
@@ -306,7 +306,7 @@ class BaseManager(
 #     """管理器友好名称
 #     """
 
-#     def __init__(self, request_context: BaseTaskContext) -> None:
+#     def __init__(self, request_context: BaseEventContext) -> None:
 
 #         self.init_from_tc(request_context)
 

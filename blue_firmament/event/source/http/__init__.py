@@ -1,8 +1,9 @@
-"""HTTP transport module, based on the ASGI specification.
+"""HTTP event source module, based on the ASGI specification.
 """
 
 __all__ = [
-    "HTTPTransporter"
+    "HTTPEventSource",
+    "HTTPEventSource"  # backward compatibility
 ]
 
 import datetime
@@ -10,7 +11,10 @@ import typing
 from typing import Optional as Opt
 import urllib.parse
 from dataclasses import dataclass
-from .main import HTTPTransporter
+from .main import HTTPEventSource
+
+# Backward compatibility alias
+HTTPEventSource = HTTPEventSource
 
 
 @dataclass

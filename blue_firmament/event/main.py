@@ -1,10 +1,10 @@
-"""Task
+"""Event
 """
 
 __all__ = [
-    "TaskID",
-    "TaskMetadata",
-    "Task",
+    "EventID",
+    "EventMetadata",
+    "Event",
     "LazyParameter",
     "Method"
 ]
@@ -35,8 +35,8 @@ class Method(enum.Enum):
     OPTIONS = 'OPTIONS'
 
 
-class TaskID:
-    """Identifier of Task.
+class EventID:
+    """Identifier of Event.
 
     Consist of a method and a path.
     Path is segmented by seperator, which optimizing
@@ -120,9 +120,9 @@ class TaskID:
         )
 
     def __eq__(self, other):
-        """Is two TaskID match.
+        """Is two EventID match.
         """
-        if not isinstance(other, TaskID):
+        if not isinstance(other, EventID):
             return False
         return self.is_match(other) is not None
 
@@ -135,13 +135,13 @@ class TaskID:
     def __len__(self) -> int:
         return len(self.segments)
 
-    def __getitem__(self, key) -> 'TaskID':
+    def __getitem__(self, key) -> 'EventID':
         """使用slice获取子路由键
         """
         if isinstance(key, slice):
-            return TaskID(self.__method, '/'.join(self.__segments[key]), param_converters=self.__param_converters)
+            return EventID(self.__method, '/'.join(self.__segments[key]), param_converters=self.__param_converters)
         else:
-            return TaskID(self.__method, self.__segments[key], param_converters=self.__param_converters)
+            return EventID(self.__method, self.__segments[key], param_converters=self.__param_converters)
 
     def dump_to_str(self) -> str:
         return self.__str__()
@@ -183,13 +183,13 @@ class TaskID:
         self,
         path_prefix: str = ""
     ) -> typing.Self:
-        """Fork a TaskID
+        """Fork a EventID
 
         :param path_prefix:
             Added to the front of the original path.
-        :return: a new TaskID instance.
+        :return: a new EventID instance.
         """
-        return TaskID(
+        return EventID(
             method=self.__method,
             path=f"{path_prefix}{self.__path}",
             param_types=self.__param_types
@@ -210,7 +210,7 @@ class TaskID:
         return self.__segments
 
     def is_dynamic(self, allow_method_dynamic: bool = False) -> bool:
-        """Is the TaskID dynamic.
+        """Is the EventID dynamic.
 
         :return: If True, it's dynamic, otherwise static.
             Dynamic means it has path parameters or method is None (wildcard).
@@ -244,11 +244,11 @@ class TaskID:
 
     def is_match(
         self,
-        to_match: 'TaskID',
+        to_match: 'EventID',
     ) -> Opt[PathParamsT]:
-        """Whether another task_id match this task_id.
+        """Whether another event_id match this event_id.
 
-        :param to_match: TaskID to match.
+        :param to_match: EventID to match.
 
         :returns: Path parameters when matched, otherwise None.
 
@@ -261,7 +261,7 @@ class TaskID:
             - 如果有路径参数，比较我方路径分段（包括静态与动态）是否为对方的子集（严格模式检验对方是否为我方子集）
                 - 此处解析路径参数，如果未找到或校验不通过，则不记录
         """
-        if not isinstance(to_match, TaskID):
+        if not isinstance(to_match, EventID):
             return None
 
         if self.method:
@@ -288,8 +288,8 @@ class TaskID:
 
 
 @dataclasses.dataclass
-class TaskMetadata:
-    """BlueFirmament Task Metadata
+class EventMetadata:
+    """BlueFirmament Event Metadata
     """
 
     authorization: Opt[tuple[str, str]] = None
@@ -331,7 +331,7 @@ class LazyParameter(abc.ABC):
 
 
 TV = typing.TypeVar("TV")
-class TaskParameters:
+class EventParameters:
 
     def __init__(self, **parameters: typing.Any | LazyParameter):
         self.__parameters = parameters
@@ -351,55 +351,55 @@ class TaskParameters:
             return await value.get()
         return value
 
-class Task:
-    """Transport Task
+class Event:
+    """Transport Event
 
-    Task will be handled by handler and returns a result.
+    Event will be handled by handler and returns a result.
 
     Notes
     -----
-    - Path parameters is not part of Task, cause task is created from transport layer,
-    and path parameters are resolved by application layer. (This implies that task module
+    - Path parameters is not part of Event, cause event is created from event source layer,
+    and path parameters are resolved by application layer. (This implies that event module
     is the glue layer between transport and application layers.)
     """
 
     def __init__(
         self,
-        task_id: TaskID,
-        metadata: Opt[TaskMetadata | dict] = None,
-        parameters: Opt[dict[str, LazyParameter | typing.Any] | TaskParameters] = None,
+        event_id: EventID,
+        metadata: Opt[EventMetadata | dict] = None,
+        parameters: Opt[dict[str, LazyParameter | typing.Any] | EventParameters] = None,
     ) -> None:
-        self.__task_id = task_id
+        self.__event_id = event_id
 
-        self.__parameters: TaskParameters
+        self.__parameters: EventParameters
         if isinstance(parameters, dict):
-            self.__parameters = TaskParameters(**parameters)
-        elif isinstance(parameters, TaskParameters):
+            self.__parameters = EventParameters(**parameters)
+        elif isinstance(parameters, EventParameters):
             self.__parameters = parameters
         else:
-            self.__parameters = TaskParameters()
+            self.__parameters = EventParameters()
 
         if isinstance(metadata, dict):
-            self.__metadata = TaskMetadata(**metadata)
+            self.__metadata = EventMetadata(**metadata)
         else:
-            self.__metadata: TaskMetadata = metadata or TaskMetadata()
+            self.__metadata: EventMetadata = metadata or EventMetadata()
 
     @property
-    def id(self) -> TaskID:
-        return self.__task_id
+    def id(self) -> EventID:
+        return self.__event_id
     @property
     def trace_id(self) -> str:
         return self.__metadata.trace_id
     @property
-    def metadata(self) -> TaskMetadata:
+    def metadata(self) -> EventMetadata:
         return self.__metadata
     @property
-    def parameters(self) -> TaskParameters:
+    def parameters(self) -> EventParameters:
         return self.__parameters
 
     async def dump_to_bytes(self, encoding: str = "utf-8") -> bytes:
         return json.dumps({
-            "task_id": self.__task_id.dump_to_str(),
+            "event_id": self.__event_id.dump_to_str(),
             "metadata": self.__metadata.dump_to_dict(),
             "parameters": {
                 key: value if not isinstance(value, LazyParameter) else await value.get()
@@ -410,7 +410,7 @@ class Task:
     @classmethod
     def load_from_bytes(cls, raw: bytes, encoding: str = "utf-8") -> typing.Self:
         data = json.loads(raw.decode(encoding))
-        task_id = TaskID.load_from_str(data["task_id"])
-        metadata = TaskMetadata(**data["metadata"])
-        parameters = TaskParameters(**data["parameters"])
-        return cls(task_id, metadata, parameters)
+        event_id = EventID.load_from_str(data["event_id"])
+        metadata = EventMetadata(**data["metadata"])
+        parameters = EventParameters(**data["parameters"])
+        return cls(event_id, metadata, parameters)

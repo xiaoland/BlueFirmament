@@ -1,4 +1,4 @@
-"""Task result module.
+"""Event result module.
 """
 
 __all__ = [
@@ -6,8 +6,8 @@ __all__ = [
     "EmptyBody",
     "JsonBody",
     "StreamingBody",
-    "TaskStatus",
-    "TaskResult"
+    "EventStatus",
+    "EventResult"
 ]
 
 import abc
@@ -16,7 +16,7 @@ import typing
 from typing import Annotated as Anno, Optional as Opt, Literal as Lit
 import enum
 
-from . import TaskMetadata
+from . import EventMetadata
 from ..model import BaseModel
 from ..utils.main import singleton
 from ..utils.typing_ import JsonDumpable
@@ -24,7 +24,7 @@ from ..utils.typing_ import JsonDumpable
 
 TV = typing.TypeVar('TV')
 class Body(abc.ABC, typing.Generic[TV]):
-    """Task Result Body
+    """Event Result Body
     """
 
     def __init__(self, data: TV = None) -> None:
@@ -91,9 +91,9 @@ class JsonBody(Body[JsonDumpable]):
         super().__init__(data)
 
     def dump_to_dict(self) -> dict:
-        if not isinstance(self._data, (dict, BaseScheme)):
+        if not isinstance(self._data, (dict, BaseModel)):
             raise TypeError(f'cannot dump {type(self._data)} to dict')
-        if isinstance(self._data, BaseScheme):
+        if isinstance(self._data, BaseModel):
             from ..model.converter import ModelConverter
             converter = ModelConverter(self._data.__class__)
             return converter.dump_to_dict(self._data)
@@ -140,7 +140,7 @@ class StreamingBody(Body):
         self.__cleanup()
 
 
-class TaskStatus(enum.Enum):
+class EventStatus(enum.Enum):
     OK = 200
     CREATED = 201
     DELETED = 204
@@ -156,19 +156,19 @@ class TaskStatus(enum.Enum):
     SERVICE_UNAVAILABLE = 503
 
 
-class TaskResult:
+class EventResult:
 
     def __init__(self,
-        status: TaskStatus = TaskStatus.OK,
+        status: EventStatus = EventStatus.OK,
         body: Body = EmptyBody(),
-        metadata: Opt[TaskMetadata] = None,
+        metadata: Opt[EventMetadata] = None,
     ):
         self.__body: Body = body
-        self.__status: TaskStatus = status
-        self.__metadata: TaskMetadata = metadata or TaskMetadata()
+        self.__status: EventStatus = status
+        self.__metadata: EventMetadata = metadata or EventMetadata()
 
     @property
-    def metadata(self) -> TaskMetadata:
+    def metadata(self) -> EventMetadata:
         return self.__metadata
 
     @property
@@ -180,9 +180,9 @@ class TaskResult:
         self.__body = value
 
     @property
-    def status(self) -> TaskStatus:
+    def status(self) -> EventStatus:
         return self.__status
     
     @status.setter
-    def status(self, value: TaskStatus) -> None:
+    def status(self, value: EventStatus) -> None:
         self.__status = value

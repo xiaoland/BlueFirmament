@@ -1,4 +1,4 @@
-"""Main module of HTTP Transporter.
+"""Main module of HTTP Event Source (formerly HTTP EventSource).
 """
 
 import uvicorn
@@ -8,19 +8,19 @@ from typing import Optional as Opt
 import json
 import urllib.parse
 import http.cookies
-from ...task import Task, TaskID, TaskMetadata
-from ...task.result import TaskResult, JsonBody, StreamingBody
+from ... import Event, EventID, EventMetadata
+from ...result import EventResult, JsonBody, StreamingBody
 from . import _types as http_types
 from .base import MIMEType, HTTPHeader, TStatus2HCode
-from ...utils.main import try_convert_str
-from ...utils.enum_ import dump_enum
-from ..base import BaseTransporter
-from ...task.main import Method, LazyParameter
-from ...exceptions import BlueFirmamentException
-from ..._types import _undefined
+from ....utils.main import try_convert_str
+from ....utils.enum_ import dump_enum
+from ..base import BaseEventSource
+from ...main import Method, LazyParameter
+from ....exceptions import BlueFirmamentException
+from ...._types import _undefined
 
 if typing.TYPE_CHECKING:
-    from ...core.app import BlueFirmamentApp
+    from ....core.app import BlueFirmamentApp
 
 
 TV = typing.TypeVar("TV")
@@ -131,7 +131,7 @@ class HTTPHeaders:
 
 
 class HTTPBody(LazyParameter):
-    """HTTP body as Task Parameter.
+    """HTTP body as Event Parameter.
 
     Receive body bytes and parse it by MIMEType, encoding
     set in the header when needed. (lazy)
@@ -212,8 +212,8 @@ class HTTPBody(LazyParameter):
             raise ValueError(f'Unsupported content type: {mime_type}')
 
 
-class HTTPTransporter(BaseTransporter):
-    """Transporter serves HTTP/S protocol.
+class HTTPEventSource(BaseEventSource):
+    """Event source serving HTTP/S protocol.
     """
 
     def __init__(
@@ -250,10 +250,10 @@ class HTTPTransporter(BaseTransporter):
             # parse headers
             headers = HTTPHeaders(scope['headers'])
 
-            # compose task and task_result
+            # compose task and event_result
             h_content_type = headers.get_content_type()
-            task = Task(
-                task_id=TaskID(
+            task = Event(
+                event_id=EventID(
                     method=Method(scope['method']),
                     path=scope['path'],
                     separator='/'
@@ -268,36 +268,36 @@ class HTTPTransporter(BaseTransporter):
                 },
                 metadata=self.parse_metadata(headers)
             )
-            task_result = TaskResult()
+            event_result = EventResult()
 
             try:
-                await self._app.handle_task(
-                    task=task, task_result=task_result, transporter=self
+                await self._app.handle_event(
+                    task=task, event_result=event_result, event_source=self
                 )
             except BlueFirmamentException as e:
-                task_result.status = e.task_status
-                task_result.body = JsonBody(e.dump_details_to_dict())
+                event_result.status = e.event_status
+                event_result.body = JsonBody(e.dump_details_to_dict())
 
             # send response
             try:
                 res_headers = HTTPHeaders()
-                if isinstance(task_result.body, JsonBody):
+                if isinstance(event_result.body, JsonBody):
                     res_headers.set_content_type(MIMEType.JSON)
-                elif isinstance(task_result.body, StreamingBody):
+                elif isinstance(event_result.body, StreamingBody):
                     res_headers.set_content_type(MIMEType.EVENT_STREAM)
                     res_headers[HTTPHeader.CONNECTION] = "keep-alive"
                     res_headers[HTTPHeader.CACHE_CONTROL] = "no-cache"
 
                 await send(http_types.HTTPResponseStartEvent(
                     type="http.response.start",
-                    status=TStatus2HCode[task_result.status],
-                    headers=task_result.metadata.dump_to_bytes(
+                    status=TStatus2HCode[event_result.status],
+                    headers=event_result.metadata.dump_to_bytes(
                         encoding="latin-1",
                         extra=res_headers.dict
                     )
                 ))
 
-                res_body = task_result.body
+                res_body = event_result.body
                 if isinstance(res_body, StreamingBody):
                     async for chunk in res_body:
                         body_ = f"data: {str(chunk)}\n\n".encode("utf-8")
@@ -321,12 +321,12 @@ class HTTPTransporter(BaseTransporter):
 
             except OSError:   # Disconnected unexpectedly
                 self._logger.warning('Connection closed before all body were sent')
-                await task_result.body.cleanup()
+                await event_result.body.cleanup()
         else:
             self._logger.warning(f"Request omitted due to unsupported protocol {scope['type']}")
 
     @staticmethod
-    def parse_metadata(headers: HTTPHeaders) -> TaskMetadata:
+    def parse_metadata(headers: HTTPHeaders) -> EventMetadata:
         # parse authorization header
         authorization = headers.get_as_str('authorization').split(" ")
         # parse cookies
@@ -336,7 +336,7 @@ class HTTPTransporter(BaseTransporter):
             cookie.load(cookie_str)
             for name, morsel in cookie.items():
                 cookies[name] = morsel.value
-        return TaskMetadata(
+        return EventMetadata(
             authorization=(authorization[0], authorization[1]) \
                 if len(authorization) == 2 else None,
             trace_id=headers.get_as_str('x-trace-id'),

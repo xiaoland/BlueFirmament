@@ -1,19 +1,42 @@
-"""BlueFirmament event system.
+"""Event module of BlueFirmament.
+
+Event is the service unit of an BlueFirmament Application.
+
+Design doc: :doc:`design/event`
 """
 
 __all__ = [
-    "set_event_broker",
-    "Event",
-    "emit",
-    "simple_emit"
+    'EventID',
+    'Event',
+    'EventStatus',
+    'EventMetadata',
+    'EventResult',
+    'EventHandler',
+    'EventRegistry',
+    'EventEntry',
+    'listen_to',
+    'Method',
+    'LazyParameter',
+    'set_event_broker',
+    'emit',
+    'simple_emit'
 ]
 
 import typing
-from typing import Annotated as Anno, Optional as Opt, Literal as Lit
+from typing import Optional as Opt
 
-from .log import get_logger
-from .task import TaskID, Task
-from .dal.base import PubSubLikeDataAccessLayer
+from .main import (
+    EventID, Event, EventMetadata, Method, LazyParameter
+)
+from .result import (
+    EventStatus, EventResult
+)
+from .handler import EventHandler
+from .registry import (
+    EventRegistry, EventEntry, listen_to
+)
+from ..log import get_logger
+from ..dal.base import PubSubLikeDataAccessLayer
 
 LOGGER = get_logger(__name__)
 
@@ -29,11 +52,6 @@ def set_event_broker(event_broker: PubSubLikeDataAccessLayer):
     if not isinstance(event_broker, PubSubLikeDataAccessLayer):
         raise TypeError("event_broker must be a PubSubLikeDataAccessLayer instance")
     EVENT_BROKER = event_broker
-
-
-class Event(Task):
-    """Event is a specialized Task.
-    """
 
 
 async def emit(event: Event) -> None:
@@ -53,12 +71,11 @@ def simple_emit(
         e.g. "user.created", "order.completed"
     :param parameters: Parameters of the event.
     :param metadata: Metadata of the event.
-        Fields must be defined in :meth:`blue_firmament.task.TaskMetadata`
+        Fields must be defined in :meth:`blue_firmament.event.EventMetadata`
     """
     event = Event(
-        task_id=TaskID(method=None, path=name, separator='.'),
+        event_id=EventID(method=None, path=name, separator='.'),
         parameters=parameters,
         metadata=metadata
     )
     return emit(event)
-

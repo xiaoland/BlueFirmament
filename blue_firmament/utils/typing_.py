@@ -6,7 +6,7 @@ import inspect
 import datetime
 
 if typing.TYPE_CHECKING:
-    from ..task.result import JsonBody
+    from ..event.result import JsonBody
 
 if typing.TYPE_CHECKING:
     from ..model import BaseModel
@@ -158,7 +158,7 @@ def is_json_dumpable(val: typing.Any) -> typing.TypeGuard[JsonDumpable]:
         return True
 
     from ..model import BaseModel
-    from ..task.result import JsonBody
+    from ..event.result import JsonBody
     if isinstance(val, (
         str, int, float, bool,
         list, tuple, dict, set,

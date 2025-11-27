@@ -8,7 +8,7 @@ from ..model.field import FieldValueProxy
 from .typing_ import JsonDumpable
 from ..model import BaseModel
 from ..log import get_logger
-from ..task.result import JsonBody
+from ..event.result import JsonBody
 
 LOGGER = get_logger(__name__)
 

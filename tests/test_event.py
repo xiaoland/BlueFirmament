@@ -3,8 +3,7 @@
 
 import asyncio
 import pytest
-from blue_firmament.event import set_event_broker, emit, simple_emit, Event
-from blue_firmament.task import TaskID
+from blue_firmament.event import set_event_broker, emit, simple_emit, Event, EventID
 from blue_firmament.dal.redis import RedisDAL
 
 
@@ -52,7 +51,7 @@ async def test_emit(event_broker: TestRedisDAL):
     ))
 
     event_to_emit = Event(
-        task_id=TaskID(method=None, path="test.event", separator='.'),
+        event_id=EventID(method=None, path="test.event", separator='.'),
         parameters={"foo": "bar"}
     )
     await emit(event_to_emit)
