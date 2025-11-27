@@ -1,7 +1,7 @@
 """Tests Of Manager/Base module"""
 
 from blue_firmament.manager.base import BaseManager
-from blue_firmament.task import listen_to, TaskID, TaskRegistry
+from blue_firmament.event import listen_to, TaskID, TaskRegistry
 
 
 def test_task_registries():

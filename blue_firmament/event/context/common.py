@@ -1,4 +1,4 @@
-"""Common Task Context
+"""Common Event Context (formerly Common Task Context)
 """
 
 __all__ = [
@@ -9,7 +9,7 @@ __all__ = [
 import typing
 from ... import event
 from ...model import Field, private_field
-from ..context import SoBaseTC, ExtendedTaskContext
+from . import SoBaseTC, ExtendedTaskContext
 from ...session.common import CommonSession
 if typing.TYPE_CHECKING:
     from ...dal import DataAccessObjects
@@ -19,7 +19,7 @@ class CommonTaskContext(
     ExtendedTaskContext[CommonSession],
     session_cls=CommonSession
 ):
-    """Task context extended with common session.
+    """Event context extended with common session.
 
     .. versionadded:: 0.1.2
     """

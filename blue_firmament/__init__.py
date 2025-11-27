@@ -11,7 +11,7 @@ __all__ = [
 
 
 from .core import BlueFirmamentApp
-from .task import listen_to, Method
+from .event import listen_to, Method
 
 from .utils import json_
 json_.override_json_encoder(json_.JsonEncoder)

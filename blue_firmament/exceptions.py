@@ -31,7 +31,7 @@ import abc
 import typing
 from typing import Optional as Opt
 from .utils.typing_ import JsonDumpable
-from .task import TaskStatus, TaskID
+from .event import TaskStatus, TaskID
 from .log.main import get_logger
 
 LOGGER = get_logger(__name__)

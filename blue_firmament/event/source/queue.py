@@ -1,26 +1,26 @@
-"""Transporter listening to a Queue.
+"""Event source listening to a Queue.
 """
 import typing
-from .base import BaseTransporter
-from ..task import Task, TaskResult
+from .base import BaseEventSource
+from .. import Task, TaskResult
 
 if typing.TYPE_CHECKING:
-    from ..dal.base import QueueLikeDataAccessLayer
-    from .. import BlueFirmamentApp
+    from ...dal.base import QueueLikeDataAccessLayer
+    from ...core.app import BlueFirmamentApp
 
 
-class QueueTransporter(BaseTransporter):
+class QueueEventSource(BaseEventSource):
     """
 
-    :ivar __dal: Listening this queue dal for tasks.
-    :ivar __handling_dal: The queue storing handling tasks.
+    :ivar __dal: Listening this queue dal for events.
+    :ivar __handling_dal: The queue storing handling events.
     """
 
     def __init__(
         self,
-        app: BlueFirmamentApp,
-        queue_dal: QueueLikeDataAccessLayer,
-        handling_queue_dal: QueueLikeDataAccessLayer,
+        app: "BlueFirmamentApp",
+        queue_dal: "QueueLikeDataAccessLayer",
+        handling_queue_dal: "QueueLikeDataAccessLayer",
         name: str = "default"
     ):
         super().__init__(app=app, name=name)
@@ -41,3 +41,7 @@ class QueueTransporter(BaseTransporter):
             task_result=TaskResult(),
             transporter=self
         )
+
+
+# Backward compatibility alias
+QueueTransporter = QueueEventSource

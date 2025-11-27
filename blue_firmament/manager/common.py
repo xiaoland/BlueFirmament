@@ -12,17 +12,17 @@ from typing import Literal as Lit, Optional as Opt, Annotated as Anno
 
 from .. import event
 from ..utils.exec_ import build_func_sig
-from ..task.registry import TaskRegistry
-from ..task.context.common import CommonTaskContext
+from ..event.registry import TaskRegistry
+from ..event.context.common import CommonTaskContext
 from ..dal import KeyableType, DataAccessObject
 from ..model.field import CompositeField, FieldValueProxy
 from ..log.main import get_logger
 # from .base import BaseFieldManager, 
 from .base import BaseManager, ModelTV
 from ..utils.typing_ import safe_issubclass
-from ..task.main import Method
+from ..event.main import Method
 from ..model import BaseModel
-from ..task import TaskID, TaskMetadata
+from ..event import TaskID, TaskMetadata
 
 if typing.TYPE_CHECKING:
     from ..core.app import BlueFirmamentApp

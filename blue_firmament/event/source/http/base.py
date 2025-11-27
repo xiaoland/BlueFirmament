@@ -1,6 +1,6 @@
 import enum
 
-from blue_firmament.task import TaskStatus
+from blue_firmament.event import TaskStatus
 
 
 class MIMEType(enum.Enum):

@@ -8,9 +8,9 @@ import typing
 from typing import Optional as Opt
 
 from .._types import TaskRegistriesT
-from ..transport.base import BaseTransporter
-from ..task.registry import TaskRegistry, TaskEntry
-from ..task.context import BaseTaskContext
+from ..event.source.base import BaseEventSource, BaseTransporter
+from ..event.registry import TaskRegistry, TaskEntry
+from ..event.context import BaseTaskContext
 from ..exceptions import BFExceptionTV
 from ..model.field import Field
 from ..model import ModelTV
@@ -34,7 +34,7 @@ class ManagerMetaclass(abc.ABCMeta):
 
     Task registry
     ^^^^^^^^^^^^^
-    Handlers decorated with :meth:`blue_firmament.task.task` will be
+    Handlers decorated with :meth:`blue_firmament.event.listen_to` will be
     automatically added to manager task registry.
 
     """
@@ -52,8 +52,8 @@ class ManagerMetaclass(abc.ABCMeta):
             return super().__new__(cls, name, bases, attrs, **kwargs)
 
         attrs["__path_prefix__"] = path_prefix
-        attrs["__task_registries__"]: dict[BaseTransporter | str, TaskRegistry] = {}
-        task_entries: list[tuple[tuple[BaseTransporter | str], TaskEntry]] = []
+        attrs["__task_registries__"]: dict[BaseEventSource | str, TaskRegistry] = {}
+        task_entries: list[tuple[tuple[BaseEventSource | str], TaskEntry]] = []
 
         for attr_name, attr_value in attrs.items():
             # resolve task_entries

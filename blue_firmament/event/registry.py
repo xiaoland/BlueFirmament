@@ -1,4 +1,4 @@
-"""Task registry module.
+"""Event registry module (formerly Task registry).
 """
 
 __all__ = [
@@ -15,9 +15,9 @@ from typing import Optional as Opt, Annotated as Anno, Literal as Lit
 
 from ..exceptions import TaskHandlerNotFound
 from .._types import PathParamsT, CallableTV
-from ..transport.base import BaseTransporter
+from .source.base import BaseEventSource, BaseTransporter
 from .result import Body, JsonBody
-from ..task.context import BaseTaskContext
+from .context import BaseTaskContext
 from ..core.middleware import BaseMiddleware
 from .main import TaskID, Method
 from . import TaskHandler
@@ -271,18 +271,18 @@ def listen_to(
     method: Opt[Method | str],
     path: str,
     separator: str = "/",
-    transporters: Opt[typing.Iterable[str | BaseTransporter]] = None,
+    transporters: Opt[typing.Iterable[str | BaseEventSource]] = None,
 ):
-    """Make the function a handler to a task.
+    """Make the function a handler to an event.
 
     :param transporters:
-        Only tasks from these transporters will be handled by this handler.
-        None for default transporter (you must have a transporter named "default").
+        Only events from these event sources will be handled by this handler.
+        None for default event source (you must have an event source named "default").
 
     Will wrap decorated function to a TaskEntry.
     With support of :meth:`blue_firmament.manager.ManagerMetaclass`,
     this entry will be added to manager task registry.
-    Finally, with :meth:`blue_firmament.task.TaskRegistry.merge` or
+    Finally, with :meth:`blue_firmament.event.TaskRegistry.merge` or
     :meth:`blue_firmament.core.BlueFirmamentApp.add_manager`,
     manager task registry's entries will be merged into application
     task registry.

@@ -1,4 +1,4 @@
-"""BlueFirmament Task Context Module.
+"""BlueFirmament Event Context Module (formerly Task Context).
 """
 
 __all__ = [

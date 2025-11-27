@@ -9,7 +9,7 @@ import typing
 from ..utils.main import call_as_async
 
 if typing.TYPE_CHECKING:
-    from blue_firmament.task.context import BaseTaskContext
+    from blue_firmament.event.context import BaseTaskContext
 
 
 type NextT = typing.Callable[[], typing.Coroutine[typing.Any, typing.Any, None]]

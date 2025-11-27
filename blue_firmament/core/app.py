@@ -1,15 +1,17 @@
 import asyncio
+import typing
+from typing import Optional as Opt
 
 from .._types import TaskRegistriesT
-from ..task.context import CommonTaskContext
-from ..task.context import ExtendedTaskContext, BaseTaskContext
+from ..event.context import CommonTaskContext
+from ..event.context import ExtendedTaskContext, BaseTaskContext
 from ..log.main import get_logger
-from ..task.result import TaskResult
-from ..transport.base import (
-    BaseTransporter
+from ..event.result import TaskResult
+from ..event.source.base import (
+    BaseEventSource, BaseTransporter
 )
-from ..task import Task
-from ..task.registry import TaskRegistry
+from ..event import Task
+from ..event.registry import TaskRegistry
 from .middleware import BaseMiddleware, MiddlewaresT
 from blue_firmament.dal.query_components.filters import *
 
@@ -24,15 +26,15 @@ class BlueFirmamentApp:
         self,
         name: str = "",
         registries: Opt[TaskRegistriesT] = None,
-        transporters: Opt[typing.Iterable[BaseTransporter]] = None,
+        transporters: Opt[typing.Iterable[BaseEventSource]] = None,
         middlewares: Opt[MiddlewaresT] = None,
         task_context_cls: type[ExtendedTaskContext] = CommonTaskContext,
     ):
         """
         :param registries:
-            If None, will create an empty registry for each transporter.
+            If None, will create an empty registry for each event source.
         """
-        self.__transporters: set[BaseTransporter] = set(transporters or ())
+        self.__transporters: set[BaseEventSource] = set(transporters or ())
         self.__task_registries: TaskRegistriesT = registries or {
             transporter: TaskRegistry(name=str(transporter))
             for transporter in self.__transporters
@@ -49,15 +51,18 @@ class BlueFirmamentApp:
 
     def add_transporter(
         self,
-        transporter: BaseTransporter,
+        transporter: BaseEventSource,
         registry: Opt[TaskRegistry] = None
     ):
-        """Add a transporter and its TaskRegistry.
+        """Add an event source and its TaskRegistry.
         """
         self.__transporters.add(transporter)
         self.__task_registries[transporter] = registry or TaskRegistry(
             name=transporter.name
         )
+
+    # Alias for backward compatibility
+    add_event_source = add_transporter
 
     def add_manager(self, manager: type["BaseManager"]):
         """Merge the manager's task registries.
@@ -88,7 +93,7 @@ class BlueFirmamentApp:
 
     async def handle_task(
         self,
-        transporter: BaseTransporter | str,
+        transporter: BaseEventSource | str,
         task: Task,
         task_result: TaskResult
     ):

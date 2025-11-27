@@ -4,7 +4,7 @@
 import typing
 import postgrest
 import enum
-from ..task.context import ExtendedTaskContext
+from ..event.context import ExtendedTaskContext
 from .._types import _undefined
 from ..model.converter import ModelConverter
 from .utils import dump_query_coms_like

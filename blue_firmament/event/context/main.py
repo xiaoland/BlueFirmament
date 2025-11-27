@@ -1,4 +1,4 @@
-"""请求上下文
+"""Event Context (formerly request context)
 """
 
 __all__ = [
@@ -16,7 +16,7 @@ from ...model import BaseModel, private_field, Field
 
 if typing.TYPE_CHECKING:
     from ...log import LoggerT
-    from .. import Task
+    from ..main import Task
     from ..result import TaskResult
 
 
@@ -29,7 +29,7 @@ class BaseTaskContextFields(typing.TypedDict):
 
 
 class BaseTaskContext:
-    """Base class of TaskContext.
+    """Base class of TaskContext (Event Context).
 
     .. versionchanged:: 0.1.2
         rename to BaseTaskContext from RequestContext and

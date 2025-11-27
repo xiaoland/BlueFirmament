@@ -100,7 +100,7 @@ Design
    :glob:
 
    ./scheme/index
-   ./transport/index
+   ./event_source/index
    ./manager
    ./dal
    ./auth

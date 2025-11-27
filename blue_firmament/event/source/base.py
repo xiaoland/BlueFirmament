@@ -1,14 +1,14 @@
 import typing
 import abc
-from ..task import TaskMetadata
+from .. import TaskMetadata
 
 if typing.TYPE_CHECKING:
     from structlog.stdlib import BoundLogger
-    from ..core.app import BlueFirmamentApp
+    from ...core.app import BlueFirmamentApp
 
 
-class BaseTransporter(abc.ABC):
-    """The base class of the transport module.
+class BaseEventSource(abc.ABC):
+    """The base class of the event source module (formerly transport module).
     """
 
     def __init__(self, app: "BlueFirmamentApp", name: str = "default") -> None:
@@ -21,7 +21,7 @@ class BaseTransporter(abc.ABC):
     def __eq__(self, other):
         if isinstance(other, str):
             return self._name == other
-        if isinstance(other, BaseTransporter):
+        if isinstance(other, BaseEventSource):
             return self._name == other._name
         return False
 
@@ -30,7 +30,7 @@ class BaseTransporter(abc.ABC):
 
     @property
     def name(self) -> str:
-        """ID of the transporter.
+        """ID of the event source.
         """
         return self._name
 
@@ -40,12 +40,12 @@ class BaseTransporter(abc.ABC):
 
     @abc.abstractmethod
     async def start(self):
-        """Start listening to tasks
+        """Start listening to events
         """
 
     @abc.abstractmethod
     async def stop(self):
-        """Stop listening to tasks
+        """Stop listening to events
         """
 
     @staticmethod
@@ -55,4 +55,8 @@ class BaseTransporter(abc.ABC):
         if isinstance(raw, dict):
             return TaskMetadata(**raw)
         raise NotImplementedError(f"Unsupported metadata parsing input type {type(raw)}")
+
+
+# Backward compatibility alias
+BaseTransporter = BaseEventSource
 

@@ -1,9 +1,39 @@
-"""Task module of BlueFirmament.
+"""Backward compatibility module for task -> event migration.
 
-Task is the service unit of an BlueFirmament Application.
+This module provides backward compatibility for code that imports from
+`blue_firmament.task`. New code should import from `blue_firmament.event`.
 
-Design doc: :doc:`design/task`
+.. deprecated:: 0.4.0
+    Use `blue_firmament.event` instead.
 """
+
+import warnings
+
+warnings.warn(
+    "The 'blue_firmament.task' module is deprecated. "
+    "Use 'blue_firmament.event' instead.",
+    DeprecationWarning,
+    stacklevel=2
+)
+
+# Re-export everything from event module
+from ..event import (
+    TaskID,
+    Task,
+    TaskStatus,
+    TaskMetadata,
+    TaskResult,
+    TaskHandler,
+    TaskRegistry,
+    TaskEntry,
+    listen_to,
+    Method,
+    LazyParameter,
+    set_event_broker,
+    Event,
+    emit,
+    simple_emit
+)
 
 __all__ = [
     'TaskID',
@@ -16,16 +46,9 @@ __all__ = [
     'TaskEntry',
     'listen_to',
     'Method',
-    'LazyParameter'
+    'LazyParameter',
+    'set_event_broker',
+    'Event',
+    'emit',
+    'simple_emit'
 ]
-
-from .main import (
-    TaskID, Task, TaskMetadata, Method, LazyParameter
-)
-from .result import (
-    TaskStatus, TaskResult
-)
-from .handler import TaskHandler
-from .registry import (
-    TaskRegistry, TaskEntry, listen_to
-)

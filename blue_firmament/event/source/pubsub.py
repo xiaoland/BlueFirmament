@@ -1,24 +1,25 @@
-"""Transporter listening to a Pub/Sub model channel.
+"""Event source listening to a Pub/Sub model channel.
 
 TODO better logging
 """
 
 __all__ = [
-    "PubSubTransporter"
+    "PubSubEventSource",
+    "PubSubTransporter"  # backward compatibility
 ]
 
 import typing
 
-from ..exceptions import TaskHandlerNotFound
-from ..transport.base import BaseTransporter
-from ..task import Task, TaskResult
-from ..dal.base import PubSubLikeDataAccessLayer, PubSubMessage
+from ...exceptions import TaskHandlerNotFound
+from .base import BaseEventSource
+from .. import Task, TaskResult
+from ...dal.base import PubSubLikeDataAccessLayer, PubSubMessage
 
 if typing.TYPE_CHECKING:
-    from ..core import BlueFirmamentApp
+    from ...core import BlueFirmamentApp
 
 
-class PubSubTransporter(BaseTransporter):
+class PubSubEventSource(BaseEventSource):
 
     def __init__(
         self,
@@ -47,7 +48,7 @@ class PubSubTransporter(BaseTransporter):
                 self._logger.warning("No handler found for the task", task=e.task_id)
             except Exception as e:
                 self._logger.exception(
-                    f"Unknown error occured when handling task from Pub/Sub {self.name}"
+                    f"Unknown error occured when handling event from Pub/Sub {self.name}"
                 )
             if self.__stop:
                 break
@@ -63,4 +64,8 @@ class PubSubTransporter(BaseTransporter):
             task_result=TaskResult(),
             transporter=self
         )
+
+
+# Backward compatibility alias
+PubSubTransporter = PubSubEventSource
 

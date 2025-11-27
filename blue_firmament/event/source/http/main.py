@@ -1,4 +1,4 @@
-"""Main module of HTTP Transporter.
+"""Main module of HTTP Event Source (formerly HTTP Transporter).
 """
 
 import uvicorn
@@ -8,19 +8,19 @@ from typing import Optional as Opt
 import json
 import urllib.parse
 import http.cookies
-from ...task import Task, TaskID, TaskMetadata
-from ...task.result import TaskResult, JsonBody, StreamingBody
+from ... import Task, TaskID, TaskMetadata
+from ...result import TaskResult, JsonBody, StreamingBody
 from . import _types as http_types
 from .base import MIMEType, HTTPHeader, TStatus2HCode
-from ...utils.main import try_convert_str
-from ...utils.enum_ import dump_enum
-from ..base import BaseTransporter
-from ...task.main import Method, LazyParameter
-from ...exceptions import BlueFirmamentException
-from ..._types import _undefined
+from ....utils.main import try_convert_str
+from ....utils.enum_ import dump_enum
+from ..base import BaseEventSource
+from ...main import Method, LazyParameter
+from ....exceptions import BlueFirmamentException
+from ...._types import _undefined
 
 if typing.TYPE_CHECKING:
-    from ...core.app import BlueFirmamentApp
+    from ....core.app import BlueFirmamentApp
 
 
 TV = typing.TypeVar("TV")
@@ -212,8 +212,8 @@ class HTTPBody(LazyParameter):
             raise ValueError(f'Unsupported content type: {mime_type}')
 
 
-class HTTPTransporter(BaseTransporter):
-    """Transporter serves HTTP/S protocol.
+class HTTPEventSource(BaseEventSource):
+    """Event source serving HTTP/S protocol.
     """
 
     def __init__(

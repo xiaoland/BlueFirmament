@@ -23,7 +23,7 @@ from ..utils.enum_ import dump_enum
 if typing.TYPE_CHECKING:
     from ..auth import AuthSession
     from ..model.field import Field, FieldValueProxy
-    from blue_firmament.task.context import ExtendedTaskContext
+    from blue_firmament.event.context import ExtendedTaskContext
 
 
 SchemeTV = typing.TypeVar('SchemeTV', bound="BaseScheme")

@@ -7,7 +7,7 @@ from ..utils.datetime_ import get_datetimez
 from ..data.settings.base import get_setting as get_base_setting
 
 if typing.TYPE_CHECKING:
-    from blue_firmament.task import Task
+    from blue_firmament.event import Task
 
 
 SFValueTV = typing.TypeVar("SFValueTV")

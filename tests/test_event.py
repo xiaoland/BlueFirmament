@@ -3,8 +3,7 @@
 
 import asyncio
 import pytest
-from blue_firmament.event import set_event_broker, emit, simple_emit, Event
-from blue_firmament.task import TaskID
+from blue_firmament.event import set_event_broker, emit, simple_emit, Event, TaskID
 from blue_firmament.dal.redis import RedisDAL
 
 

@@ -1,19 +1,45 @@
-"""BlueFirmament event system.
+"""Event module of BlueFirmament.
+
+Event is the service unit of an BlueFirmament Application.
+
+Design doc: :doc:`design/event`
 """
 
 __all__ = [
-    "set_event_broker",
-    "Event",
-    "emit",
-    "simple_emit"
+    # Task-related exports (renamed from task module)
+    'TaskID',
+    'Task',
+    'TaskStatus',
+    'TaskMetadata',
+    'TaskResult',
+    'TaskHandler',
+    'TaskRegistry',
+    'TaskEntry',
+    'listen_to',
+    'Method',
+    'LazyParameter',
+    # Event-specific exports
+    'set_event_broker',
+    'Event',
+    'emit',
+    'simple_emit'
 ]
 
 import typing
-from typing import Annotated as Anno, Optional as Opt, Literal as Lit
+from typing import Optional as Opt
 
-from .log import get_logger
-from .task import TaskID, Task
-from .dal.base import PubSubLikeDataAccessLayer
+from .main import (
+    TaskID, Task, TaskMetadata, Method, LazyParameter
+)
+from .result import (
+    TaskStatus, TaskResult
+)
+from .handler import TaskHandler
+from .registry import (
+    TaskRegistry, TaskEntry, listen_to
+)
+from ..log import get_logger
+from ..dal.base import PubSubLikeDataAccessLayer
 
 LOGGER = get_logger(__name__)
 
@@ -53,7 +79,7 @@ def simple_emit(
         e.g. "user.created", "order.completed"
     :param parameters: Parameters of the event.
     :param metadata: Metadata of the event.
-        Fields must be defined in :meth:`blue_firmament.task.TaskMetadata`
+        Fields must be defined in :meth:`blue_firmament.event.TaskMetadata`
     """
     event = Event(
         task_id=TaskID(method=None, path=name, separator='.'),
@@ -61,4 +87,3 @@ def simple_emit(
         metadata=metadata
     )
     return emit(event)
-

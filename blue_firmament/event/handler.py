@@ -1,4 +1,4 @@
-"""Task handler module.
+"""Event handler module (formerly Task handler).
 """
 
 import inspect
@@ -9,13 +9,13 @@ from .._types import PathParamsT, _undefined
 from ..exceptions import InternalError
 from ..model import BaseConverter
 from ..model.converter import get_converter_from_anno
-from . import Task
+from .main import Task
 from .result import TaskResult, Body, EmptyBody, JsonBody
 from ..utils.main import call_as_async
 from ..utils.typing_ import get_origin, safe_issubclass, is_json_dumpable
 
 if typing.TYPE_CHECKING:
-    from .main import BaseTaskContext
+    from .context import BaseTaskContext
     from ..manager import BaseManager
 
 
@@ -64,7 +64,7 @@ class TaskHandler:
         """Set inner handler's manager class if it's a manager method.
 
         Useful for manager class created after task handler created.
-        E.g. use :meth:`blue_firmament.task.task` to decorate a manager method.
+        E.g. use :meth:`blue_firmament.event.listen_to` to decorate a manager method.
         """
         self.__method_manager_cls = manager_cls
 
@@ -116,7 +116,7 @@ class TaskHandler:
         -------
         返回一个字典，键为处理器的参数名称，值为该参数的获取器。
 
-        参数获取器接收 :class:`blue_firmament.transport.context.RequestContext` 作为参数，从中解析出本参数需要的值。
+        参数获取器接收 :class:`blue_firmament.event.context.BaseTaskContext` 作为参数，从中解析出本参数需要的值。
         """
         handler_params_sig = inspect.signature(handler).parameters
         kwargs: TaskHandler.FunctionKwargsT = {}
