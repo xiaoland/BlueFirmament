@@ -12,14 +12,17 @@ __all__ = [
     'EventMetadata',
     'EventResult',
     'EventHandler',
-    'EventRegistry',
+    'EventBus',
     'EventEntry',
     'listen_to',
     'Method',
     'LazyParameter',
     'set_event_broker',
     'emit',
-    'simple_emit'
+    'simple_emit',
+    'BaseMiddleware',
+    'MiddlewaresT',
+    'NextT',
 ]
 
 import typing
@@ -32,8 +35,11 @@ from .result import (
     EventStatus, EventResult
 )
 from .handler import EventHandler
-from .registry import (
-    EventRegistry, EventEntry, listen_to
+from .bus import (
+    EventBus, EventEntry, listen_to
+)
+from .middleware import (
+    BaseMiddleware, MiddlewaresT, NextT
 )
 from ..log import get_logger
 from ..dal.base import PubSubLikeDataAccessLayer

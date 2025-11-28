@@ -20,7 +20,7 @@ from ....exceptions import BlueFirmamentException
 from ...._types import _undefined
 
 if typing.TYPE_CHECKING:
-    from ....core.app import BlueFirmamentApp
+    from ...bus import EventBus
 
 
 TV = typing.TypeVar("TV")
@@ -218,16 +218,20 @@ class HTTPEventSource(BaseEventSource):
 
     def __init__(
         self,
-        app: "BlueFirmamentApp",
+        event_bus: "EventBus",
         host: str,
         port: int,
         uds: Opt[str] = None,
         name: str = "default"
     ):
         """
+        :param event_bus: The event bus to dispatch events to
+        :param host: Host to bind the server to
+        :param port: Port to bind the server to
         :param uds: Unix domain socket. E.g /tmp/blue_firmament.sock
+        :param name: Name identifier for this event source
         """
-        super().__init__(app=app, name=name)
+        super().__init__(event_bus=event_bus, name=name)
         self.__asgi_server = uvicorn.Server(uvicorn.Config(
             app=self, host=host, port=port, uds=uds
         ))
@@ -250,9 +254,9 @@ class HTTPEventSource(BaseEventSource):
             # parse headers
             headers = HTTPHeaders(scope['headers'])
 
-            # compose task and event_result
+            # compose event and event_result
             h_content_type = headers.get_content_type()
-            task = Event(
+            event = Event(
                 event_id=EventID(
                     method=Method(scope['method']),
                     path=scope['path'],
@@ -271,8 +275,8 @@ class HTTPEventSource(BaseEventSource):
             event_result = EventResult()
 
             try:
-                await self._app.handle_event(
-                    task=task, event_result=event_result, event_source=self
+                await self._event_bus.emit(
+                    event=event, event_result=event_result
                 )
             except BlueFirmamentException as e:
                 event_result.status = e.event_status

@@ -4,15 +4,22 @@ from .. import EventMetadata
 
 if typing.TYPE_CHECKING:
     from structlog.stdlib import BoundLogger
-    from ...core.app import BlueFirmamentApp
+    from ..bus import EventBus
 
 
 class BaseEventSource(abc.ABC):
-    """The base class of the event source module (formerly event source module).
+    """The base class of the event source module.
+
+    Event sources receive events from external systems and dispatch them
+    to the event bus for handling.
     """
 
-    def __init__(self, app: "BlueFirmamentApp", name: str = "default") -> None:
-        self._app = app
+    def __init__(self, event_bus: "EventBus", name: str = "default") -> None:
+        """
+        :param event_bus: The event bus to dispatch events to
+        :param name: Name identifier for this event source
+        """
+        self._event_bus = event_bus
         self._name = name
 
     def __hash__(self):
@@ -36,7 +43,7 @@ class BaseEventSource(abc.ABC):
 
     @property
     def _logger(self) -> "BoundLogger":
-        return self._app._logger
+        return self._event_bus._logger
 
     @abc.abstractmethod
     async def start(self):
@@ -55,8 +62,4 @@ class BaseEventSource(abc.ABC):
         if isinstance(raw, dict):
             return EventMetadata(**raw)
         raise NotImplementedError(f"Unsupported metadata parsing input type {type(raw)}")
-
-
-# Backward compatibility alias
-BaseEventSource = BaseEventSource
 

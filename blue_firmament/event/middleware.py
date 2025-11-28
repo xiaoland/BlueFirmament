@@ -2,6 +2,8 @@
 
 __all__ = [
     "BaseMiddleware",
+    "NextT",
+    "MiddlewaresT",
 ]
 
 import abc
@@ -45,7 +47,7 @@ class BaseMiddleware(abc.ABC):
             if current < len(middlewares):
                 return await call_as_async(
                     middlewares[current],
-                    next=BaseMiddleware._get_next(
+                    next_=BaseMiddleware._get_next(
                         middlewares, event_context=event_context, current=current
                     ),
                     event_context=event_context
