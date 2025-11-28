@@ -21,7 +21,7 @@ class BaseEventContextFields(typing.TypedDict):
     event: typing.NotRequired["Event"]
     event_result: typing.NotRequired["EventResult"]
     base_logger: typing.NotRequired["LoggerT"]
-    """Bind task context based on this logger.
+    """Bind event context based on this logger.
     """
 
 
@@ -77,14 +77,14 @@ class SoBaseEC(BaseModel):
     """Scheme attached BaseEventContext.
 
     By inheriting this class, your class can access
-    task context and its properties with ease.
+    event context and its properties with ease.
 
     Or by inheriting this class then override ``_event_context``'s
     type to your customized EventContext and add fields, enables
-    your scheme accessing your customized task context.
+    your scheme accessing your customized event context.
 
     .. versionchanged:: 0.1.2
-        rename to ``SoBTC`` from ``SchemeHasRequestContext``
+        rename to ``SoBaseEC`` from ``SchemeHasRequestContext``
     """
 
     _event_context: Field[BaseEventContext] = private_field(
