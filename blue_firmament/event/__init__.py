@@ -42,7 +42,7 @@ __all__ = [
     "EventSource",
 ]
 
-from .model import Event, EventID
+from .main import Event, EventID
 from .bus import EventBus, EventHandler, on_event
 from .middleware import BaseMiddleware, MiddlewaresT, NextT
 from .source import EventSource

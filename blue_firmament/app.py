@@ -2,19 +2,19 @@ import asyncio
 import typing
 from typing import Optional as Opt
 
-from .._types import TaskRegistriesT
-from ..task.context import CommonTaskContext
-from ..task.context import ExtendedTaskContext, BaseTaskContext
-from ..log.main import get_logger
-from ..task.result import TaskResult
-from ..transport.base import BaseTransporter
-from ..task import Task
-from ..task.registry import TaskRegistry
-from .middleware import BaseTaskMiddleware, TaskMiddlewaresT
+from ._types import TaskRegistriesT
+from .task.context import CommonTaskContext
+from .task.context import ExtendedTaskContext, BaseTaskContext
+from .log.main import get_logger
+from .task.result import TaskResult
+from .transport.base import BaseTransporter
+from .task import Task
+from .task.registry import TaskRegistry
+from .core.middleware import BaseTaskMiddleware, TaskMiddlewaresT
 
 if typing.TYPE_CHECKING:
     from structlog.stdlib import BoundLogger
-    from ..manager import BaseManager
+    from .manager import BaseManager
 
 
 class BlueFirmamentApp:

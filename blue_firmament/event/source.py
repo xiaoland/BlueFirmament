@@ -11,7 +11,7 @@ __all__ = [
 import typing
 from typing import Optional as Opt
 
-from .model import Event, EventID
+from .main import Event, EventID
 from .bus import EventBus
 from ..log import get_logger
 

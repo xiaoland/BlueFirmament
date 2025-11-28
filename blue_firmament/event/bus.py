@@ -17,7 +17,7 @@ import re
 import typing
 from typing import Optional as Opt
 
-from .model import Event, EventID
+from .main import Event, EventID
 from .middleware import BaseMiddleware, MiddlewaresT
 from ..utils.main import call_as_async
 from ..log import get_logger

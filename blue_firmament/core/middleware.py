@@ -6,9 +6,7 @@ For event-based middleware, see :mod:`blue_firmament.event.middleware`.
 
 __all__ = [
     "BaseTaskMiddleware",
-    "BaseMiddleware",  # Backward compatibility alias
     "TaskMiddlewaresT",
-    "MiddlewaresT",  # Backward compatibility alias
 ]
 
 import abc
@@ -21,10 +19,6 @@ if typing.TYPE_CHECKING:
 
 type TaskNextT = typing.Callable[[], typing.Coroutine[typing.Any, typing.Any, None]]
 type TaskMiddlewaresT = typing.List["BaseTaskMiddleware"]
-
-# Backward compatibility aliases
-type NextT = TaskNextT
-type MiddlewaresT = TaskMiddlewaresT
 
 
 class BaseTaskMiddleware(abc.ABC):
@@ -67,7 +61,3 @@ class BaseTaskMiddleware(abc.ABC):
                 return None
 
         return _next
-
-
-# Backward compatibility alias
-BaseMiddleware = BaseTaskMiddleware
