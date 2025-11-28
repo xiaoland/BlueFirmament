@@ -66,8 +66,9 @@ class EventHandler(BaseMiddleware):
         self,
         *,
         next_: typing.Any = None,
-        event: Event,
+        event: Event = None,
         context: typing.Optional[typing.Any] = None,
+        task_context: typing.Any = None,
     ) -> None:
         """Execute the handler function.
 
@@ -75,6 +76,7 @@ class EventHandler(BaseMiddleware):
             next_: Ignored for handlers (they are the end of the chain)
             event: The event to handle
             context: Optional context object
+            task_context: Task context (for task-based middleware compatibility)
         """
         await call_as_async(self._func, event)
         # Call next if provided (for middleware chain compatibility)
@@ -253,8 +255,9 @@ class EventBus:
                 self_,
                 *,
                 next_: typing.Any = None,
-                event: Event,
+                event: Event = None,
                 context: typing.Optional[typing.Any] = None,
+                task_context: typing.Any = None,
             ) -> None:
                 await run_handlers()
 

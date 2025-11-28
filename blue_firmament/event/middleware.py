@@ -1,6 +1,6 @@
 """BlueFirmament Middleware.
 
-Middleware provides a way to intercept and process events
+Middleware provides a way to intercept and process events or tasks
 before they reach their handlers.
 """
 
@@ -17,7 +17,8 @@ import typing
 from ..utils.main import call_as_async
 
 if typing.TYPE_CHECKING:
-    from .model import Event
+    from .main import Event
+    from ..task.context import BaseTaskContext
 
 
 type NextT = typing.Callable[[], typing.Coroutine[typing.Any, typing.Any, None]]
@@ -30,7 +31,7 @@ type MiddlewaresT = typing.List["BaseMiddleware"]
 class BaseMiddleware(abc.ABC):
     """Base class of BlueFirmament Middleware.
 
-    Middleware intercepts events before they reach their handlers,
+    Middleware intercepts events or tasks before they reach their handlers,
     allowing for cross-cutting concerns like logging, authentication,
     validation, etc.
 
@@ -70,35 +71,46 @@ class BaseMiddleware(abc.ABC):
         self,
         *,
         next_: NextT,
-        event: "Event",
+        event: typing.Optional["Event"] = None,
         context: typing.Optional[typing.Any] = None,
+        task_context: typing.Optional["BaseTaskContext"] = None,
     ) -> typing.Union[None, typing.Coroutine]:
-        """Process the event.
+        """Process the event or task.
 
         Args:
             next_: Function to call the next middleware/handler
-            event: The event being processed
+            event: The event being processed (for event-based middleware)
             context: Optional context object for sharing state
+            task_context: The task context (for task-based middleware)
         """
         ...
 
     @staticmethod
     async def run_middlewares(
         middlewares: MiddlewaresT,
-        event: "Event",
+        event: typing.Optional["Event"] = None,
         context: typing.Optional[typing.Any] = None,
+        task_context: typing.Optional["BaseTaskContext"] = None,
     ) -> None:
-        """Run a chain of middlewares for an event.
+        """Run a chain of middlewares for an event or task.
 
-        Only middlewares that match the event pattern will be executed.
+        Only middlewares that match the event pattern will be executed
+        (when processing events).
 
         Args:
             middlewares: List of middlewares to run
-            event: The event to process
+            event: The event to process (for event-based middleware)
             context: Optional context for sharing state
+            task_context: The task context (for task-based middleware)
         """
-        # Filter middlewares that match this event
-        matching_middlewares = [m for m in middlewares if m.matches_event(event)]
+        if not middlewares:
+            return
+
+        # Filter middlewares that match this event (if event-based)
+        if event is not None:
+            matching_middlewares = [m for m in middlewares if m.matches_event(event)]
+        else:
+            matching_middlewares = middlewares
 
         if not matching_middlewares:
             return
@@ -109,16 +121,19 @@ class BaseMiddleware(abc.ABC):
                 matching_middlewares,
                 event=event,
                 context=context,
+                task_context=task_context,
             ),
             event=event,
             context=context,
+            task_context=task_context,
         )
 
     @staticmethod
     def _get_next(
         middlewares: MiddlewaresT,
-        event: "Event",
+        event: typing.Optional["Event"] = None,
         context: typing.Optional[typing.Any] = None,
+        task_context: typing.Optional["BaseTaskContext"] = None,
         current: int = 0,
     ) -> NextT:
         """Get the next function for the middleware chain.
@@ -127,6 +142,7 @@ class BaseMiddleware(abc.ABC):
             middlewares: List of middlewares
             event: The event being processed
             context: Optional context object
+            task_context: The task context (for task-based middleware)
             current: Current position in middleware chain
         """
 
@@ -140,10 +156,12 @@ class BaseMiddleware(abc.ABC):
                         middlewares,
                         event=event,
                         context=context,
+                        task_context=task_context,
                         current=current,
                     ),
                     event=event,
                     context=context,
+                    task_context=task_context,
                 )
             else:
                 return None

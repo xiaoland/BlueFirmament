@@ -10,7 +10,7 @@ from .task.result import TaskResult
 from .transport.base import BaseTransporter
 from .task import Task
 from .task.registry import TaskRegistry
-from .core.middleware import BaseTaskMiddleware, TaskMiddlewaresT
+from .event.middleware import BaseMiddleware, MiddlewaresT
 
 if typing.TYPE_CHECKING:
     from structlog.stdlib import BoundLogger
@@ -24,7 +24,7 @@ class BlueFirmamentApp:
         name: str = "",
         registries: Opt[TaskRegistriesT] = None,
         transporters: Opt[typing.Iterable[BaseTransporter]] = None,
-        middlewares: Opt[TaskMiddlewaresT] = None,
+        middlewares: Opt[MiddlewaresT] = None,
         task_context_cls: type[ExtendedTaskContext] = CommonTaskContext,
     ):
         """
@@ -37,7 +37,7 @@ class BlueFirmamentApp:
             for transporter in self.__transporters
         }
         self.__task_context_cls: type[ExtendedTaskContext] = task_context_cls
-        self.__middlewares: TaskMiddlewaresT = middlewares or []
+        self.__middlewares: MiddlewaresT = middlewares or []
         self.__logger = get_logger(f"BFApp[{name}]").bind(app_name=name)
 
     @property
@@ -82,11 +82,11 @@ class BlueFirmamentApp:
         self, transporter: BaseTransporter | str, task: Task, task_result: TaskResult
     ):
         task_entry = self.__task_registries[transporter].lookup(task.id)
-        middlewares: TaskMiddlewaresT = self.__middlewares + [task_entry]
+        middlewares: MiddlewaresT = self.__middlewares + [task_entry]
         task_context = self.__task_context_cls(
             BaseTaskContext(
                 task=task, task_result=task_result, base_logger=self._logger
             )
         )
         BaseTaskContext.set_contextvar(task_context)
-        await BaseTaskMiddleware.run_middlewares(middlewares, task_context)
+        await BaseMiddleware.run_middlewares(middlewares, task_context=task_context)

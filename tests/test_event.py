@@ -174,7 +174,9 @@ class TestMiddleware:
             def __init__(self):
                 super().__init__(event_pattern=None)
 
-            async def __call__(self, *, next_, event, context=None):
+            async def __call__(
+                self, *, next_, event=None, context=None, task_context=None
+            ):
                 execution_order.append("middleware_start")
                 await next_()
                 execution_order.append("middleware_end")
@@ -200,7 +202,9 @@ class TestMiddleware:
             def __init__(self):
                 super().__init__(event_pattern=r"user\..*")
 
-            async def __call__(self, *, next_, event, context=None):
+            async def __call__(
+                self, *, next_, event=None, context=None, task_context=None
+            ):
                 middleware_called.append("user_middleware")
                 await next_()
 

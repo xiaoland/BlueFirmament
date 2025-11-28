@@ -1,11 +1,6 @@
-"""Task registry module.
-"""
+"""Task registry module."""
 
-__all__ = [
-    'TaskRegistry',
-    'TaskEntry',
-    'listen_to'
-]
+__all__ = ["TaskRegistry", "TaskEntry", "listen_to"]
 
 import asyncio
 import copy
@@ -18,7 +13,7 @@ from .._types import PathParamsT, CallableTV
 from ..transport.base import BaseTransporter
 from .result import Body, JsonBody
 from ..task.context import BaseTaskContext
-from ..core.middleware import BaseTaskMiddleware
+from ..event.middleware import BaseMiddleware
 from .main import TaskID, Method
 from . import TaskHandler
 from ..utils.inspect_ import get_param_types
@@ -27,7 +22,7 @@ if typing.TYPE_CHECKING:
     from ..manager import BaseManager
 
 
-class TaskEntry(BaseTaskMiddleware):
+class TaskEntry(BaseMiddleware):
     """BlueFirmament TaskEntry
 
     A mapping from TaskID to a couple of TaskHandler(s).
@@ -42,13 +37,16 @@ class TaskEntry(BaseTaskMiddleware):
     """
 
     def __init__(
-        self,
-        task_id: TaskID,
-        *handlers: TaskHandler | typing.Callable
+        self, task_id: TaskID, *handlers: TaskHandler | typing.Callable
     ) -> None:
+        super().__init__(event_pattern=None)
         self.__task_id = task_id
         self.__handlers: typing.List[TaskHandler] = list(
-            handler if isinstance(handler, TaskHandler) else TaskHandler(function=handler)
+            (
+                handler
+                if isinstance(handler, TaskHandler)
+                else TaskHandler(function=handler)
+            )
             for handler in handlers
         )
         self.path_params: dict[str, PathParamsT] = {}
@@ -61,43 +59,34 @@ class TaskEntry(BaseTaskMiddleware):
     def handlers(self):
         return self.__handlers
 
-    def fork(
-        self,
-        path_prefix: str = ""
-    ) -> typing.Self:
+    def fork(self, path_prefix: str = "") -> typing.Self:
         """Fork this entry with a new TaskID
 
         :param path_prefix:
             Prefix task_id path with this.
         :return: Forked TaskEntry
         """
-        return TaskEntry(
-            self.__task_id.fork(
-                path_prefix=path_prefix
-            ),
-            *self.__handlers
-        )
+        return TaskEntry(self.__task_id.fork(path_prefix=path_prefix), *self.__handlers)
 
     def is_dynamic(self) -> bool:
         return self.__task_id.is_dynamic()
 
     def is_match(self, task_id: TaskID) -> Opt[dict]:
-        """Whether a task_id match this entry's task_id
-        """
+        """Whether a task_id match this entry's task_id"""
         return self.__task_id.is_match(task_id)
 
     def add_handler(self, task_handler: TaskHandler):
-        """Add a TaskHandler
-        """
+        """Add a TaskHandler"""
         self.__handlers.append(task_handler)
 
     def set_manager_cls(self, manager_cls: typing.Type["BaseManager"]):
-        """Set manager class for all handlers in this entry.
-        """
+        """Set manager class for all handlers in this entry."""
         for handler in self.__handlers:
             handler.set_manager_cls(manager_cls)
 
-    async def __call__(self, *, next_, task_context: 'BaseTaskContext'):
+    async def __call__(
+        self, *, next_, event=None, context=None, task_context: "BaseTaskContext" = None
+    ):
         """Run all handlers in this entry concurrently.
 
         If multiple results, set task result body to a JsonBody which is a list
@@ -106,19 +95,16 @@ class TaskEntry(BaseTaskMiddleware):
         """
         coros: list[typing.Awaitable[Body]] = []
         for handler in self.__handlers:
-            coros.append(handler(
-                task_context=task_context, path_params=self.path_params
-            ))
+            coros.append(
+                handler(task_context=task_context, path_params=self.path_params)
+            )
 
         results = await asyncio.gather(*coros)
 
         if len(results) == 1:
             task_context._task_result.body = results[0]
         else:
-            task_context._task_result.body = JsonBody([
-                result
-                for result in results
-            ])
+            task_context._task_result.body = JsonBody([result for result in results])
 
         await next_()
 
@@ -129,12 +115,9 @@ class TaskRegistry:
     A bunch of task entries that you can look up by TaskID.
     """
 
-    def __init__(self, 
-        name: str = 'router',
-        path_prefix: str = ''
-    ):
+    def __init__(self, name: str = "router", path_prefix: str = ""):
         """
-        :param path_prefix: 
+        :param path_prefix:
             Prefix added to every record path
             registered to this router.
 
@@ -147,11 +130,16 @@ class TaskRegistry:
         self.__name = name
 
     @property
-    def name(self): return self.__name
+    def name(self):
+        return self.__name
+
     @property
-    def static_entries(self): return self.__static_entries
+    def static_entries(self):
+        return self.__static_entries
+
     @property
-    def dynamic_entries(self): return self.__dynamic_entries
+    def dynamic_entries(self):
+        return self.__dynamic_entries
 
     def add_entry(self, entry: TaskEntry):
         entry = entry.fork(path_prefix=self.__path_prefix)
@@ -163,7 +151,7 @@ class TaskRegistry:
     def add_entries(self, entries: typing.Iterable[TaskEntry]):
         for entry in entries:
             self.add_entry(entry)
-        
+
     def add_handler(
         self,
         method: Opt[Method] = None,
@@ -176,7 +164,7 @@ class TaskRegistry:
         """Bind a task handler to Task(ID).
 
         :param method:
-        :param path: 
+        :param path:
             Must start with a slash and ends with no slash.
         :param task_id:
             Replace method and path and path_prefix won't be applied.
@@ -185,17 +173,17 @@ class TaskRegistry:
         if handler is None:
             if not (function is None or handler_manager_cls is None):
                 handler = TaskHandler(
-                    function=function,
-                    manager_cls=handler_manager_cls
+                    function=function, manager_cls=handler_manager_cls
                 )
             else:
                 raise ValueError("provide handler or inner_handler and handler_manager")
-        
+
         if task_id is None:
             if not (method is None or path is None):
                 task_id = TaskID(
-                    method, self.__path_prefix + path,
-               )
+                    method,
+                    self.__path_prefix + path,
+                )
             else:
                 raise ValueError("provide task_id or method and path")
 
@@ -205,8 +193,7 @@ class TaskRegistry:
             else:
                 # lookup in dynamic entries
                 entry = next(
-                    (e for e in self.__dynamic_entries if e.is_match(task_id)),
-                    None
+                    (e for e in self.__dynamic_entries if e.is_match(task_id)), None
                 )
             if entry is None:
                 raise KeyError
@@ -287,16 +274,22 @@ def listen_to(
     manager task registry's entries will be merged into application
     task registry.
     """
+
     def wrapper(handler: CallableTV) -> CallableTV:
-        return typing.cast(CallableTV, (
-            tuple(transporters or ("default",)),
-            TaskEntry(
-                TaskID(
-                    method=method, path=path,
-                    separator=separator,
-                    param_types=get_param_types(handler),
+        return typing.cast(
+            CallableTV,
+            (
+                tuple(transporters or ("default",)),
+                TaskEntry(
+                    TaskID(
+                        method=method,
+                        path=path,
+                        separator=separator,
+                        param_types=get_param_types(handler),
+                    ),
+                    handler,
                 ),
-                handler
-            )
-        )) # lie to type checker
+            ),
+        )  # lie to type checker
+
     return wrapper
