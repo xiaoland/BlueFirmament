@@ -8,8 +8,7 @@ import asyncio
 import typing
 from typing import Optional as Opt
 
-from .event.context import CommonEventContext
-from .event.context import ExtendedEventContext
+from .event.context import BaseEventContext
 from .log.main import get_logger
 from .event.source.base import BaseEventSource
 from .event import EventBus
@@ -33,7 +32,7 @@ class BlueFirmamentApp:
         event_bus: Opt[EventBus] = None,
         event_sources: Opt[typing.Iterable[BaseEventSource]] = None,
         middlewares: Opt[MiddlewaresT] = None,
-        event_context_cls: type[ExtendedEventContext] = CommonEventContext,
+        event_context_cls: type[BaseEventContext] = BaseEventContext,
     ):
         """
         :param name: Name of the application.
@@ -45,7 +44,7 @@ class BlueFirmamentApp:
         """
         self.__name = name
         self.__middlewares: MiddlewaresT = middlewares or []
-        self.__event_context_cls: type[ExtendedEventContext] = event_context_cls
+        self.__event_context_cls: type[BaseEventContext] = event_context_cls
         self.__event_bus: EventBus = event_bus or EventBus(
             name=f"{name}_bus",
             middlewares=self.__middlewares,

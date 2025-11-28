@@ -8,18 +8,16 @@ __all__ = [
 
 from dataclasses import dataclass
 import typing
-from typing import Literal as Lit, Optional as Opt, Annotated as Anno
+from typing import Optional as Opt, Annotated as Anno
 
 from .. import event
 from ..utils.exec_ import build_func_sig
 from ..event.bus import EventBus
-from ..event.context.common import CommonEventContext
-from ..dal import KeyableType, DataAccessObject
-from ..model.field import CompositeField, FieldValueProxy
+from ..event.context import BaseEventContext
+from ..dal import KeyableType
+from ..model.field import CompositeField
 from ..log.main import get_logger
-# from .base import BaseFieldManager, 
 from .base import BaseManager, ModelTV
-from ..utils.typing_ import safe_issubclass
 from ..event.main import Method
 from ..model import BaseModel
 from ..event import EventID, EventMetadata
@@ -103,7 +101,6 @@ KeyTV = typing.TypeVar('KeyTV', bound=KeyableType)
 class CommonManager(
     typing.Generic[ModelTV, KeyTV],
     BaseManager[ModelTV],
-    CommonEventContext,
 ):
     """
     Configuration
@@ -115,9 +112,8 @@ class CommonManager(
     - preset_handler_config:
     """
 
-    def __init__(self, event_context: CommonEventContext):
+    def __init__(self, event_context: BaseEventContext):
         BaseManager.__init__(self, event_context)
-        CommonEventContext.__init__(self, tc=event_context, skip_btc_init=True)
 
     def __init_subclass__(
         cls,
@@ -225,12 +221,6 @@ class CommonManager(
                     handler_manager_cls=cls
                 )
 
-    @property
-    def _dao(self) -> DataAccessObject[ModelTV]:
-        """DAO of managing scheme.
-        """
-        return self._daos(self._scheme_cls)
-
     def _emit(
         self,
         name: str,
@@ -249,7 +239,7 @@ class CommonManager(
         return event.simple_emit(
             name=f"{self.__path_prefix__.replace('/', '.') if not without_prefix else ""}{name}",
             parameters=parameters,
-            metadata=metadata or self._task.metadata
+            metadata=metadata or self._event.metadata
         )
 
     async def _get_scheme(self, _id: Opt[KeyTV] = None) -> ModelTV:
@@ -278,187 +268,7 @@ class CommonManager(
                 raise ValueError
             return scheme
         except ValueError as e:
-            if _id is not None:
-                return await self.get(_id=_id)
             raise e
-
-    async def get(self, _id: KeyTV) -> ModelTV:
-        """Get scheme
-
-        If success, set as managing scheme.
-        """
-        self._scheme = await self._dao.select_one(
-            _id, event_context=self
-        )
-        return self._scheme
-
-    async def insert(self, scheme: Opt[ModelTV] = None) -> ModelTV:
-        """插入数据模型实例到 DAO
-
-        - 插入成功则设置为当前实例
-
-        :param scheme: 数据模型实例；不提供则为当前实例
-
-        """
-        self._scheme = await self._dao.insert(
-            to_insert=scheme or await self._get_scheme(),
-        )
-        return self._scheme
-
-    async def patch(self, editable: BaseModel, _id: Opt[KeyTV] = None) -> ModelTV:
-        """Patch managing model to DAO.
-
-        :param editable: Editable version of managing model.
-        :param _id: which model to put, if not provided, use current managing model.
-        :return:
-        """
-        self._scheme = await self._get_scheme(_id=_id)
-        self._scheme._merge(model=editable)
-        return await self._update_scheme(self._scheme)
-    
-    async def _update_scheme(
-        self,
-        scheme: Opt[ModelTV] = None,
-    ) -> ModelTV:
-        """Update dirty fields to dal.
-
-        If success, set update result to manager scheme.
-        """
-        self._scheme = await self._dao.update(
-            to_update=scheme or await self._get_scheme(), 
-            only_dirty=True,
-        )
-        return self._scheme
-
-    async def get_a_field(
-        self,
-        field: "Field[TV]", 
-        _id: Opt[KeyTV] = None,
-    ) -> TV:
-        """Get a field's value of managing scheme.
-
-        :returns: Field Value (no proxy)
-        """
-        scheme = self._try_get_scheme()
-        if not scheme:
-            return await self._dao.select_a_field(
-                field,
-                self._scheme_cls._get_key_field().equals(_id),
-                event_context=self
-            )
-        else:
-            return FieldValueProxy.dump(scheme._get_value(field))
-        
-    async def put_a_field(
-        self,
-        field: "Field[TV]", 
-        value: TV,  
-        _id: Opt[KeyTV] = None,
-    ) -> TV:
-        
-        """Put a field value of managing scheme.
-
-        Put value will be performed on scheme so that
-        related validators can be run, and then
-        patch to dal.
-        """        
-        scheme = await self._get_scheme(_id=_id)
-        scheme[field] = value
-        return (await self._update_scheme(scheme))[field]
-
-    IoDableT = typing.TypeVar('IoDableT', bound=typing.List | typing.Set)
-    async def insert_item(
-        self,
-        field: "Field[IoDableT]",
-        values: typing.Iterable[TV],
-        _id: Opt[KeyTV] = None,
-        mode: Lit['append', 'prepend', 'insert'] = 'append',
-        at: Opt[int] = None,
-    ) -> IoDableT:
-        
-        """插入条目到列表型字段值
-
-        :param _id: 主键值；没有则从当前实例获取
-        :param field: 要插入到的字段；类型必须是列表或集合
-        :param values: 要插入的值（可多个）；
-        :param mode: 插入模式 （Set 不生效）
-
-            - append: `[raw][values]`
-            - prepend: `[values][raw]`
-            - insert: `[raw before at][values][raw after at]`
-        :param at: 插入位置；仅当 mode 为 `insert`
-        """
-        field_value = await self.get_a_field(_id=_id, field=field) 
-
-        if isinstance(field_value, list):
-            if mode == 'append':
-                field_value.extend(values)
-            elif mode == 'prepend':
-                field_value[:0] = values
-            elif mode == 'insert':
-                if at is None:
-                    raise ValueError('at must be provided when mode is insert')
-                field_value[at:at] = values
-            else:
-                raise ValueError(f'Invalid mode {mode} for insert item')
-        elif isinstance(field_value, set):
-            field_value.update(values)
-        else:
-            raise ValueError(f'DAO not returning valid value of field {field}, {field_value}')
-        
-        return await self.put_a_field(
-            field=field, value=field_value, 
-            _id=_id,
-        )
-    
-    async def delete_item(
-        self,
-        field: "Field[IoDableT]", 
-        values: typing.Union[
-            typing.Iterable[TV],
-            typing.Set[TV]
-        ],
-        _id: Opt[KeyTV] = None,
-    ) -> IoDableT:
-        """从列表型字段值中删除条目
-
-        :param _id: 主键值；没有则从当前实例获取
-        :param field: 要删除的字段；值必须是列表类型
-        :param values: 要删除的值（可多个）；
-        :param dao: 数据访问对象；不提供则使用当前会话的 DAO
-
-        Implementation
-        --------------
-        高效删除
-        ^^^^^^^^
-        因为要删除的数量不可能大于当前列表的长度
-        """
-        field_value = await self.get_a_field(_id=_id, field=field)
-
-        if isinstance(values, (list,)):
-            field_value = [v for v in field_value if v not in values]
-        elif isinstance(values, (set,)):
-            for value in values:
-                field_value.remove(value)
-        else:
-            raise ValueError(f'{field} value invalid, value is {field_value}')
-
-        return await self.put_a_field(
-            _id=_id, field=field, value=field_value
-        )
-    
-    async def delete(self, _id: Opt[KeyTV] = None) -> None:
-        """Delete the scheme from DAO
-
-        If success, set managing scheme to None.
-
-        :param _id: key value
-
-            If not provided, use managing scheme's.
-        """
-        scheme = await self._get_scheme(_id=_id)
-        await self._dao.delete(to_delete=scheme)
-        self._scheme = None
 
 
 # CommonManagerTV = typing.TypeVar('CommonManagerTV', bound=CommonManager)
@@ -557,32 +367,32 @@ def common_handler_adder(
     --------
     Get
     ^^^
-    - A handler return a scheme using session DAO to select record by primary key
+    - A handler return a scheme using DAO to select record by primary key
 
     Get a Field
     ^^^^^^^^^^^
-    - A handler return a field of the scheme using session DAO to select record by primary key
+    - A handler return a field of the scheme using DAO to select record by primary key
     - Route `GET /<manager_name>/{<manager_name>_id}/<field_name>`
 
     Create
     ^^^^^^^^^^^^^^
-    - A handler insert a record into session DAO with provided scheme data.
+    - A handler insert a record into DAO with provided scheme data.
     - Only fields not in `disabled_fields` will be inserted, others will be ignored.
 
     Insert item
     ^^^^^^^^^^^^^^
-    - A handler insert item(s) into an insertable field of the scheme using session DAO.
+    - A handler insert item(s) into an insertable field of the scheme using DAO.
     - Route `POST /<manager_name>/{<manager_name>_id>/<field_name>`
     - Request body is a list of items to insert
 
     Patch
     ^^^^^
-    - A handler update provided fields of the scheme into session DAO.
+    - A handler update provided fields of the scheme into DAO.
     - Only fields in `available_fields` will be updated, other will be ignored.
 
     Put a Field
     ^^^^^^^^^^^
-    - A handler update a field of the scheme into session DAO.
+    - A handler update a field of the scheme into DAO.
     - Every field in `fields` will get a handler.
     - Route `PUT /<manager_name>/{<manager_name>_id}/<field_name>`
     - Request body is the new value to put
@@ -597,7 +407,7 @@ def common_handler_adder(
                 'fields': (UserScheme.nickname,)
             }
         )
-        class UserManager(BaseManager[UserScheme, Session]):
+        class UserManager(BaseManager[UserScheme]):
             __SCHEME_CLS__ = UserScheme
             __name__ = 'user'
 

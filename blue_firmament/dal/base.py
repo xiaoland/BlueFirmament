@@ -23,7 +23,7 @@ from ..utils.enum_ import dump_enum
 if typing.TYPE_CHECKING:
     from ..auth import AuthSession
     from ..model.field import Field, FieldValueProxy
-    from blue_firmament.event.context import ExtendedEventContext
+    from blue_firmament.event.context import BaseEventContext
 
 
 SchemeTV = typing.TypeVar('SchemeTV', bound="BaseScheme")
@@ -241,7 +241,7 @@ class TableLikeDataAccessLayer(DataAccessLayer):
         to_select: typing.Type[SchemeTV],
         *query_coms: QueryComLikeType,
         path: Opt[DALPath] = None,
-        event_context: Opt["ExtendedEventContext"] = None,
+        event_context: Opt["BaseEventContext"] = None,
     ) -> typing.Tuple[SchemeTV, ...]:
         ...
     @typing.overload
@@ -251,7 +251,7 @@ class TableLikeDataAccessLayer(DataAccessLayer):
         to_select: "Field[FieldValueTV]",
         *query_coms: QueryComLikeType,
         path: Opt[DALPath] = None,
-        event_context: Opt["ExtendedEventContext"] = None,
+        event_context: Opt["BaseEventContext"] = None,
     ) -> typing.Tuple[FieldValueTV, ...]:
         ...
     @typing.overload
@@ -261,7 +261,7 @@ class TableLikeDataAccessLayer(DataAccessLayer):
         to_select: typing.Iterable[FieldLikeType],
         *query_coms: QueryComLikeType,  # 实际上此时 str, int 不支持
         path: Opt[DALPath] = None,
-        event_context: Opt["ExtendedEventContext"] = None,
+        event_context: Opt["BaseEventContext"] = None,
     ) -> typing.Tuple[dict, ...]:
         ...
     @abc.abstractmethod
@@ -274,7 +274,7 @@ class TableLikeDataAccessLayer(DataAccessLayer):
         ],
         *query_coms: QueryComLikeType,
         path: Opt[DALPath] = None,
-        event_context: Opt["ExtendedEventContext"] = None,
+        event_context: Opt["BaseEventContext"] = None,
     ) -> typing.Union[
         typing.Tuple[SchemeTV, ...],
         typing.Tuple[FieldValueTV, ...],
@@ -315,7 +315,7 @@ class TableLikeDataAccessLayer(DataAccessLayer):
         to_select: typing.Type[SchemeTV],
         *query_coms: QueryComLikeType,
         path: Opt[DALPath] = None,
-        event_context: Opt["ExtendedEventContext"] = None,
+        event_context: Opt["BaseEventContext"] = None,
     ) -> SchemeTV:
         ...
     @typing.overload
@@ -324,7 +324,7 @@ class TableLikeDataAccessLayer(DataAccessLayer):
         to_select: "Field[FieldValueTV]",
         *query_coms: QueryComLikeType,
         path: Opt[DALPath] = None,
-        event_context: Opt["ExtendedEventContext"] = None,
+        event_context: Opt["BaseEventContext"] = None,
     ) -> FieldValueTV:
         ...
     @typing.overload
@@ -333,7 +333,7 @@ class TableLikeDataAccessLayer(DataAccessLayer):
         to_select: typing.Iterable[FieldLikeType],
         *query_coms: QueryComLikeType,
         path: Opt[DALPath] = None,
-        event_context: Opt["ExtendedEventContext"] = None,
+        event_context: Opt["BaseEventContext"] = None,
     ) -> dict:
         ...
     async def select_one(
@@ -345,7 +345,7 @@ class TableLikeDataAccessLayer(DataAccessLayer):
         ],
         *query_coms: QueryComLikeType,
         path: Opt[DALPath] = None,
-        event_context: Opt["ExtendedEventContext"] = None,
+        event_context: Opt["BaseEventContext"] = None,
     ) -> typing.Union[
         SchemeTV,
         FieldValueTV,
@@ -490,7 +490,7 @@ class DataAccessObject(
     def select(
         self,
         *query_coms: QueryComLikeType,
-        event_context: Opt["ExtendedEventContext"] = None,
+        event_context: Opt["BaseEventContext"] = None,
     ):
         if not isinstance(self.__dal, TableLikeDataAccessLayer):
             raise TypeError(f"{self.__dal.__name__} not support TableLike operation")
@@ -504,7 +504,7 @@ class DataAccessObject(
         self,
         to_select: typing.Iterable[FieldLikeType],
         *query_coms: QueryComLikeType,
-        event_context: Opt["ExtendedEventContext"] = None,
+        event_context: Opt["BaseEventContext"] = None,
     ):
         if not isinstance(self.__dal, TableLikeDataAccessLayer):
             raise TypeError(f"{self.__dal.__name__} not support TableLike operation")
@@ -518,7 +518,7 @@ class DataAccessObject(
         self,
         to_select: "Field[FieldValueTV]",
         *query_coms: QueryComLikeType,
-        event_context: Opt["ExtendedEventContext"] = None,
+        event_context: Opt["BaseEventContext"] = None,
     ):
         """Select a field, returns a tuple of field values.
         """
@@ -533,7 +533,7 @@ class DataAccessObject(
     def select_one(
         self,
         *query_coms: QueryComLikeType,
-        event_context: Opt["ExtendedEventContext"] = None,
+        event_context: Opt["BaseEventContext"] = None,
     ):
         if not isinstance(self.__dal, TableLikeDataAccessLayer):
             raise TypeError(f"{self.__dal.__name__} not support TableLike operation")
@@ -547,7 +547,7 @@ class DataAccessObject(
         self,
         to_select: "Field[FieldValueTV]",
         *query_coms: QueryComLikeType,
-        event_context: Opt["ExtendedEventContext"] = None,
+        event_context: Opt["BaseEventContext"] = None,
     ):
         """Select a field, returns a single field value.
         """

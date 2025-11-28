@@ -3,15 +3,12 @@
 
 __all__ = [
     "BaseEventContext", 
-    "ExtendedEventContext",
     "SoBaseEC",
 ]
 
 import contextvars
 import typing
 from typing import Optional as Opt
-from ...session import SessionTV
-from ...model.main import ModelTV
 from ...model import BaseModel, private_field, Field
 
 if typing.TYPE_CHECKING:
@@ -74,51 +71,6 @@ class BaseEventContext:
         :raise LookupError: if not set
         """
         return cls.CONTEXTVAR.get()
-
-
-class ExtendedEventContext(
-    typing.Generic[SessionTV],
-    BaseEventContext, 
-):
-    """Extend BaseEventContext with session.
-    """
-
-    def __init_subclass__(
-        cls,
-        session_cls: Opt[typing.Type[SessionTV]] = None
-    ) -> None:
-        if session_cls:
-            cls.__session_cls = session_cls
-        super().__init_subclass__()
-
-    def __init__(
-        self,
-        tc: BaseEventContext | typing.Self,
-        skip_btc_init: bool = False
-    ):
-        """
-        :param tc: BaseEventContext or ExtendedEventContext instance.
-        :param skip_btc_init: For manager's sake!
-        """
-        if not skip_btc_init:
-            super().__init__(btc=tc)
-        if tc.__class__ is BaseEventContext:
-            self.__session: SessionTV = self.__session_cls.from_event(tc._event)
-        elif isinstance(tc, ExtendedEventContext):
-            self.__session: SessionTV = tc._session
-        else:
-            raise TypeError("tc must be either BaseEventContext or subclass of ExtendedEventContext")
-        self.__init_fields__()
-
-    def __init_fields__(self):
-        """Assign your customized fields.
-
-        Better to use property instead of set attribute.
-        """
-
-    @property
-    def _session(self): 
-        return self.__session
 
 
 class SoBaseEC(BaseModel):
