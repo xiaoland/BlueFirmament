@@ -260,15 +260,12 @@ class CommonManager(
                 async def my_handler(self, _id: Opt[IdType] = None):
                     my = await self._get_scheme(_id)
         """
-        try:
-            scheme = self._scheme
-            if _id is not None:
-                if scheme.key_value == _id:
-                    return scheme
-                raise ValueError
-            return scheme
-        except ValueError as e:
-            raise e
+        scheme = self._scheme
+        if _id is not None:
+            if scheme.key_value == _id:
+                return scheme
+            raise ValueError("scheme key does not match provided _id")
+        return scheme
 
 
 # CommonManagerTV = typing.TypeVar('CommonManagerTV', bound=CommonManager)

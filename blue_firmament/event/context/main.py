@@ -18,7 +18,7 @@ if typing.TYPE_CHECKING:
 
 
 class BaseEventContextFields(typing.TypedDict):
-    event: typing.NotRequired["Event"]
+    task: typing.NotRequired["Event"]
     event_result: typing.NotRequired["EventResult"]
     base_logger: typing.NotRequired["LoggerT"]
     """Bind task context based on this logger.
