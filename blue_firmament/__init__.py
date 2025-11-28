@@ -6,12 +6,13 @@ __name__ = "blue_firmament"
 __all__ = [
     "listen_to",
     "Method",
-    "BlueFirmamentApp"
+    "BlueFirmamentApp",
+    "EventBus",
 ]
 
 
-from .core import BlueFirmamentApp
-from .event import listen_to, Method
+from .app import BlueFirmamentApp
+from .event import listen_to, Method, EventBus
 
 from .utils import json_
 json_.override_json_encoder(json_.JsonEncoder)

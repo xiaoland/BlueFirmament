@@ -1,30 +1,32 @@
-"""Event registry module (formerly Task registry).
+"""Event bus module (formerly event registry / task registry).
 """
 
 __all__ = [
-    'EventRegistry',
+    'EventBus',
+    'EventRegistry',  # backward compatibility alias
     'EventEntry',
     'listen_to'
 ]
 
 import asyncio
 import copy
-import inspect
 import typing
-from typing import Optional as Opt, Annotated as Anno, Literal as Lit
+from typing import Optional as Opt
 
 from ..exceptions import EventHandlerNotFound
 from .._types import PathParamsT, CallableTV
-from .source.base import BaseEventSource, BaseEventSource
-from .result import Body, JsonBody
-from .context import BaseEventContext
-from ..core.middleware import BaseMiddleware
-from .main import EventID, Method
+from .source.base import BaseEventSource
+from .result import Body, JsonBody, EventResult
+from .context import BaseEventContext, CommonEventContext, ExtendedEventContext
+from .middleware import BaseMiddleware, MiddlewaresT
+from .main import EventID, Method, Event
 from . import EventHandler
 from ..utils.inspect_ import get_param_types
+from ..log.main import get_logger
 
 if typing.TYPE_CHECKING:
     from ..manager import BaseManager
+    from structlog.stdlib import BoundLogger
 
 
 class EventEntry(BaseMiddleware):
@@ -123,28 +125,40 @@ class EventEntry(BaseMiddleware):
         await next_()
 
 
-class EventRegistry:
-    """BlueFirmament Event Registry
+class EventBus:
+    """BlueFirmament Event Bus
 
-    A bunch of task entries that you can look up by EventID.
+    A collection of event entries that can be looked up by EventID.
+    Provides the `emit` method to dispatch events to handlers concurrently
+    while running middlewares.
     """
 
     def __init__(self, 
-        name: str = 'router',
-        path_prefix: str = ''
+        name: str = 'event_bus',
+        path_prefix: str = '',
+        middlewares: Opt[MiddlewaresT] = None,
+        event_context_cls: type[ExtendedEventContext] = CommonEventContext,
     ):
         """
+        :param name: Name identifier for this event bus.
         :param path_prefix: 
             Prefix added to every record path
-            registered to this router.
+            registered to this event bus.
 
             Can be ``/abc/{var}`` or ``abc/{var}``, but don't
             end with a slash.
+        :param middlewares: List of middlewares to run before event handlers.
+        :param event_context_cls: Class to use for creating event contexts.
         """
         self.__static_entries: dict[EventID, EventEntry] = dict()
         self.__dynamic_entries: list[EventEntry] = list()
         self.__path_prefix = path_prefix
         self.__name = name
+        self.__middlewares: MiddlewaresT = middlewares or []
+        self.__event_context_cls: type[ExtendedEventContext] = event_context_cls
+        self.__logger: "BoundLogger" = get_logger(f"EventBus[{name}]").bind(
+            event_bus_name=name
+        )
 
     @property
     def name(self): return self.__name
@@ -152,6 +166,12 @@ class EventRegistry:
     def static_entries(self): return self.__static_entries
     @property
     def dynamic_entries(self): return self.__dynamic_entries
+    @property
+    def _logger(self) -> "BoundLogger": return self.__logger
+
+    def add_middleware(self, middleware: BaseMiddleware):
+        """Add a middleware to the event bus."""
+        self.__middlewares.append(middleware)
 
     def add_entry(self, entry: EventEntry):
         entry = entry.fork(path_prefix=self.__path_prefix)
@@ -219,8 +239,8 @@ class EventRegistry:
         else:
             self.__dynamic_entries.append(entry)
 
-    def merge(self, to_merge: "EventRegistry"):
-        """Merge another event registry's entries.
+    def merge(self, to_merge: "EventBus"):
+        """Merge another event bus's entries.
 
         Every entry to be merged will be prefixed with the path_prefix.
         (Of course on the forked entry)
@@ -266,6 +286,44 @@ class EventRegistry:
             event_id=event_id,
         )
 
+    async def emit(
+        self,
+        event: Event,
+        event_result: Opt[EventResult] = None,
+    ) -> EventResult:
+        """Emit an event and dispatch to matching handlers concurrently.
+
+        This method:
+        1. Looks up the event entry matching the event's ID
+        2. Creates an event context
+        3. Runs middlewares and the event entry (which runs handlers concurrently)
+
+        :param event: The event to emit
+        :param event_result: Optional pre-created EventResult. If None, a new one is created.
+        :return: The EventResult after processing
+        :raises EventHandlerNotFound: If no handler matches the event ID
+        """
+        if event_result is None:
+            event_result = EventResult()
+
+        event_entry = self.lookup(event.id)
+        middlewares: MiddlewaresT = self.__middlewares + [event_entry]
+        
+        event_context = self.__event_context_cls(BaseEventContext(
+            task=event,
+            event_result=event_result,
+            base_logger=self._logger
+        ))
+        BaseEventContext.set_contextvar(event_context)
+        
+        await BaseMiddleware.run_middlewares(middlewares, event_context)
+        
+        return event_result
+
+
+# Backward compatibility alias
+EventRegistry = EventBus
+
 
 def listen_to(
     method: Opt[Method | str],
@@ -281,11 +339,11 @@ def listen_to(
 
     Will wrap decorated function to a EventEntry.
     With support of :meth:`blue_firmament.manager.ManagerMetaclass`,
-    this entry will be added to manager event registry.
-    Finally, with :meth:`blue_firmament.event.EventRegistry.merge` or
-    :meth:`blue_firmament.core.BlueFirmamentApp.add_manager`,
-    manager event registry's entries will be merged into application
-    event registry.
+    this entry will be added to manager event bus.
+    Finally, with :meth:`blue_firmament.event.EventBus.merge` or
+    :meth:`blue_firmament.app.BlueFirmamentApp.add_manager`,
+    manager event bus entries will be merged into application
+    event bus.
     """
     def wrapper(handler: CallableTV) -> CallableTV:
         return typing.cast(CallableTV, (

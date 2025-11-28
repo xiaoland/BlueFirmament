@@ -7,9 +7,9 @@ import abc
 import typing
 from typing import Optional as Opt
 
-from .._types import EventRegistriesT
-from ..event.source.base import BaseEventSource, BaseEventSource
-from ..event.registry import EventRegistry, EventEntry
+from .._types import EventBusesT
+from ..event.source.base import BaseEventSource
+from ..event.registry import EventBus, EventEntry
 from ..event.context import BaseEventContext
 from ..exceptions import BFExceptionTV
 from ..model.field import Field
@@ -32,10 +32,10 @@ class ManagerMetaclass(abc.ABCMeta):
     Use :func:`blue_firmament.log.decorators.log_manager_handler` to decorate all handlers.
     A decorated handler will be skipped.
 
-    Event registry
-    ^^^^^^^^^^^^^
+    Event bus
+    ^^^^^^^^^
     Handlers decorated with :meth:`blue_firmament.event.listen_to` will be
-    automatically added to manager task registry.
+    automatically added to manager event bus.
 
     """
 
@@ -52,7 +52,7 @@ class ManagerMetaclass(abc.ABCMeta):
             return super().__new__(cls, name, bases, attrs, **kwargs)
 
         attrs["__path_prefix__"] = path_prefix
-        attrs["__event_registries__"]: dict[BaseEventSource | str, EventRegistry] = {}
+        attrs["__event_registries__"]: dict[BaseEventSource | str, EventBus] = {}
         event_entries: list[tuple[tuple[BaseEventSource | str], EventEntry]] = []
 
         for attr_name, attr_value in attrs.items():
@@ -93,7 +93,7 @@ class ManagerMetaclass(abc.ABCMeta):
             for event_source in i[0]:
                 attrs["__event_registries__"].setdefault(
                     event_source,
-                    EventRegistry(name=str(event_source), path_prefix=path_prefix),
+                    EventBus(name=str(event_source), path_prefix=path_prefix),
                 ).add_entry(i[1])
 
         return new_cls
@@ -117,8 +117,8 @@ class BaseManager(
     __scheme_cls__: type[ModelTV]
     """Scheme class this manager is managing
     """
-    __event_registries__: EventRegistriesT
-    """Event entries of this manager
+    __event_registries__: EventBusesT
+    """Event buses of this manager
     """
     __manager_name__: str
     """Friendly name of this manager.

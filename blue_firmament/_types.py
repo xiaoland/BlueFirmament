@@ -7,6 +7,7 @@ __all__ = [
     "NamedTupleTV",
     "PathParamsT",
     "EventRegistriesT",
+    "EventBusesT",
     "CallableTV",
 ]
 
@@ -15,9 +16,9 @@ import typing
 
 if typing.TYPE_CHECKING:
     from .event.source.base import BaseEventSource
-    from .event import EventRegistry
+    from .event import EventBus
     # Backward compatibility alias
-    BaseEventSource = BaseEventSource
+    EventRegistry = EventBus
 
 
 class AnnotatedDirective(enum.Enum):
@@ -40,8 +41,13 @@ type PathParamsT = typing.Dict[str, typing.Any]
 Path parameters is the parameters resolved from EventID path.
 """
 
-type EventRegistriesT = dict["BaseEventSource" | str, "EventRegistry"]
-"""A dict, records which event registry serves which event source.
+type EventBusesT = dict["BaseEventSource" | str, "EventBus"]
+"""A dict, records which event bus serves which event source.
+"""
+
+# Backward compatibility alias
+type EventRegistriesT = EventBusesT
+"""Backward compatibility alias for EventBusesT.
 """
 
 CallableTV = typing.TypeVar("CallableTV", bound=typing.Callable)

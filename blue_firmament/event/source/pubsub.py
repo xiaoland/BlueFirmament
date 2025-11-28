@@ -5,7 +5,6 @@ TODO better logging
 
 __all__ = [
     "PubSubEventSource",
-    "PubSubEventSource"  # backward compatibility
 ]
 
 import typing
@@ -16,22 +15,25 @@ from .. import Event, EventResult
 from ...dal.base import PubSubLikeDataAccessLayer, PubSubMessage
 
 if typing.TYPE_CHECKING:
-    from ...core import BlueFirmamentApp
+    from ..registry import EventBus
 
 
 class PubSubEventSource(BaseEventSource):
 
     def __init__(
         self,
-        app: "BlueFirmamentApp",
+        event_bus: "EventBus",
         pubsub_dal: PubSubLikeDataAccessLayer,
         *channel_names: str,
         name: str = "default"
     ):
         """
+        :param event_bus: The event bus to dispatch events to
         :param pubsub_dal: A PubSubDAL not subscribed to any channel.
+        :param channel_names: Names of channels to subscribe to
+        :param name: Name identifier for this event source
         """
-        super().__init__(app=app, name=name)
+        super().__init__(event_bus=event_bus, name=name)
 
         self.__stop = False
         self.__pubsub_dal = pubsub_dal
@@ -45,7 +47,7 @@ class PubSubEventSource(BaseEventSource):
             try:
                 await self(message)
             except EventHandlerNotFound as e:
-                self._logger.warning("No handler found for the task", task=e.task_id)
+                self._logger.warning("No handler found for the event", event_id=e.event_id)
             except Exception as e:
                 self._logger.exception(
                     f"Unknown error occured when handling event from Pub/Sub {self.name}"
@@ -59,13 +61,8 @@ class PubSubEventSource(BaseEventSource):
         self._logger.info("Stop listening to Pub/Sub channels", channels=self.__channel_names)
 
     async def __call__(self, message: PubSubMessage):
-        await self._app.handle_task(
-            task=Event.load_from_bytes(message["data"]),
-            task_result=EventResult(),
-            event_source=self
+        await self._event_bus.emit(
+            event=Event.load_from_bytes(message["data"]),
+            event_result=EventResult(),
         )
-
-
-# Backward compatibility alias
-PubSubEventSource = PubSubEventSource
 

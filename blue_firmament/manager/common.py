@@ -12,7 +12,7 @@ from typing import Literal as Lit, Optional as Opt, Annotated as Anno
 
 from .. import event
 from ..utils.exec_ import build_func_sig
-from ..event.registry import EventRegistry
+from ..event.registry import EventBus
 from ..event.context.common import CommonEventContext
 from ..dal import KeyableType, DataAccessObject
 from ..model.field import CompositeField, FieldValueProxy
@@ -25,7 +25,7 @@ from ..model import BaseModel
 from ..event import EventID, EventMetadata
 
 if typing.TYPE_CHECKING:
-    from ..core.app import BlueFirmamentApp
+    from ..app import BlueFirmamentApp
     from ..model.field import Field
 
 
@@ -184,7 +184,7 @@ class CommonManager(
                 exec(func_sig + func_body, exec_namespaces, handlers)
                 setattr(cls, handler_name, handlers[handler_name])
 
-                cls.__event_registries__.setdefault("default", EventRegistry(
+                cls.__event_registries__.setdefault("default", EventBus(
                     name="default", path_prefix=cls.__path_prefix__
                 )).add_handler(
                     method=Method.GET, path=sup_path,
@@ -217,7 +217,7 @@ class CommonManager(
                 exec(func_sig + func_body, exec_namespaces, handlers)
                 setattr(cls, handler_name, handlers[handler_name])
 
-                cls.__event_registries__.setdefault("default", EventRegistry(
+                cls.__event_registries__.setdefault("default", EventBus(
                     name="default", path_prefix=cls.__path_prefix__
                 )).add_handler(
                     method=Method.PUT, path=sup_path,

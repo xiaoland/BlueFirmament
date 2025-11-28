@@ -6,11 +6,11 @@ from .. import Event, EventResult
 
 if typing.TYPE_CHECKING:
     from ...dal.base import QueueLikeDataAccessLayer
-    from ...core.app import BlueFirmamentApp
+    from ..registry import EventBus
 
 
 class QueueEventSource(BaseEventSource):
-    """
+    """Event source that listens to a queue for events.
 
     :ivar __dal: Listening this queue dal for events.
     :ivar __handling_dal: The queue storing handling events.
@@ -18,12 +18,18 @@ class QueueEventSource(BaseEventSource):
 
     def __init__(
         self,
-        app: "BlueFirmamentApp",
+        event_bus: "EventBus",
         queue_dal: "QueueLikeDataAccessLayer",
         handling_queue_dal: "QueueLikeDataAccessLayer",
         name: str = "default"
     ):
-        super().__init__(app=app, name=name)
+        """
+        :param event_bus: The event bus to dispatch events to
+        :param queue_dal: The queue to listen for events
+        :param handling_queue_dal: The queue to store events being handled
+        :param name: Name identifier for this event source
+        """
+        super().__init__(event_bus=event_bus, name=name)
         self.__dal = queue_dal
         self.__handling_dal = handling_queue_dal
         self.__stop = False
@@ -36,12 +42,7 @@ class QueueEventSource(BaseEventSource):
         self.__stop = True
 
     async def __call__(self, raw: bytes):
-        await self._app.handle_task(
-            task=Event.load_from_bytes(raw),
-            task_result=EventResult(),
-            event_source=self
+        await self._event_bus.emit(
+            event=Event.load_from_bytes(raw),
+            event_result=EventResult(),
         )
-
-
-# Backward compatibility alias
-QueueEventSource = QueueEventSource
