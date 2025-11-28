@@ -16,7 +16,7 @@ from ..exceptions import EventHandlerNotFound
 from .._types import PathParamsT, CallableTV
 from .source.base import BaseEventSource
 from .result import Body, JsonBody, EventResult
-from .context import BaseEventContext, CommonEventContext, ExtendedEventContext
+from .context import BaseEventContext
 from .middleware import BaseMiddleware, MiddlewaresT
 from .main import EventID, Method, Event
 from . import EventHandler
@@ -136,7 +136,7 @@ class EventBus:
         name: str = 'event_bus',
         path_prefix: str = '',
         middlewares: Opt[MiddlewaresT] = None,
-        event_context_cls: type[ExtendedEventContext] = CommonEventContext,
+        event_context_cls: Opt[type[BaseEventContext]] = None,
     ):
         """
         :param name: Name identifier for this event bus.
@@ -154,7 +154,7 @@ class EventBus:
         self.__path_prefix = path_prefix
         self.__name = name
         self.__middlewares: MiddlewaresT = middlewares or []
-        self.__event_context_cls: type[ExtendedEventContext] = event_context_cls
+        self.__event_context_cls: type[BaseEventContext] = event_context_cls or BaseEventContext
         self.__logger: "BoundLogger" = get_logger(f"EventBus[{name}]").bind(
             event_bus_name=name
         )
@@ -308,11 +308,11 @@ class EventBus:
         event_entry = self.lookup(event.id)
         middlewares: MiddlewaresT = self.__middlewares + [event_entry]
         
-        event_context = self.__event_context_cls(BaseEventContext(
-            task=event,
+        event_context = self.__event_context_cls(
+            event=event,
             event_result=event_result,
             base_logger=self._logger
-        ))
+        )
         BaseEventContext.set_contextvar(event_context)
         
         await BaseMiddleware.run_middlewares(middlewares, event_context)

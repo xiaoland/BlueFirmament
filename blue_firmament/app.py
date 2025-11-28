@@ -8,8 +8,6 @@ import asyncio
 import typing
 from typing import Optional as Opt
 
-from .event.context import CommonEventContext
-from .event.context import ExtendedEventContext
 from .log.main import get_logger
 from .event.source.base import BaseEventSource
 from .event import EventBus
@@ -33,7 +31,6 @@ class BlueFirmamentApp:
         event_bus: Opt[EventBus] = None,
         event_sources: Opt[typing.Iterable[BaseEventSource]] = None,
         middlewares: Opt[MiddlewaresT] = None,
-        event_context_cls: type[ExtendedEventContext] = CommonEventContext,
     ):
         """
         :param name: Name of the application.
@@ -41,15 +38,12 @@ class BlueFirmamentApp:
             If None, a new event bus will be created.
         :param event_sources: Iterable of event sources to add to the app.
         :param middlewares: List of global middlewares to run for all events.
-        :param event_context_cls: Class to use for creating event contexts.
         """
         self.__name = name
         self.__middlewares: MiddlewaresT = middlewares or []
-        self.__event_context_cls: type[ExtendedEventContext] = event_context_cls
         self.__event_bus: EventBus = event_bus or EventBus(
             name=f"{name}_bus",
             middlewares=self.__middlewares,
-            event_context_cls=self.__event_context_cls
         )
         self.__event_sources: set[BaseEventSource] = set(event_sources or ())
         self.__logger = get_logger(f"BFApp[{name}]").bind(
