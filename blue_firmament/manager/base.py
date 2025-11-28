@@ -62,7 +62,7 @@ class ManagerMetaclass(BFModelMetaclass):
         attrs["__event_registries__"]: dict[BaseEventSource | str, EventBus] = {}
         event_entries: list[tuple[tuple[BaseEventSource | str], EventEntry]] = []
 
-        for attr_name, attr_value in list(attrs.items()):
+        for attr_name, attr_value in attrs.items():
             # resolve event_entries
             if (
                 isinstance(attr_value, tuple)
@@ -94,18 +94,17 @@ class ManagerMetaclass(BFModelMetaclass):
         # Restore custom __init__:
         # - Use custom_init from attrs if defined
         # - Otherwise, find __init__ from BaseManager in bases to preserve it
+        # Note: We check by name because at metaclass time, we can't use issubclass
         if custom_init is not None:
             new_cls.__init__ = custom_init
         else:
-            # Find BaseManager.__init__ from base classes
+            # Find __init__ from a base class that has a custom __init__ (not metaclass-generated)
+            # Look for BaseManager's __init__ specifically
             for base in bases:
-                if hasattr(base, '__init__') and base.__name__ == 'BaseManager':
-                    # Get the original __init__ from BaseManager's __dict__
-                    # to avoid getting the metaclass-generated one
-                    base_init = base.__dict__.get('__init__')
-                    if base_init is not None:
-                        new_cls.__init__ = base_init
-                        break
+                base_init = base.__dict__.get('__init__')
+                if base_init is not None and base.__name__ == 'BaseManager':
+                    new_cls.__init__ = base_init
+                    break
 
         if not issubclass(new_cls, BaseManager):
             raise TypeError(f"{name} should not directly use the ManagerMetaclass")

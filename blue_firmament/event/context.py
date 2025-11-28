@@ -68,11 +68,6 @@ class BaseEventContext(BaseModel):
                 _logger=logger,
             )
 
-    # Keep CONTEXTVAR as class property for backward compatibility
-    @property
-    def CONTEXTVAR(cls) -> contextvars.ContextVar[typing.Self]:
-        return cls.__contextvar__
-    
     @classmethod
     def set_contextvar(cls, task_context: typing.Self) -> None:
         cls.__contextvar__.set(task_context)
