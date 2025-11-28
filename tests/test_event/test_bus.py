@@ -1,8 +1,8 @@
-"""Tests of Event/Registry module.
+"""Tests of Event Bus module.
 """
 
 import pytest
-from blue_firmament.event.registry import listen_to, EventBus, EventEntry
+from blue_firmament.event.bus import listen_to, EventBus, EventEntry
 from blue_firmament.event.main import EventID, Event, Method
 from blue_firmament.event.result import EventResult
 
@@ -91,9 +91,3 @@ def test_event_bus_merge():
     bus1.merge(bus2)
     
     assert len(bus1.static_entries) == 2
-
-
-def test_event_registry_alias():
-    """Test that EventRegistry is an alias for EventBus."""
-    from blue_firmament.event.registry import EventRegistry
-    assert EventRegistry is EventBus

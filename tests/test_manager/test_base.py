@@ -1,7 +1,7 @@
 """Tests Of Manager/Base module"""
 
 from blue_firmament.manager.base import BaseManager
-from blue_firmament.event import listen_to, EventID, EventRegistry
+from blue_firmament.event import listen_to, EventID, EventBus
 
 
 def test_task_registries():
@@ -12,8 +12,7 @@ def test_task_registries():
             return id_
 
     assert isinstance(AManager.__event_registries__, dict)
-    assert isinstance(AManager.__event_registries__["default"], EventRegistry)
+    assert isinstance(AManager.__event_registries__["default"], EventBus)
     assert AManager.__event_registries__["default"].lookup(
         EventID("GET", "/a/1")
     ).handlers[0].function(1, "1") == "1"
-

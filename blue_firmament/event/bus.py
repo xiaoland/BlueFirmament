@@ -1,9 +1,8 @@
-"""Event bus module (formerly event registry / task registry).
+"""Event bus module.
 """
 
 __all__ = [
     'EventBus',
-    'EventRegistry',  # backward compatibility alias
     'EventEntry',
     'listen_to'
 ]
@@ -319,10 +318,6 @@ class EventBus:
         await BaseMiddleware.run_middlewares(middlewares, event_context)
         
         return event_result
-
-
-# Backward compatibility alias
-EventRegistry = EventBus
 
 
 def listen_to(

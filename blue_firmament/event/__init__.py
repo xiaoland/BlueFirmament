@@ -13,7 +13,6 @@ __all__ = [
     'EventResult',
     'EventHandler',
     'EventBus',
-    'EventRegistry',  # backward compatibility alias
     'EventEntry',
     'listen_to',
     'Method',
@@ -36,8 +35,8 @@ from .result import (
     EventStatus, EventResult
 )
 from .handler import EventHandler
-from .registry import (
-    EventBus, EventRegistry, EventEntry, listen_to
+from .bus import (
+    EventBus, EventEntry, listen_to
 )
 from .middleware import (
     BaseMiddleware, MiddlewaresT, NextT

@@ -6,7 +6,7 @@ from .. import Event, EventResult
 
 if typing.TYPE_CHECKING:
     from ...dal.base import QueueLikeDataAccessLayer
-    from ..registry import EventBus
+    from ..bus import EventBus
 
 
 class QueueEventSource(BaseEventSource):

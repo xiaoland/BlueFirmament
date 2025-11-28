@@ -20,7 +20,7 @@ from ....exceptions import BlueFirmamentException
 from ...._types import _undefined
 
 if typing.TYPE_CHECKING:
-    from ...registry import EventBus
+    from ...bus import EventBus
 
 
 TV = typing.TypeVar("TV")

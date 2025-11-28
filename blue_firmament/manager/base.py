@@ -7,9 +7,8 @@ import abc
 import typing
 from typing import Optional as Opt
 
-from .._types import EventBusesT
 from ..event.source.base import BaseEventSource
-from ..event.registry import EventBus, EventEntry
+from ..event.bus import EventBus, EventEntry
 from ..event.context import BaseEventContext
 from ..exceptions import BFExceptionTV
 from ..model.field import Field
@@ -117,7 +116,7 @@ class BaseManager(
     __scheme_cls__: type[ModelTV]
     """Scheme class this manager is managing
     """
-    __event_registries__: EventBusesT
+    __event_registries__: dict[BaseEventSource | str, EventBus]
     """Event buses of this manager
     """
     __manager_name__: str

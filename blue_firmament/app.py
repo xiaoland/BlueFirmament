@@ -1,14 +1,13 @@
 """BlueFirmament Application Module
 
 This module contains the main application class that coordinates
-event sources and event buses.
+event sources and the event bus.
 """
 
 import asyncio
 import typing
 from typing import Optional as Opt
 
-from ._types import EventBusesT
 from .event.context import CommonEventContext
 from .event.context import ExtendedEventContext
 from .log.main import get_logger
@@ -24,43 +23,38 @@ if typing.TYPE_CHECKING:
 class BlueFirmamentApp:
     """BlueFirmament Application
 
-    The main application class that manages event sources and their
-    associated event buses.
+    The main application class that manages event sources and
+    a single shared event bus.
     """
 
     def __init__(
         self,
         name: str = "",
-        event_buses: Opt[EventBusesT] = None,
+        event_bus: Opt[EventBus] = None,
         event_sources: Opt[typing.Iterable[BaseEventSource]] = None,
         middlewares: Opt[MiddlewaresT] = None,
         event_context_cls: type[ExtendedEventContext] = CommonEventContext,
     ):
         """
         :param name: Name of the application.
-        :param event_buses: Mapping of event sources to their event buses.
-            If None, will create an empty event bus for each event source.
+        :param event_bus: The event bus for this application.
+            If None, a new event bus will be created.
         :param event_sources: Iterable of event sources to add to the app.
         :param middlewares: List of global middlewares to run for all events.
         :param event_context_cls: Class to use for creating event contexts.
         """
         self.__name = name
-        self.__event_sources: set[BaseEventSource] = set(event_sources or ())
-        self.__event_buses: EventBusesT = event_buses or {}
-        self.__event_context_cls: type[ExtendedEventContext] = event_context_cls
         self.__middlewares: MiddlewaresT = middlewares or []
+        self.__event_context_cls: type[ExtendedEventContext] = event_context_cls
+        self.__event_bus: EventBus = event_bus or EventBus(
+            name=f"{name}_bus",
+            middlewares=self.__middlewares,
+            event_context_cls=self.__event_context_cls
+        )
+        self.__event_sources: set[BaseEventSource] = set(event_sources or ())
         self.__logger = get_logger(f"BFApp[{name}]").bind(
             app_name=name
         )
-
-        # Create event buses for event sources that don't have one
-        for event_source in self.__event_sources:
-            if event_source not in self.__event_buses:
-                self.__event_buses[event_source] = EventBus(
-                    name=str(event_source),
-                    middlewares=self.__middlewares,
-                    event_context_cls=self.__event_context_cls
-                )
 
     @property
     def _logger(self) -> "BoundLogger":
@@ -70,37 +64,23 @@ class BlueFirmamentApp:
     def name(self) -> str:
         return self.__name
 
-    def get_event_bus(self, event_source: BaseEventSource | str) -> EventBus:
-        """Get the event bus for a specific event source.
+    @property
+    def event_bus(self) -> EventBus:
+        """The application's event bus."""
+        return self.__event_bus
 
-        :param event_source: The event source or its name
-        :return: The associated EventBus
-        :raises KeyError: If no event bus exists for the event source
-        """
-        return self.__event_buses[event_source]
-
-    def add_event_source(
-        self,
-        event_source: BaseEventSource,
-        event_bus: Opt[EventBus] = None
-    ):
-        """Add an event source and its EventBus.
+    def add_event_source(self, event_source: BaseEventSource):
+        """Add an event source to the application.
 
         :param event_source: The event source to add
-        :param event_bus: Optional event bus. If None, creates a new one.
         """
         self.__event_sources.add(event_source)
-        self.__event_buses[event_source] = event_bus or EventBus(
-            name=event_source.name,
-            middlewares=self.__middlewares,
-            event_context_cls=self.__event_context_cls
-        )
 
     def add_manager(self, manager: type["BaseManager"]):
-        """Merge the manager's event buses into the app's event buses.
+        """Merge the manager's event bus entries into the app's event bus.
         """
-        for event_source, event_bus in manager.__event_registries__.items():
-            self.__event_buses[event_source].merge(event_bus)
+        for event_bus in manager.__event_registries__.values():
+            self.__event_bus.merge(event_bus)
 
     def add_managers(self, *managers: type["BaseManager"]):
         """Add multiple managers to the app."""

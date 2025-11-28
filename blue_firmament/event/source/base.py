@@ -4,11 +4,11 @@ from .. import EventMetadata
 
 if typing.TYPE_CHECKING:
     from structlog.stdlib import BoundLogger
-    from ..registry import EventBus
+    from ..bus import EventBus
 
 
 class BaseEventSource(abc.ABC):
-    """The base class of the event source module (formerly event source module).
+    """The base class of the event source module.
 
     Event sources receive events from external systems and dispatch them
     to the event bus for handling.

@@ -15,7 +15,7 @@ from .. import Event, EventResult
 from ...dal.base import PubSubLikeDataAccessLayer, PubSubMessage
 
 if typing.TYPE_CHECKING:
-    from ..registry import EventBus
+    from ..bus import EventBus
 
 
 class PubSubEventSource(BaseEventSource):

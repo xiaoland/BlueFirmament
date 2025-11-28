@@ -12,7 +12,7 @@ from typing import Literal as Lit, Optional as Opt, Annotated as Anno
 
 from .. import event
 from ..utils.exec_ import build_func_sig
-from ..event.registry import EventBus
+from ..event.bus import EventBus
 from ..event.context.common import CommonEventContext
 from ..dal import KeyableType, DataAccessObject
 from ..model.field import CompositeField, FieldValueProxy
@@ -666,7 +666,7 @@ def common_handler_adder(
             )
 
             if app:
-                app.task_registry.add_handler(
+                app.event_bus.add_handler(
                     method=Method.GET,
                     path=path_prefix_with_key_,
                     handler=getattr(manager_cls, get_handler_name),
