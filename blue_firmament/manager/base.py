@@ -13,10 +13,11 @@ from ..event.context import BaseEventContext
 from ..exceptions import BFExceptionTV
 from ..model.field import Field
 from ..model import ModelTV
+from ..model.main import BFModelMetaclass
 from ..log import log_manager_handler
 
 
-class ManagerMetaclass(abc.ABCMeta):
+class ManagerMetaclass(BFModelMetaclass):
     """Metaclass of Manager
 
     Terms
@@ -46,15 +47,22 @@ class ManagerMetaclass(abc.ABCMeta):
         path_prefix: str = "",
         **kwargs,
     ):
+        # Save custom __init__ if defined in attrs (before metaclass generates one)
+        custom_init = attrs.get("__init__")
+
         # exclude BaseManager
         if name in ("BaseManager",):
-            return super().__new__(cls, name, bases, attrs, **kwargs)
+            new_cls = super().__new__(cls, name, bases, attrs, **kwargs)
+            # Restore custom __init__ for BaseManager if it was defined
+            if custom_init is not None:
+                new_cls.__init__ = custom_init
+            return new_cls
 
         attrs["__path_prefix__"] = path_prefix
         attrs["__event_registries__"]: dict[BaseEventSource | str, EventBus] = {}
         event_entries: list[tuple[tuple[BaseEventSource | str], EventEntry]] = []
 
-        for attr_name, attr_value in attrs.items():
+        for attr_name, attr_value in list(attrs.items()):
             # resolve event_entries
             if (
                 isinstance(attr_value, tuple)
@@ -82,6 +90,22 @@ class ManagerMetaclass(abc.ABCMeta):
                     attrs[attr_name] = log_manager_handler(attr_value)
 
         new_cls = super().__new__(cls, name, bases, attrs, **kwargs)
+
+        # Restore custom __init__:
+        # - Use custom_init from attrs if defined
+        # - Otherwise, find __init__ from BaseManager in bases to preserve it
+        if custom_init is not None:
+            new_cls.__init__ = custom_init
+        else:
+            # Find BaseManager.__init__ from base classes
+            for base in bases:
+                if hasattr(base, '__init__') and base.__name__ == 'BaseManager':
+                    # Get the original __init__ from BaseManager's __dict__
+                    # to avoid getting the metaclass-generated one
+                    base_init = base.__dict__.get('__init__')
+                    if base_init is not None:
+                        new_cls.__init__ = base_init
+                        break
 
         if not issubclass(new_cls, BaseManager):
             raise TypeError(f"{name} should not directly use the ManagerMetaclass")

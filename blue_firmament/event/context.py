@@ -9,7 +9,7 @@ __all__ = [
 import contextvars
 import typing
 from typing import Optional as Opt
-from ..model import BaseModel, private_field, Field
+from ..model import BaseModel, private_field, Field, PrivateField
 
 if typing.TYPE_CHECKING:
     from ..log import LoggerT
@@ -25,13 +25,23 @@ class BaseEventContextFields(typing.TypedDict):
     """
 
 
-class BaseEventContext:
+class BaseEventContext(BaseModel):
     """Base class of EventContext (Event Context).
 
     .. versionchanged:: 0.1.2
         rename to BaseEventContext from RequestContext and
         removed fields from session.
+    
+    .. versionchanged:: 0.3.0
+        Refactored to inherit from BaseModel using private fields.
     """
+
+    _event: PrivateField["Event"] = private_field()
+    _event_result: PrivateField["EventResult"] = private_field()
+    _logger: PrivateField["LoggerT"] = private_field()
+
+    __contextvar__: typing.ClassVar[contextvars.ContextVar[typing.Self]]
+    __contextvar__ = contextvars.ContextVar('TASKC_CONTEXTVAR')
 
     def __init__(
         self,
@@ -41,36 +51,37 @@ class BaseEventContext:
         """
         :param btc: another BaseEventContext instance to copy from
         """
-        if btc:
-            self.__event = btc._event
-            self.__event_result = btc._event_result
-            self.__logger = btc._logger
+        if btc is not None:
+            self.__model_init__(
+                _event=btc._event,
+                _event_result=btc._event_result,
+                _logger=btc._logger,
+            )
         else:
-            self.__event = kwargs["event"]
-            self.__event_result = kwargs["event_result"]
-            self.__logger = kwargs["base_logger"].bind(
-                trace_id=self.__event.trace_id,
+            event = kwargs["event"]
+            logger = kwargs["base_logger"].bind(
+                trace_id=event.trace_id,
+            )
+            self.__model_init__(
+                _event=event,
+                _event_result=kwargs["event_result"],
+                _logger=logger,
             )
 
+    # Keep CONTEXTVAR as class property for backward compatibility
     @property
-    def _event(self) -> "Event": return self.__event
-    @property
-    def _event_result(self) -> 'EventResult': return self.__event_result
-    @property
-    def _logger(self) -> "LoggerT": return self.__logger
-    @_logger.setter
-    def _logger(self, new_logger: "LoggerT"): self.__logger = new_logger
+    def CONTEXTVAR(cls) -> contextvars.ContextVar[typing.Self]:
+        return cls.__contextvar__
     
-    CONTEXTVAR = contextvars.ContextVar[typing.Self]('TASKC_CONTEXTVAR')
     @classmethod
     def set_contextvar(cls, task_context: typing.Self) -> None:
-        cls.CONTEXTVAR.set(task_context)
+        cls.__contextvar__.set(task_context)
     @classmethod
     def from_contextvar(cls) -> typing.Self:
         """
         :raise LookupError: if not set
         """
-        return cls.CONTEXTVAR.get()
+        return cls.__contextvar__.get()
 
 
 class SoBaseEC(BaseModel):
