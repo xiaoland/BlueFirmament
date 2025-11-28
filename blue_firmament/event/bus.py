@@ -136,7 +136,7 @@ class EventBus:
         name: str = 'event_bus',
         path_prefix: str = '',
         middlewares: Opt[MiddlewaresT] = None,
-        event_context_cls: type[BaseEventContext] = BaseEventContext,
+        event_context_cls: Opt[type[BaseEventContext]] = None,
     ):
         """
         :param name: Name identifier for this event bus.
@@ -154,7 +154,7 @@ class EventBus:
         self.__path_prefix = path_prefix
         self.__name = name
         self.__middlewares: MiddlewaresT = middlewares or []
-        self.__event_context_cls: type[BaseEventContext] = event_context_cls
+        self.__event_context_cls: type[BaseEventContext] = event_context_cls or BaseEventContext
         self.__logger: "BoundLogger" = get_logger(f"EventBus[{name}]").bind(
             event_bus_name=name
         )
@@ -309,7 +309,7 @@ class EventBus:
         middlewares: MiddlewaresT = self.__middlewares + [event_entry]
         
         event_context = self.__event_context_cls(
-            task=event,
+            event=event,
             event_result=event_result,
             base_logger=self._logger
         )

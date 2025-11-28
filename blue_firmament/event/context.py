@@ -9,16 +9,16 @@ __all__ = [
 import contextvars
 import typing
 from typing import Optional as Opt
-from ...model import BaseModel, private_field, Field
+from ..model import BaseModel, private_field, Field
 
 if typing.TYPE_CHECKING:
-    from ...log import LoggerT
-    from ..main import Event
-    from ..result import EventResult
+    from ..log import LoggerT
+    from .main import Event
+    from .result import EventResult
 
 
 class BaseEventContextFields(typing.TypedDict):
-    task: typing.NotRequired["Event"]
+    event: typing.NotRequired["Event"]
     event_result: typing.NotRequired["EventResult"]
     base_logger: typing.NotRequired["LoggerT"]
     """Bind task context based on this logger.
@@ -46,7 +46,7 @@ class BaseEventContext:
             self.__event_result = btc._event_result
             self.__logger = btc._logger
         else:
-            self.__event = kwargs["task"]
+            self.__event = kwargs["event"]
             self.__event_result = kwargs["event_result"]
             self.__logger = kwargs["base_logger"].bind(
                 trace_id=self.__event.trace_id,
