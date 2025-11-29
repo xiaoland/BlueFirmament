@@ -309,9 +309,9 @@ class EventBus:
         middlewares: MiddlewaresT = self.__middlewares + [event_entry]
         
         event_context = self.__event_context_cls(
-            event=event,
-            event_result=event_result,
-            base_logger=self._logger
+            _event=event,
+            _event_result=event_result,
+            _logger=self._logger
         )
         BaseEventContext.set_contextvar(event_context)
         
