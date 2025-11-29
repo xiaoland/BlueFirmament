@@ -21,7 +21,7 @@ from .query_components.modifiers import LimitModifier
 from ..utils.enum_ import dump_enum
 
 if typing.TYPE_CHECKING:
-    from ..auth import AuthSession
+    from typing import Mapping, Any
     from ..model.field import Field, FieldValueProxy
     from blue_firmament.event.context import BaseEventContext
 
@@ -77,7 +77,7 @@ class DataAccessLayerWithAuth(DataAccessLayer):
         cls.__force_auth__ = force_auth
         super().__init_subclass__(**kwargs)
 
-    def __init__(self, auth_session: Opt["AuthSession"] = None, **kwargs):
+    def __init__(self, auth_session: Opt[Mapping[str, Any]] = None, **kwargs):
         if auth_session is None and self.__force_auth__:
             raise ParamsInvalid("auth_session must be provided")
         self._auth_session = auth_session
@@ -644,7 +644,7 @@ class DataAccessObjects:
 
     def __init__(
         self,
-        auth_session: Opt["AuthSession"] = None
+        auth_session: Opt[Mapping[str, Any]] = None
     ) -> None:
         self.__auth_session = auth_session
         self.__dals: dict[type[DataAccessLayer], DataAccessLayer] = {}
@@ -667,5 +667,8 @@ class DataAccessObjects:
     def is_expired(self) -> bool:
         """Session expired is seen as DAOs expired,"""
         if self.__auth_session:
-            return self.__auth_session.is_expired()
+            exp = self.__auth_session.get("exp") if isinstance(self.__auth_session, Mapping) else None
+            if isinstance(exp, (int, float)):
+                import time
+                return exp <= int(time.time())
         return False

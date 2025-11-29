@@ -67,8 +67,8 @@ class PostgrestDAL(TableLikeDataAccessLayer, DataAccessLayerWithAuth):
             headers={
                 'X-Client-Info': f'{__package_name__}/{__version__}',
                 'apiKey': self.__apikey,
-                **({"authorization": f'Bearer {self._auth_session.access_token}'}
-                    if self._auth_session else {})
+                **({"authorization": f'Bearer {self._auth_session.get("access_token")}'}
+                    if self._auth_session and isinstance(self._auth_session, dict) and self._auth_session.get("access_token") else {})
             }
         )
 
@@ -122,7 +122,10 @@ class PostgrestDAL(TableLikeDataAccessLayer, DataAccessLayerWithAuth):
             return await query.execute()
         except postgrest.APIError as e:
             if e.code == 'PGRST301':  # JWT expired
-                raise Unauthorized("token expired", self._auth_session.access_token)
+                token = None
+                if self._auth_session and isinstance(self._auth_session, dict):
+                    token = self._auth_session.get("access_token")
+                raise Unauthorized("token expired", token)
             
             raise e
 

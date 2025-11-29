@@ -103,5 +103,4 @@ Design
    ./event_source/index
    ./manager
    ./dal
-   ./auth
    ./event

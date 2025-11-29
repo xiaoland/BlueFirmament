@@ -17,3 +17,4 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Enhanced integration of event-driven patterns
 - Improved overall developer experience
 - Removed internal support of Supabase Auth
+- Removed built-in auth/session module (`blue_firmament.auth`) and JWT utilities. DAL now accepts an optional generic mapping for token/session data instead of `AuthSession`.
