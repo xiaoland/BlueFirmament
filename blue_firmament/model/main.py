@@ -285,9 +285,7 @@ class BFModelMetaclass(abc.ABCMeta):
                 break
 
 
-        # dynamically create __init__ method if not defined in attrs
-        # If __init__ is defined in attrs, preserve it (it should call super().__init__())
-        custom_init = attrs.get("__init__")
+        # dynamically create __init__ method
         init_params: set[str] = set()
         init_assignments = []
         new_globals = globals().copy()
@@ -335,18 +333,8 @@ class BFModelMetaclass(abc.ABCMeta):
         init_method = init_sig + init_body
         
         exec(init_method, new_globals, attrs)
-        # Store the metaclass-generated __init__ for potential use by custom __init__
-        metaclass_init = attrs["__init__"]
-        
-        result_class = super().__new__(cls, name, bases, attrs, **kwargs)
-        
-        # Store the metaclass-generated __init__ on the class so custom __init__ can call it
-        result_class.__model_init__ = metaclass_init
 
-        # Restore custom __init__ if it was defined
-        # The custom __init__ should call self.__model_init__() to properly initialize fields
-        if custom_init is not None:
-            result_class.__init__ = custom_init
+        result_class = super().__new__(cls, name, bases, attrs, **kwargs)
 
         # set fields' model class
         for k, default_v in (result_class.__fields__).items():

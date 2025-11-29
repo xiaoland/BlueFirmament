@@ -414,3 +414,11 @@ class Event:
         metadata = EventMetadata(**data["metadata"])
         parameters = EventParameters(**data["parameters"])
         return cls(event_id, metadata, parameters)
+
+    def bind_logger(self, logger: typing.Any) -> typing.Any:
+        """Bind logger with event's trace_id.
+        
+        :param logger: A logger instance with bind method (e.g., structlog BoundLogger)
+        :returns: A new logger bound with trace_id
+        """
+        return logger.bind(trace_id=self.trace_id)

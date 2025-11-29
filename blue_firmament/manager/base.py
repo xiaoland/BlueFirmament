@@ -47,16 +47,9 @@ class ManagerMetaclass(BFModelMetaclass):
         path_prefix: str = "",
         **kwargs,
     ):
-        # Save custom __init__ if defined in attrs (before metaclass generates one)
-        custom_init = attrs.get("__init__")
-
         # exclude BaseManager
         if name in ("BaseManager",):
-            new_cls = super().__new__(cls, name, bases, attrs, **kwargs)
-            # Restore custom __init__ for BaseManager if it was defined
-            if custom_init is not None:
-                new_cls.__init__ = custom_init
-            return new_cls
+            return super().__new__(cls, name, bases, attrs, **kwargs)
 
         attrs["__path_prefix__"] = path_prefix
         attrs["__event_registries__"]: dict[BaseEventSource | str, EventBus] = {}
@@ -90,21 +83,6 @@ class ManagerMetaclass(BFModelMetaclass):
                     attrs[attr_name] = log_manager_handler(attr_value)
 
         new_cls = super().__new__(cls, name, bases, attrs, **kwargs)
-
-        # Restore custom __init__:
-        # - Use custom_init from attrs if defined
-        # - Otherwise, find __init__ from BaseManager in bases to preserve it
-        # Note: We check by name because at metaclass time, we can't use issubclass
-        if custom_init is not None:
-            new_cls.__init__ = custom_init
-        else:
-            # Find __init__ from a base class that has a custom __init__ (not metaclass-generated)
-            # Look for BaseManager's __init__ specifically
-            for base in bases:
-                base_init = base.__dict__.get('__init__')
-                if base_init is not None and base.__name__ == 'BaseManager':
-                    new_cls.__init__ = base_init
-                    break
 
         if not issubclass(new_cls, BaseManager):
             raise TypeError(f"{name} should not directly use the ManagerMetaclass")
@@ -176,19 +154,14 @@ class BaseManager(
 
         super().__init_subclass__(**kwargs)
 
-    def __init__(self, event_context: BaseEventContext) -> None:
-        BaseEventContext.__init__(self, event_context)
-
+    def __post_init__(self):
+        """Called after BaseModel initialization.
+        
+        Binds logger with manager name.
+        """
+        super().__post_init__()
         self.__scheme = self.ManagingScheme(None)
         self._logger = self._logger.bind(manager_name=self.__manager_name__)
-        self.__post_init__()
-
-    def __post_init__(self):
-        """Override this method to customize init behaviour
-
-        This method will be called once BaseManager finish its init.
-        """
-        ...
 
     @property
     def _scheme_cls(self) -> typing.Type[ModelTV]:
