@@ -45,13 +45,6 @@ __all__ = [
     "EnvVarSource",
     "JsonFileSource",
     "PythonSource",
-    # Deprecated (for backward compatibility)
-    "EnvSetting",
-    "JsonFileSetting",
-    "EnvJsonSetting",
-    "PythonScriptSetting",
-    "private_field",
-    "field",
 ]
 
 from .base import Setting, make_setting_singleton
@@ -63,12 +56,3 @@ from .source import (
     JsonFileSource,
     PythonSource,
 )
-from .legacy import (
-    EnvSetting,
-    JsonFileSetting,
-    EnvJsonSetting,
-    PythonScriptSetting,
-)
-
-# Re-export from model for backward compatibility
-from ..model import field, private_field

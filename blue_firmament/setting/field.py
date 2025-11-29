@@ -45,7 +45,7 @@ class SettingField(Field[FieldValueTV]):
         default_factory: Opt[typing.Callable[[], FieldValueTV]] = None,
         vtype: Undefined | typing.Type[FieldValueTV] = _undefined,
         name: Opt[str] = None,
-        in_scheme_name: Opt[str] = None,
+        in_model_name: Opt[str] = None,
         converter: Opt[BaseConverter[FieldValueTV]] = None,
         validators: Opt[typing.Iterable["BaseValidator"]] = None,
         description: Opt[str] = None,
@@ -63,8 +63,8 @@ class SettingField(Field[FieldValueTV]):
             Value type hint.
         name : str | None
             Field name.
-        in_scheme_name : str | None
-            Field name in scheme.
+        in_model_name : str | None
+            Field name in model.
         converter : BaseConverter | None
             Value converter.
         validators : Iterable[BaseValidator] | None
@@ -77,7 +77,7 @@ class SettingField(Field[FieldValueTV]):
             default_factory=default_factory,
             vtype=vtype,
             name=name,
-            in_scheme_name=in_scheme_name,
+            in_model_name=in_model_name,
             converter=converter,
             validators=validators,
             is_partial=True,  # Settings are partial by default
@@ -122,8 +122,8 @@ class SettingField(Field[FieldValueTV]):
         default_factory: Opt[typing.Callable[[], FieldValueTV]] = None,
         vtype: Undefined | typing.Type[FieldValueTV] = _undefined,
         name: Opt[str] = None,
-        in_scheme_name: Opt[str] = None,
-        scheme_cls: Opt[typing.Type["BaseModel"]] = None,
+        in_model_name: Opt[str] = None,
+        model_cls: Opt[typing.Type["BaseModel"]] = None,
         converter: Opt[BaseConverter[FieldValueTV]] = None,
         fork_validators: bool = False,
         description: Opt[str] = None,
@@ -135,8 +135,8 @@ class SettingField(Field[FieldValueTV]):
             default_factory=default_factory,
             vtype=vtype,
             name=name,
-            in_scheme_name=in_scheme_name,
-            scheme_cls=scheme_cls,
+            in_model_name=in_model_name,
+            model_cls=model_cls,
             converter=converter,
             fork_validators=fork_validators,
             is_partial=True,
