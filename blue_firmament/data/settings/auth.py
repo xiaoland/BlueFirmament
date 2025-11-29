@@ -2,8 +2,7 @@ import datetime
 import typing
 
 from ...utils.datetime_ import get_datetimez
-from ...model import private_field
-from ...setting import EnvJsonSetting, make_setting_singleton
+from ...setting import Setting, SettingField, InlineSource, make_setting_singleton
 
 type AuthSessionField = typing.Literal[
     "session_id",
@@ -20,16 +19,24 @@ SESSION_FIELDS_GETTER_DEFAULT: dict[AuthSessionField, typing.Callable[[dict], ty
     "roles": lambda payload: payload["roles"],
 }
 
-class AuthSetting(EnvJsonSetting):
+class AuthSetting(Setting):
 
-    _setting_name = private_field(default="auth")
-    _is_packaged = private_field(default=False)
-
-    jwt_secret_key: str = ""
-    jwt_algorithms: tuple[str, ...] = ("HS256",)
-    jwt_allowed_audiences: tuple[str, ...] = ()
-    session_fields_getter: dict[AuthSessionField, typing.Callable[[dict], typing.Any]] = \
-        SESSION_FIELDS_GETTER_DEFAULT
+    jwt_secret_key: SettingField[str] = SettingField(
+        sources=[InlineSource("")],
+        description="JWT secret key for signing tokens"
+    )
+    jwt_algorithms: SettingField[tuple[str, ...]] = SettingField(
+        sources=[InlineSource(("HS256",))],
+        description="JWT algorithms to use"
+    )
+    jwt_allowed_audiences: SettingField[tuple[str, ...]] = SettingField(
+        sources=[InlineSource(())],
+        description="JWT allowed audiences"
+    )
+    session_fields_getter: SettingField[dict[AuthSessionField, typing.Callable[[dict], typing.Any]]] = SettingField(
+        sources=[InlineSource(SESSION_FIELDS_GETTER_DEFAULT)],
+        description="Functions to extract session fields from JWT payload"
+    )
 
 
 get_setting, set_setting = make_setting_singleton(AuthSetting.load())
