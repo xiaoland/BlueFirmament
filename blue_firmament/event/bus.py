@@ -311,7 +311,7 @@ class EventBus:
         event_context = self.__event_context_cls(
             _event=event,
             _event_result=event_result,
-            _base_logger=self._logger
+            _logger=self._logger
         )
         BaseEventContext.set_contextvar(event_context)
         

@@ -29,7 +29,6 @@ class BaseEventContext(BaseModel):
 
     _event: PrivateField["Event"] = private_field()
     _event_result: PrivateField["EventResult"] = private_field()
-    _base_logger: PrivateField["LoggerT"] = private_field()
     _logger: PrivateField["LoggerT"] = private_field()
 
     __contextvar__: typing.ClassVar[contextvars.ContextVar[typing.Self]]
@@ -37,7 +36,7 @@ class BaseEventContext(BaseModel):
 
     def __post_init__(self) -> None:
         """Bind logger with event's trace_id after initialization."""
-        self._logger = self._event.bind_logger(self._base_logger)
+        self._logger = self._event.bind_logger(self._logger)
 
     @classmethod
     def set_contextvar(cls, task_context: typing.Self) -> None:

@@ -163,11 +163,7 @@ class EventHandler:
         args = []
         # [self] don't add other arg parser before this one
         if self.__method_manager_cls:
-            manager = self.__method_manager_cls(
-                _event=event_context._event,
-                _event_result=event_context._event_result,
-                _base_logger=event_context._base_logger,
-            )
+            manager = self.__method_manager_cls(event_context=event_context)
             args.append(manager)
 
         # call handler

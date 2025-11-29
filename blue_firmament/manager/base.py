@@ -47,9 +47,16 @@ class ManagerMetaclass(BFModelMetaclass):
         path_prefix: str = "",
         **kwargs,
     ):
+        # Save custom __init__ if defined
+        custom_init = attrs.get("__init__")
+
         # exclude BaseManager
         if name in ("BaseManager",):
-            return super().__new__(cls, name, bases, attrs, **kwargs)
+            new_cls = super().__new__(cls, name, bases, attrs, **kwargs)
+            # Restore custom __init__ for BaseManager
+            if custom_init is not None:
+                new_cls.__init__ = custom_init
+            return new_cls
 
         attrs["__path_prefix__"] = path_prefix
         attrs["__event_registries__"]: dict[BaseEventSource | str, EventBus] = {}
@@ -83,6 +90,18 @@ class ManagerMetaclass(BFModelMetaclass):
                     attrs[attr_name] = log_manager_handler(attr_value)
 
         new_cls = super().__new__(cls, name, bases, attrs, **kwargs)
+
+        # Restore custom __init__ if defined, or inherit from BaseManager
+        if custom_init is not None:
+            new_cls.__init__ = custom_init
+        else:
+            # Inherit __init__ from BaseManager
+            for base in bases:
+                if hasattr(base, '__init__') and base.__name__ == 'BaseManager':
+                    base_init = base.__dict__.get('__init__')
+                    if base_init is not None:
+                        new_cls.__init__ = base_init
+                        break
 
         if not issubclass(new_cls, BaseManager):
             raise TypeError(f"{name} should not directly use the ManagerMetaclass")
@@ -128,7 +147,7 @@ class BaseManager(
     """
     __path_prefix__: str
 
-    class ManagingScheme:
+    class __ManagingScheme__:
         def __init__(self, scheme: Opt[ModelTV] = None):
             self.__scheme: Opt[ModelTV] = scheme
 
@@ -154,14 +173,23 @@ class BaseManager(
 
         super().__init_subclass__(**kwargs)
 
-    def __post_init__(self):
-        """Called after BaseModel initialization.
-        
-        Binds logger with manager name.
-        """
-        super().__post_init__()
-        self.__scheme = self.ManagingScheme(None)
+    def __init__(self, event_context: BaseEventContext) -> None:
+        # Initialize BaseEventContext fields from the provided event_context
+        super().__init__(
+            _event=event_context._event,
+            _event_result=event_context._event_result,
+            _logger=event_context._logger,
+        )
+
+        self.__scheme = self.__ManagingScheme__(None)
         self._logger = self._logger.bind(manager_name=self.__manager_name__)
+
+    def __post_init__(self):
+        """Override this method to customize init behaviour
+
+        This method will be called once BaseManager finish its init.
+        """
+        ...
 
     @property
     def _scheme_cls(self) -> typing.Type[ModelTV]:
