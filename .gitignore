@@ -41,4 +41,7 @@ venv.bak/
 .DS_Store
 Thumbs.db
 
+# logs
 blue_firmament/logs/
+*.log
+debug.log
