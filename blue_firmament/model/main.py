@@ -311,13 +311,16 @@ class BFModelMetaclass(abc.ABCMeta):
                 for sub_field in field_ins.sub_fields:
                     init_params.add(sub_field.in_model_name)
 
-                init_assignments.append(f"    self.{k} = {k} if {k} is not _undefined \
-                    else {sub_model_name}({
-                    ",".join(
-                        f"{i.in_model_name}={i.in_model_name}"
-                        for i in field_ins.sub_fields
+                init_assignments.append(
+                    "    self.{k} = {k} if {k} is not _undefined else {sub_model}".format(
+                        k=k,
+                        sub_model=f"{sub_model_name}("
+                        + ",".join(
+                            f"{i.in_model_name}={i.in_model_name}" for i in field_ins.sub_fields
+                        )
+                        + ")",
                     )
-                })")
+                )
             else:
                 init_assignments.append(f"    self.{k} = {k}")
         

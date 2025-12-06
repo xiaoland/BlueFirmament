@@ -4,7 +4,7 @@ import typing
 from ...utils.datetime_ import get_datetimez
 from ...setting import Setting, SettingField, InlineSource, make_setting_singleton
 
-type AuthSessionField = typing.Literal[
+AuthSessionField = typing.Literal[
     "session_id",
     "user_id",
     "roles",

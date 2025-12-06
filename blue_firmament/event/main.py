@@ -130,7 +130,7 @@ class EventID:
         return hash((self.method, *(i for i in self.segments)))
 
     def __str__(self):
-        return f"{dump_enum(self.method) or ""}@{self.path}"
+        return f"{dump_enum(self.method) or ''}@{self.path}"
 
     def __len__(self) -> int:
         return len(self.segments)

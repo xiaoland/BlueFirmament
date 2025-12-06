@@ -114,7 +114,7 @@ class StreamingBody(Body):
     :ivar __cleanup: 清理函数
     """
 
-    type GeneratorType = typing.AsyncGenerator["Body", None]
+    GeneratorType = typing.AsyncGenerator["Body", None]
 
     def __init__(
         self,

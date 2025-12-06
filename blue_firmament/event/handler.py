@@ -26,14 +26,14 @@ class EventHandler:
     EventContext.
     """
 
-    type FunctionKwargsT = typing.Dict[
+    FunctionKwargsT = typing.Dict[
         str,
         typing.Callable[
             ["BaseEventContext", PathParamsT], typing.Coroutine,
         ]
     ]
     """Inner handler parameters"""
-    type FunctionT = typing.Union[
+    FunctionT = typing.Union[
         typing.Callable[..., typing.Any],
         typing.Callable[..., typing.Awaitable[typing.Any]]
     ]

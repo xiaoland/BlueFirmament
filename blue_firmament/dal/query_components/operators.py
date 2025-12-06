@@ -44,7 +44,7 @@ class OrOperator(DALOperator):
         ),))
 
     def dump_to_postgrest_str(self) -> str:
-        return f"or({','.join(
-            filter_.dump_to_postgrest_str() 
-            for filter_ in self.__filters
-        )})"
+        joined_filters = ",".join(
+            filter_.dump_to_postgrest_str() for filter_ in self.__filters
+        )
+        return f"or({joined_filters})"

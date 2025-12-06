@@ -594,7 +594,7 @@ def field(
     )
 
 
-class PrivateField[FieldValueType](Field[FieldValueType]):
+class PrivateField(Field[FieldValueTV], typing.Generic[FieldValueTV]):
 
     """BF Private Field
 
@@ -608,7 +608,7 @@ class PrivateField[FieldValueType](Field[FieldValueType]):
     @property
     def name(self): raise ValueError('Private field name is forbidden')
     
-    def __set__(self, instance: "BaseModel", value: FieldValueType) -> None:
+    def __set__(self, instance: "BaseModel", value: FieldValueTV) -> None:
         try:
             if value is _undefined:
                 value = self.default_value
