@@ -27,7 +27,7 @@ _undefined: typing.Final = Undefined.token
 
 NamedTupleTV = typing.TypeVar("NamedTupleTV", bound=typing.NamedTuple)
 
-type PathParamsT = typing.Dict[str, typing.Any]
+PathParamsT = typing.Dict[str, typing.Any]
 """Path parameters type.
 
 Path parameters is the parameters resolved from EventID path.

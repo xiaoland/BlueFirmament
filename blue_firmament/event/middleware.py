@@ -14,8 +14,8 @@ if typing.TYPE_CHECKING:
     from blue_firmament.event.context import BaseEventContext
 
 
-type NextT = typing.Callable[[], typing.Coroutine[typing.Any, typing.Any, None]]
-type MiddlewaresT = typing.List['BaseMiddleware']
+NextT = typing.Callable[[], typing.Coroutine[typing.Any, typing.Any, None]]
+MiddlewaresT = typing.List['BaseMiddleware']
 
 
 class BaseMiddleware(abc.ABC):

@@ -34,6 +34,8 @@ __all__ = [
     "BoolConverter",
     "EnumConverter",
     "ModelConverter",
+    # Generators
+    "generate_models_from_openapi",
 ]
 
 from .main import (
@@ -73,3 +75,4 @@ from .validator import (
     field_validators,
     model_validator,
 )
+from .openapi_generator import generate_models_from_openapi

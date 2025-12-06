@@ -15,13 +15,12 @@ __all__ = [
 
 import abc
 import typing
-from typing import Optional as Opt
+from typing import Optional as Opt, Mapping, Any
 from .types import DALPath, QueryComLikeType, StrictDALPath, FieldLikeType
 from .query_components.modifiers import LimitModifier
 from ..utils.enum_ import dump_enum
 
 if typing.TYPE_CHECKING:
-    from typing import Mapping, Any
     from ..model.field import Field, FieldValueProxy
     from blue_firmament.event.context import BaseEventContext
 

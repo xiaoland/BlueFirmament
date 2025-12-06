@@ -131,10 +131,10 @@ def isclassmethod(func: typing.Any) -> bool:
     return inspect.ismethod(func) and hasattr(func, '__self__') and func.__self__ is not None
 
 
-type JsonDumpable = typing.Union[
-    str, int, float, bool, None, 
+JsonDumpable = typing.Union[
+    str, int, float, bool, None,
     datetime.datetime,
-    typing.List['JsonDumpable'], 
+    typing.List['JsonDumpable'],
     typing.Tuple['JsonDumpable', ...],
     typing.Dict[str, 'JsonDumpable'],
     typing.Set['JsonDumpable'],
